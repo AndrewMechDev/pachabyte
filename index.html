@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#122e36" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2359d3c4'/%3E%3Cpath d='M4 3h3v10H4zm4 5 4-5h3l-4 5 4 5h-3z' fill='%23122e36'/%3E%3C/svg%3E" />
+    <title>PachaByte — Phase 3 demo</title>
+  </head>
+  <body>
+    <main>
+      <header><p class="eyebrow">LOCAL PROTOTYPE · PHASE 3</p><h1>PachaByte</h1>
+        <h2 id="view-title">Choose your challenge</h2></header>
+      <nav id="navigation" aria-label="Challenge navigation">
+        <button type="button" data-view="guardian">Play Amaru</button>
+        <button type="button" data-view="training">Explore Arequipa</button>
+        <button type="button" id="choose" hidden>Choose challenge</button>
+        <button type="button" id="retry" hidden>Retry challenge</button>
+        <button type="button" id="sound" aria-pressed="true">Sound: on</button>
+      </nav>
+      <div id="game" tabindex="0" aria-label="PachaByte keyboard-controlled game. Click to focus, then use the controls below."></div>
+      <p class="controls" id="view-help"></p>
+      <p id="view-result" role="status" aria-live="polite"></p>
+      <p class="note" id="achievements"></p>
+      <p class="note">Click or Tab to the game to play. Navigation focus pauses play; focus the game to resume. Original static demo art, not final spritesheets. Achievements reset on refresh; both challenges remain available.</p>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
