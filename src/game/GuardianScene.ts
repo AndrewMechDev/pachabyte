@@ -1,15 +1,16 @@
 import Phaser from 'phaser';
-import { GAME, flight, canShoot, frameDelta, type Facing } from './rules';
+import { GAME, flight, canShoot, frameDelta, oncePerEvent, type Facing } from './rules';
 import { boltExpired, type Outcome } from './combatRules';
 import {
   REVERSE, activateReverse, advanceClocks, awakenCore, captureBolt, chargeReverse, initialReverse, isSlow, resolveReturn, shiftCue,
   tickReverse, worldScale, type Clocks, type Reverse,
 } from './reverseRules';
 import {
-  AMARU, attackFor, attackStage, bodyPositions, capturable, emissionVelocity, emissionsDue, headPosition, hitBoss, initialBoss,
-  isVulnerable, mouthOf, openWindow, shieldBlocks, shieldRing, tickBoss, victoryReady, waveGapY, waveHits, waveX,
-  type Attack, type AttackKind, type Boss, type Emission, type HitKind, type Phase, type Stage,
+  AMARU, attackFor, attackStage, bodyPositions, capturable, checkpointAt, emissionVelocity, emissionsDue, headPosition, hitBoss, initialBoss,
+  isVulnerable, mouthOf, openWindow, resumeFrom, shieldBlocks, shieldRing, tickBoss, victoryReady, waveGapY, waveHits, waveX,
+  type Attack, type AttackKind, type Boss, type Checkpoint, type Emission, type HitKind, type Phase, type Stage,
 } from './amaruRules';
+import { coach, initialCoach, type Coach, type CoachEvent } from './coachRules';
 import { advanceLiberation, resultLines, stageProgress, startLiberation, tickLiberation, variantKey, type Liberation } from './liberationRules';
 import { ARENA, ARENA_DIM, BODY_TEXTURES, BOLT_TEXTURES, HEAD, HEAD_FLASH, createAmaruTextures, derive } from './amaruTextures';
 import { NOKIA, convertPixels } from './nokiaPalette';
@@ -114,7 +115,14 @@ export class GuardianScene extends Phaser.Scene {
   private shiftRequested = false;
   private advanceRequested = false;
   private retry = false;
+  private fromStart = false;
   private mapRequested = false;
+  // Phase checkpoints: `resume` is handed from a defeat to the next create(); `checkpoint` is what this defeat offers.
+  private resume: Checkpoint | null = null;
+  private resumedFrom: Checkpoint | null = null;
+  private checkpoint: Checkpoint | null = null;
+  private priorMs = 0;
+  private coachState: Coach = initialCoach();
   private nextShot = 0;
   private cycle = 0;
   private attackStart: number = AMARU.firstAttackMs;
@@ -145,16 +153,24 @@ export class GuardianScene extends Phaser.Scene {
     // Direct entry (map or page button) uses 4 HP and an empty meter; a finished route carries its state.
     this.entry = readRunState(this.registry.get(RUN_KEY));
     this.run++;
+    // A checkpoint retry (R after a phase 2/3 defeat) resumes at that phase; every other start is a full fight.
+    const resume = this.resume;
+    this.resume = null; this.resumedFrom = resume; this.checkpoint = null; this.priorMs = resume?.elapsedMs ?? 0;
     this.clocks = { real: 0, world: 0 };
     this.health = { hp: this.entry.hp, invulnerableUntil: 0 };
     this.bossState = initialBoss();
     this.reverse = initialReverse(this.entry.meter);
+    if (resume) {
+      const start = resumeFrom(resume);
+      this.health = { hp: start.heroHp, invulnerableUntil: 0 }; this.bossState = start.boss; this.reverse = start.reverse;
+    }
     this.ending = 'playing'; this.bossDown = false; this.liberation = null; this.fightMs = 0; this.resultText = '';
     this.facing = 1; this.focused = true; this.paused = false; this.palette = false;
-    this.shiftRequested = false; this.advanceRequested = false; this.retry = false; this.mapRequested = false;
-    this.nextShot = 0; this.cycle = 0; this.attackStart = AMARU.firstAttackMs; this.resetCycle();
-    this.waveGap = 0; this.patternsSeen = new Set(); this.coreAwakened = false;
-    this.messages = [{ text: TEXT.guardianAwakens, ms: 1500 }, { text: PHASE_NAME[1], ms: 1700 }]; this.messageUntil = 0;
+    this.shiftRequested = false; this.advanceRequested = false; this.retry = false; this.fromStart = false; this.mapRequested = false;
+    this.nextShot = 0; this.cycle = 0; this.attackStart = resume ? AMARU.phaseIntroMs : AMARU.firstAttackMs; this.resetCycle();
+    this.waveGap = 0; this.patternsSeen = new Set(); this.coreAwakened = resume !== null; this.coachState = initialCoach();
+    this.messages = resume ? [{ text: PHASE_NAME[resume.phase], ms: 1700 }] : [{ text: TEXT.guardianAwakens, ms: 1500 }, { text: PHASE_NAME[1], ms: 1700 }];
+    this.messageUntil = 0;
     this.bossFlashUntil = 0; this.noCaptureUntil = 0; this.cueShown = false; this.nextAuraAt = 0;
     this.time.paused = false;
     sfx.setDucked(false);
@@ -221,18 +237,21 @@ export class GuardianScene extends Phaser.Scene {
     this.message = this.text(0, MESSAGE.textY, '').setDepth(31).setCenterAlign().setLineSpacing(LINE_GAP);
     this.panel = this.add.graphics().setDepth(50);
     this.panelText = this.text(0, 0, '').setDepth(51).setLineSpacing(LINE_GAP);
-    this.panelHelp = this.text(0, 0, '').setDepth(51);
+    this.panelHelp = this.text(0, 0, '').setDepth(51).setCenterAlign().setLineSpacing(LINE_GAP);
     this.pause = new PauseOverlay(this);
 
     this.keys = this.input.keyboard!.addKeys({ a:'A',d:'D',w:'W',s:'S',left:'LEFT',right:'RIGHT',up:'UP',down:'DOWN',space:'SPACE',j:'J',z:'Z',shift:'SHIFT',k:'K',x:'X',esc:'ESC',p:'P',r:'R',m:'M',enter:'ENTER' }) as Keys;
     for (const key of [this.keys.shift, this.keys.k, this.keys.x]) key.setEmitOnRepeat(false).on('down', () => { if (this.focused && !this.paused) this.shiftRequested = true; });
-    // OS auto-repeat is ignored so a held Esc cannot toggle pause twice.
-    for (const key of [this.keys.esc, this.keys.p]) key.setEmitOnRepeat(false).on('down', (_key: unknown, event?: KeyboardEvent) => { if (this.focused && !event?.repeat) this.togglePause(); });
+    // OS auto-repeat and Phaser's same-frame queue replay are ignored so one Esc can never toggle pause twice.
+    const freshKey = oncePerEvent();
+    for (const key of [this.keys.esc, this.keys.p]) key.setEmitOnRepeat(false).on('down', (_key: unknown, event?: KeyboardEvent) => { if (this.focused && !event?.repeat && freshKey(event)) this.togglePause(); });
     this.keys.r.setEmitOnRepeat(false).on('down', () => { if (this.focused && !this.paused) this.retry = true; });
     this.keys.m.setEmitOnRepeat(false).on('down', () => { if (this.focused && !this.paused) this.mapRequested = true; });
     this.keys.enter.setEmitOnRepeat(false).on('down', (_key: unknown, event?: KeyboardEvent) => {
       if (!this.focused || this.paused || event?.repeat) return;
-      if (this.ending === 'defeat' || this.liberation?.stage === 'result') this.mapRequested = true;
+      // After a phase 2/3 defeat Enter restarts the whole fight (R resumes the phase); otherwise it opens the map.
+      if (this.ending === 'defeat' && this.checkpoint) this.fromStart = true;
+      else if (this.ending === 'defeat' || this.liberation?.stage === 'result') this.mapRequested = true;
       else if (this.ending === 'victory') this.advanceRequested = true;
     });
     this.keys.space.setEmitOnRepeat(false).on('down', (_key: unknown, event?: KeyboardEvent) => {
@@ -250,7 +269,11 @@ export class GuardianScene extends Phaser.Scene {
   update(_time: number, rawDelta: number): void {
     if (!this.focused) return;
     if (this.mapRequested) { this.input.keyboard?.resetKeys(); this.scene.start('MapScene'); return; }
-    if (this.retry) { this.input.keyboard?.resetKeys(); this.scene.restart(); return; }
+    if (this.retry || this.fromStart) {
+      // R after a phase 2/3 defeat resumes at that phase; R anywhere else, or Enter after such a defeat, starts over.
+      this.resume = this.retry && !this.fromStart && this.ending === 'defeat' ? this.checkpoint : null;
+      this.input.keyboard?.resetKeys(); this.scene.restart(); return;
+    }
     if (this.paused) return;
     const delta = frameDelta(rawDelta);
     if (this.ending === 'playing') this.play(delta);
@@ -278,6 +301,7 @@ export class GuardianScene extends Phaser.Scene {
         this.reverse = next;
         sfx.play('shiftOn');
         burst(this.fx, this.player.x, this.player.y - 4, 10, 75, 320, 'teal', now, 2);
+        this.coachSay('slowStart');
       }
     }
     this.shiftRequested = false;
@@ -310,7 +334,7 @@ export class GuardianScene extends Phaser.Scene {
     this.reverse = step.reverse;
     if (before.state === 'SLOW' && this.reverse.state !== 'SLOW') {
       for (const image of this.orbit) image.setVisible(false);
-      if (step.released === 0) this.noCaptureUntil = now + TIMING.noCaptureMs;
+      if (step.released === 0) { this.noCaptureUntil = now + TIMING.noCaptureMs; this.coachSay('emptySlow'); }
     }
     for (let i = 0; i < step.released; i++) this.fireReturned(i, step.released);
   }
@@ -351,7 +375,7 @@ export class GuardianScene extends Phaser.Scene {
         sfx.play('shieldBreak');
         burst(this.fx, center.x, center.y, 16, 80, 480, 'teal', now, 2); burst(this.fx, center.x, center.y, 8, 45, 380, 'light', now, 2);
         if (!motion.reduced) this.cameras.main.shake(140, 0.006);
-        this.say({ text: TEXT.shieldBroken, ms: 1600 }, true);
+        this.coachSay('shieldBreak');
         break;
       case 'damage':
         sfx.play(kind === 'returned' ? 'reflectHit' : 'bossHit');
@@ -474,7 +498,8 @@ export class GuardianScene extends Phaser.Scene {
 
   // ------------------------------------------------------------------ endings
   private victory(): void {
-    this.ending = 'victory'; this.fightMs = this.clocks.real;
+    // Time spent before a checkpoint retry still counts, so resuming never earns a larger time bonus.
+    this.ending = 'victory'; this.fightMs = this.priorMs + this.clocks.real;
     this.liberation = startLiberation(this.clocks.real);
     this.registry.set('progress', freeGuardian(this.registry.get('progress') ?? initialProgress()));
     this.stopWorld();
@@ -490,7 +515,9 @@ export class GuardianScene extends Phaser.Scene {
     this.animator.hold('squash', false); this.player.setAngle(0);
     sfx.play('defeat');
     burst(this.fx, this.player.x, this.player.y - 4, 14, 65, 500, 'violet', this.clocks.real, 2);
-    this.showPanel('center', `${TEXT.routeDefeat}`, TEXT.resultHelp);
+    this.checkpoint = checkpointAt(this.bossState.phase, this.reverse.returnsTotal, this.priorMs + this.clocks.real);
+    const help = this.checkpoint ? `${TEXT.checkpointRetry} ${this.checkpoint.phase}\n${TEXT.checkpointHelp}` : TEXT.resultHelp;
+    this.showPanel('center', TEXT.routeDefeat, help);
     this.publishView();
   }
 
@@ -534,16 +561,26 @@ export class GuardianScene extends Phaser.Scene {
 
   private showPanel(kind: 'center' | 'dialogue' | 'codex' | 'result', body: string, help: string): void {
     const c = COLORS.normal, g = this.panel.clear();
-    const box = kind === 'dialogue' ? { x: 8, y: 124, w: 304, h: 44 } : kind === 'codex' ? { x: 24, y: 40, w: 272, h: 100 } : kind === 'result' ? { x: 44, y: 40, w: 232, h: 118 } : { x: 60, y: 70, w: 200, h: 40 };
+    // Help may span lines (the checkpoint keys); the centered panel grows to fit them.
+    const helpLines = help.split('\n'), helpWidth = Math.max(...helpLines.map(line => line.length)) * CELL_WIDTH;
+    const extra = (helpLines.length - 1) * (CELL_HEIGHT + LINE_GAP), centerW = Math.max(200, helpWidth + 16);
+    const box = kind === 'dialogue' ? { x: 8, y: 124, w: 304, h: 44 } : kind === 'codex' ? { x: 24, y: 40, w: 272, h: 100 } : kind === 'result' ? { x: 44, y: 40, w: 232, h: 118 }
+      : { x: Math.round((GAME.width - centerW) / 2), y: 70 - Math.round(extra / 2), w: centerW, h: 40 + extra };
     g.fillStyle(c.gold).fillRect(box.x, box.y, box.w, box.h).fillStyle(c.dark).fillRect(box.x + 1, box.y + 1, box.w - 2, box.h - 2);
     const lines = body.split('\n'), widest = Math.max(...lines.map(line => line.length)) * CELL_WIDTH;
     const textX = kind === 'dialogue' ? box.x + 6 : Math.round(box.x + (box.w - widest) / 2);
     this.panelText.setText(body).setPosition(textX, box.y + 7);
-    this.panelHelp.setText(help).setPosition(Math.round(box.x + box.w - 6 - help.length * CELL_WIDTH), box.y + box.h - 12);
-    if (kind === 'center') this.panelHelp.setX(Math.round(box.x + (box.w - help.length * CELL_WIDTH) / 2));
+    this.panelHelp.setText(help).setPosition(Math.round(box.x + box.w - 6 - helpWidth), box.y + box.h - 12 - extra);
+    if (kind === 'center') this.panelHelp.setX(Math.round(box.x + (box.w - helpWidth) / 2));
   }
 
   // ------------------------------------------------------------------ messages
+  private coachSay(event: CoachEvent): void {
+    const step = coach(this.coachState, event, this.bossState.phase);
+    this.coachState = step.coach;
+    if (step.line) this.say({ text: step.line, ms: 1600 }, true);
+  }
+
   private say(message: Message, now = false): void {
     if (now) { this.messages.unshift(message); this.messageUntil = 0; } else this.messages.push(message);
   }
@@ -647,7 +684,7 @@ export class GuardianScene extends Phaser.Scene {
     if (shieldBlocks(b, world)) for (const [x, y] of shieldRing(SHIELD_RADIUS, b.shield, AMARU.shieldMax)) g.fillStyle(c.mid).fillRect(Math.round(center.x) + x, Math.round(center.y) + y, 1, 1);
     this.drawTelegraph(g, c);
     if (isSlow(this.reverse)) {
-      // The capture field is drawn at its real 28 px radius in hard pixels.
+      // The capture field is drawn at its real radius (REVERSE.captureRadius) in hard pixels.
       for (const [x, y] of shieldRing(REVERSE.captureRadius, 1, 1)) g.fillStyle(c.mid).fillRect(Math.round(this.player.x) + x, Math.round(this.player.y) + y, 1, 1);
     }
     this.drawCue(now);
@@ -700,10 +737,12 @@ export class GuardianScene extends Phaser.Scene {
       for (let i = 1; i <= steps; i++) g.fillStyle(c.light).fillRect(Math.round(mx + dx * i / steps), Math.round(my + dy * i / steps), 1, 1);
       return;
     }
-    // Fan guides: one dash per rhombus direction, lit in firing order (the loop motif).
-    const fixed = attack.emissions.filter(e => !e.aimed), lit = Math.floor(elapsed / attack.anticipation * fixed.length);
-    fixed.forEach((e, i) => {
-      for (let d = 12; d <= 20; d += 2) g.fillStyle(i <= lit ? c.light : c.mid).fillRect(Math.round(mx + Math.cos(e.angle) * d), Math.round(my + Math.sin(e.angle) * d), 1, 1);
+    // Fan guides: one dash per rhombus direction (aimed ones follow Kipu), lit in firing order (the loop motif).
+    const fan = attack.emissions.filter(e => e.shape === 'rhombus'), lit = Math.floor(elapsed / attack.anticipation * fan.length);
+    const aim = Math.atan2(this.player.y - my, this.player.x - mx);
+    fan.forEach((e, i) => {
+      const angle = e.aimed ? aim + e.angle : e.angle;
+      for (let d = 12; d <= 20; d += 2) g.fillStyle(i <= lit ? c.light : c.mid).fillRect(Math.round(mx + Math.cos(angle) * d), Math.round(my + Math.sin(angle) * d), 1, 1);
     });
   }
 
@@ -779,7 +818,7 @@ export class GuardianScene extends Phaser.Scene {
   private freeze(frozen: boolean): void {
     if (frozen) {
       this.physics.world.pause(); this.time.paused = true; this.input.keyboard?.resetKeys();
-      this.shiftRequested = false; this.advanceRequested = false; this.retry = false; this.mapRequested = false;
+      this.shiftRequested = false; this.advanceRequested = false; this.retry = false; this.fromStart = false; this.mapRequested = false;
       this.player.setVelocity(0, 0);
     } else { if (this.ending === 'playing') this.physics.world.resume(); this.time.paused = false; }
   }
@@ -787,7 +826,10 @@ export class GuardianScene extends Phaser.Scene {
   private blur = (): void => { this.focused = false; this.freeze(true); };
   private focus = (): void => { if (document.activeElement?.id !== 'game') return; this.focused = true; this.freeze(this.paused); };
   private pageFocus(active: boolean): void { if (active) this.focus(); else this.blur(); }
-  private publishView(): void { this.game.events.emit(VIEW_EVENT, { view: 'guardian', outcome: this.ending, progress: { ...this.registry.get('progress') } } satisfies ViewState); }
+  private publishView(): void {
+    const checkpoint = this.ending === 'defeat' && this.checkpoint ? { checkpoint: this.checkpoint.phase } : {};
+    this.game.events.emit(VIEW_EVENT, { view: 'guardian', outcome: this.ending, progress: { ...this.registry.get('progress') }, ...checkpoint } satisfies ViewState);
+  }
 
   private shutdown(): void {
     this.game.events.off(FOCUS_EVENT, this.pageFocus, this);
@@ -810,7 +852,9 @@ export class GuardianScene extends Phaser.Scene {
       wave: wave ? { ...wave, width: AMARU.wave.width, gap: AMARU.wave.gap } : null,
       patternsSeen: [...this.patternsSeen], cue: this.cueShown, message: this.message.text,
       liberation: lib ? { stage: lib.stage, dialogueIndex: lib.dialogueIndex, codexShown: lib.codexShown } : null,
-      panel: this.panelText.text, resultText: this.resultText,
+      panel: this.panelText.text, panelHelp: this.panelHelp.text, resultText: this.resultText,
+      checkpoint: this.checkpoint ? { ...this.checkpoint } : null, checkpointed: this.resumedFrom !== null, resumedFrom: this.resumedFrom?.phase ?? null,
+      fightElapsedMs: this.priorMs + this.clocks.real, coach: { ...this.coachState },
       enemyBolts: this.alive(this.enemies).map(bolt => { const v = (bolt.body as Body).velocity; return { x: bolt.x, y: bolt.y, vx: v.x, vy: v.y, capturable: bolt.getData('capturable') === true, shape: bolt.getData('shape'), texture: bolt.texture.key }; }),
       alliedShots: [...this.alive(this.shots).map(s => ({ x: s.x, y: s.y, returned: false })), ...this.alive(this.returns).map(s => ({ x: s.x, y: s.y, returned: true }))],
       pools: { shots: this.shots.getLength(), returns: this.returns.getLength(), enemies: this.enemies.getLength(), orbit: this.orbit.length, particles: this.fx.items.length, particlesActive: this.fx.activeCount },

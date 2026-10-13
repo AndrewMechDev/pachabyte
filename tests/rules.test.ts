@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GAME, MAX_FRAME_MS, canShoot, clamp, clampToBounds, flight, frameDelta, playBounds, projectileExpired, shotVelocity } from '../src/game/rules';
+import { GAME, MAX_FRAME_MS, canShoot, clamp, clampToBounds, flight, frameDelta, oncePerEvent, playBounds, projectileExpired, shotVelocity } from '../src/game/rules';
 
 const none = { left: false, right: false, up: false, down: false };
 
@@ -82,5 +82,18 @@ describe('frame-time cap', () => {
   });
   it('never runs a clock backwards', () => {
     expect(frameDelta(-5)).toBe(0);
+  });
+});
+
+describe('once per DOM key event', () => {
+  // Phaser 3.90 re-runs the frame's key queue on every DOM key event; after resetKeys() the same keydown can
+  // reach a handler twice (a release followed by Esc in one frame paused and unpaused at once).
+  it('accepts each event object once and always accepts a missing event', () => {
+    const fresh = oncePerEvent(), first = { type: 'keydown' }, second = { type: 'keydown' };
+    expect(fresh(first)).toBe(true);
+    expect(fresh(first)).toBe(false);
+    expect(fresh(second)).toBe(true);
+    expect(fresh(undefined)).toBe(true);
+    expect(oncePerEvent()(first)).toBe(true);
   });
 });

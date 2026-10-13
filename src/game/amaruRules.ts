@@ -1,11 +1,12 @@
 import type { Reverse } from './reverseRules';
-import { REVERSE } from './reverseRules';
+import { REVERSE, initialReverse } from './reverseRules';
 import { GAME } from './rules';
-import type { Rect } from './routeRules';
+import { ROUTE, type Rect } from './routeRules';
 
 // Amaru-01 as pure rules: health-based phases, shield, vulnerability windows, attack patterns, the wave
 // and the head/body path. Times are WORLD-clock milliseconds (scaled to 20 % while REVERSE is SLOW).
-// Every value is tentative canon (docs/design/COMBAT_DESIGN.md) aimed at a 2-3 minute casual fight.
+// Every value is tentative canon (docs/design/COMBAT_DESIGN.md) aimed at a 2-3 minute casual fight; values marked
+// "playtest" come from the first human playtest (2026-10-13), where phase 2 proved too hard to learn.
 export const AMARU = Object.freeze({
   maxHP: 100,
   phase2From: 66,       // phase 2 covers HP 66..34
@@ -14,7 +15,7 @@ export const AMARU = Object.freeze({
   returnDamage: REVERSE.returnDamage,
   finalMultiplier: 2,   // normal shots inside the scripted phase 3 window (after the wave)
   shieldMax: 6,
-  shieldWindowMs: 4000, // vulnerability after the shield breaks; then it regenerates
+  shieldWindowMs: 6500, // vulnerability after the shield breaks; then it regenerates in full. Playtest: was 4000
   finalWindowMs: 2600,  // scripted phase 3 window after the wave
   firstAttackMs: 1500,  // calm opening before the first telegraph
   phaseIntroMs: 2200,   // pause on entering a phase so its message reads before the next attack
@@ -76,6 +77,23 @@ export function victoryReady(b: Boss, r: Reverse): boolean {
   return b.hp <= 0 && r.state !== 'SLOW' && r.state !== 'RELEASE';
 }
 
+// ---------------------------------------------------------------- phase checkpoints
+// Playtest (2026-10-13): a defeat in phase 2 or 3 may resume at that phase's start. The returns already scored
+// and the fight time already spent carry over, so a checkpoint never earns a larger time bonus.
+export interface Checkpoint { readonly phase: 2 | 3; readonly returnsTotal: number; readonly elapsedMs: number }
+export function checkpointAt(phase: Phase, returnsTotal: number, elapsedMs: number): Checkpoint | null {
+  return phase === 1 ? null : { phase, returnsTotal, elapsedMs };
+}
+// Full hearts, a full meter and the shield raised, at the HP where the phase begins.
+export function resumeFrom(c: Checkpoint): { boss: Boss; reverse: Reverse; heroHp: number } {
+  const hp = c.phase === 2 ? AMARU.phase2From : AMARU.phase3From;
+  return {
+    boss: { hp, phase: c.phase, shield: AMARU.shieldMax, vulnerableUntil: 0, doubleDamage: false },
+    reverse: { ...initialReverse(REVERSE.meterMax), returnsTotal: c.returnsTotal },
+    heroHp: ROUTE.maxHp,
+  };
+}
+
 // ---------------------------------------------------------------- attack patterns
 export type Shape = 'orb' | 'rhombus';
 // Capturable bolts are rhombus-shaped; round orbs and the wave are never capturable (silhouette, not color).
@@ -90,10 +108,13 @@ const orb = (at: number, speed: number = AMARU.orbSpeed, angle = 0): Emission =>
 const rhombus = (at: number, angle: number, speed: number = AMARU.rhombusSpeed): Emission => ({ at, shape: 'rhombus', aimed: false, angle, speed });
 const byTime = (list: Emission[]): readonly Emission[] => Object.freeze(list.sort((a, b) => a.at - b.at));
 
-// A fan of seven rhombi sweeping across the left side (the "loop"), plus two aimed orbs to keep Kipu moving.
+// The "loop": a narrow fan of seven rhombi sweeping across Kipu's position, each aimed at where Kipu is when it
+// fires, so flying into them always finds captures (playtest: the old absolute fan could miss Kipu entirely).
+// One aimed orb trails the fan to keep Kipu moving; dangerous orbs stay sparse in phase 2.
+const LOOP_SPREAD = 0.33;
 function loop(direction: 1 | -1): readonly Emission[] {
-  const fan = Array.from({ length: 7 }, (_, i) => rhombus(i * 180, Math.PI + direction * (0.55 - i * 1.1 / 6)));
-  return byTime([...fan, orb(300, 100), orb(900, 100)]);
+  const fan = Array.from({ length: 7 }, (_, i): Emission => ({ ...rhombus(i * 180, direction * (LOOP_SPREAD - i * LOOP_SPREAD / 3)), aimed: true }));
+  return byTime([...fan, orb(1250, 100)]);
 }
 function burst(): readonly Emission[] {
   const list: Emission[] = [];

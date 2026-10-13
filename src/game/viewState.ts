@@ -4,11 +4,12 @@ export const VIEW_EVENT = 'pacha:view';
 export const FOCUS_EVENT = 'pacha:focus';
 export type View = 'map' | 'route' | 'guardian';
 export type ViewOutcome = 'playing' | 'victory' | 'defeat';
-export interface ViewState { view: View; outcome: ViewOutcome; progress: Progress }
+// checkpoint: the phase a guardian defeat can resume from (2 or 3); absent otherwise.
+export interface ViewState { view: View; outcome: ViewOutcome; progress: Progress; checkpoint?: number }
 export const sceneForView = (view: View): string => ({ map: 'MapScene', route: 'RouteScene', guardian: 'GuardianScene' })[view];
 
 // Page copy (Spanish) for the DOM bridge around the canvas.
-export function viewCopy({ view, outcome, progress }: ViewState) {
+export function viewCopy({ view, outcome, progress, checkpoint }: ViewState) {
   if (view === 'map') return {
     title: 'Mapa de la Trama',
     help: 'Enter: iniciar ruta · 2: ir a Amaru',
@@ -23,6 +24,11 @@ export function viewCopy({ view, outcome, progress }: ViewState) {
     help: ended ? 'R: reintentar · M: mapa' : `${move} · Pausa: Esc · Reintentar: R · Mapa: M`,
     result: outcome === 'defeat' ? 'Kipu se desconecta. Reintenta cuando quieras.'
       : 'Esquiva los Glitchlings, recoge fragmentos y busca la brecha del firewall. La ruta termina en Amaru.',
+  };
+  if (outcome === 'defeat' && checkpoint) return {
+    title: 'Amaru-01 — Arena del guardián',
+    help: `R: reintentar desde la fase ${checkpoint} · Enter: desde el inicio · M: mapa`,
+    result: `Derrota: Kipu se desconecta. Reintenta desde la fase ${checkpoint} con vidas y energía llenas.`,
   };
   return {
     title: 'Amaru-01 — Arena del guardián',

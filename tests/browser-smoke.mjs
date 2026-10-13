@@ -18,7 +18,11 @@ const TEXT = {
   intro: 'LAS RUTAS SE ESTÁN APAGANDO', threshold: 'ALGO REPITE UN PATRÓN...', defeat: 'KIPU SE DESCONECTA',
   core: 'EL NÚCLEO DE KIPU DESPIERTA', amaru: 'AMARU: OTRA VEZ... ESTABA CONDENADO A REPETIRLO.', kipu: 'KIPU: ENTONCES CAMBIEMOS EL FINAL.',
   codex: 'CÓDICE: BUCLE', codexFind: 'FRAGMENTO LOOP ENCONTRADO', result: 'NODO AREQUIPA RESTAURADO', pulse: 'TRIPLE PULSO: ESQUIVA',
+  flyToRhombi: 'VUELA HACIA LOS ROMBOS', shieldBroken: '¡ESCUDO ROTO! ¡DISPARA!',
+  checkpointHelp: phase => `R: REINTENTAR DESDE FASE ${phase}\nENTER: DESDE EL INICIO  M: MAPA`,
 };
+// REVERSE tuning from the first human playtest (2026-10-13); mirrors src/game/reverseRules.ts.
+const SLOW_MS = 1200, CAPTURE_RADIUS = 40;
 const phaseFor = hp => (hp > 66 ? 1 : hp > 33 ? 2 : 3);
 
 const passed = [];
@@ -416,14 +420,18 @@ try {
   while (outcome === 'defeat' && fight.attempts < 4) {
     const lost = await snap();
     notes.push(`fight attempt ${fight.attempts} lost at boss HP ${lost.bossHP} (phase ${lost.phase})`);
+    // A phase 2/3 defeat offers a checkpoint; this pilot always restarts the whole fight (Enter) so the winning
+    // attempt still crosses phases 1, 2 and 3. The checkpoint itself is exercised in the defeat section.
+    if (lost.phase >= 2) assert.equal(lost.panelHelp, TEXT.checkpointHelp(lost.phase));
     if (fight.attempts === 2) {
       // Two losses with the carried run: continue from a fresh direct entry (4 HP, empty meter).
       await button('Mapa').click();
       await wait(() => window.pachaDebug?.().scene === 'map');
       await button('Ir a Amaru').click();
       notes.push('fight: switched to direct entry after two carried-run losses');
-    } else await page.keyboard.press('r');
+    } else await page.keyboard.press(lost.phase >= 2 ? 'Enter' : 'r');
     await wait(previous => window.pachaDebug?.().scene === 'guardian' && window.pachaDebug().sceneRun > previous && window.pachaDebug().outcome === 'playing', lost.sceneRun);
+    assert.equal((await snap()).bossHP, 100, 'the fight pilot restarts from phase 1');
     outcome = await fightOnce();
   }
   assert.equal(outcome, 'victory', `the keyboard pilot must free Amaru (attempts ${fight.attempts})`);
@@ -464,17 +472,17 @@ try {
   assert.ok(closed.length >= 2, `REVERSE must be used at least twice (${closed.length})`);
   for (const r of closed) {
     const real = r.end.rc - r.start.rc, world = r.end.wc - r.start.wc;
-    assert.ok(real >= 800 && real <= 900, `SLOW lasts 800 ms of real clock (observed ${real})`);
+    assert.ok(real >= SLOW_MS && real <= SLOW_MS + 100, `SLOW lasts ${SLOW_MS} ms of real clock (observed ${real})`);
     assert.ok(Math.abs(world - 0.2 * real) < 0.5, `world advances at 0.2 during SLOW (${world} vs ${real})`);
   }
   const wall = closed.filter(r => !F.some(s => s.run === r.start.run && s.rc >= r.start.rc && s.rc <= r.end.rc && !s.f)).map(r => Math.round(r.end.t - r.start.t));
   notes.push(`SLOW wall-clock durations (unfrozen): ${wall.join(', ')} ms`);
-  assert.ok(wall.length > 0 && wall.every(ms => ms >= 750 && ms <= 1600), `unfrozen SLOW must take about 800 ms of wall time (${wall})`);
+  assert.ok(wall.length > 0 && wall.every(ms => ms >= SLOW_MS - 50 && ms <= SLOW_MS * 2), `unfrozen SLOW must take about ${SLOW_MS} ms of wall time (${wall})`);
   const captures = gPairs.filter(([a, b]) => b.cap > a.cap && b.st === 'SLOW');
   assert.ok(captures.length >= 2, 'bolts must be captured');
   assert.ok(G.every(s => s.cap <= 6), 'at most six captures per activation');
   for (const [a, b] of captures) {
-    assert.ok(a.mcd !== null && a.mcd <= 28 + 14, `captured bolt was ${a.mcd} px away (radius 28 plus one frame of motion)`);
+    assert.ok(a.mcd !== null && a.mcd <= CAPTURE_RADIUS + 14, `captured bolt was ${a.mcd} px away (radius ${CAPTURE_RADIUS} plus one frame of motion)`);
     assert.ok(b.hero === a.hero, 'a captured bolt never damages Kipu');
   }
   const shieldDrops = gPairs.filter(([a, b]) => b.sh < a.sh);
@@ -496,6 +504,8 @@ try {
   const phase2 = G.find(s => s.ph === 2);
   assert.ok(phase2.m === 100 || phase2.st === 'SLOW', 'entering phase 2 awakens the core and fills the meter');
   assert.ok(F.some(s => s.msg.includes(TEXT.core)), 'core-awakening message shows');
+  assert.ok(F.some(s => s.ph === 2 && s.st === 'SLOW' && s.msg === TEXT.flyToRhombi), 'the first SLOW of phase 2 coaches "fly into the rhombi"');
+  assert.ok(F.some(s => s.msg === TEXT.shieldBroken), 'a broken shield calls the punish window');
   const lib = F.filter(s => s.run === runs.at(-1) && s.lib).map(s => s.lib);
   const order = lib.filter((x, i) => x !== lib[i - 1]);
   assert.deepEqual(order, ['recede0', 'restore0', 'dialogue0', 'dialogue1', 'codex1', 'result1'], 'liberation stages in order');
@@ -546,6 +556,57 @@ try {
     { outcome: 'playing', hero: 4, boss: 100, phase: 1, shield: 0, state: 'CHARGING', meter: 0, activations: 0, returns: 0, liberation: null, bolts: 0 }, 'R resets the fight');
   assert.ok(retried.realClock < 1000);
   passed.push('5 defeat: Shift/K/X rejected while CHARGING, standing still loses all hearts, "KIPU SE DESCONECTA", bolts cleared, R restarts with full state reset');
+
+  stage = '5 checkpoint: a phase 2 defeat resumes at phase 2 with R and restarts the fight with Enter';
+  // Fight phase 1 with the pilot (it never uses PachaShift there), then stand still in phase 2 until the hearts run out.
+  const loseInPhase2 = async () => {
+    for (let tries = 0; tries < 3; tries++) {
+      const deadline = Date.now() + 120000;
+      while (Date.now() < deadline) {
+        const s = await snap();
+        if (s.outcome !== 'playing' || s.phase >= 2) break;
+        await setKeys(guardianKeys(s).keys);
+      }
+      await releaseAll();
+      const s = await snap();
+      if (s.outcome === 'playing' && s.phase === 2) break;
+      notes.push(`checkpoint setup: lost in phase ${s.phase} at boss HP ${s.bossHP}; retrying`);
+      await page.keyboard.press('r');
+      await wait(previous => window.pachaDebug?.().sceneRun > previous && window.pachaDebug().outcome === 'playing', s.sceneRun);
+    }
+    await wait(() => window.pachaDebug().outcome === 'defeat', undefined, 90000);
+    return snap();
+  };
+  const lost2 = await loseInPhase2();
+  assert.equal(lost2.phase, 2, 'the defeat happens in phase 2');
+  assert.equal(lost2.panel, TEXT.defeat);
+  assert.equal(lost2.panelHelp, TEXT.checkpointHelp(2));
+  assert.equal(lost2.checkpoint.phase, 2); assert.equal(lost2.checkpoint.returnsTotal, lost2.reverse.returnsTotal);
+  assert.ok(lost2.checkpoint.elapsedMs > 0 && lost2.checkpoint.elapsedMs <= lost2.fightElapsedMs, 'the checkpoint keeps the fight time already spent');
+  assert.match(await page.locator('#view-help').innerText(), /R: reintentar desde la fase 2 · Enter: desde el inicio · M: mapa/);
+  await frames(10);
+  await page.keyboard.press('r');
+  await wait(previous => window.pachaDebug?.().sceneRun > previous && window.pachaDebug().realClock > 0, lost2.sceneRun);
+  const resumed = await snap();
+  assert.deepEqual(
+    { outcome: resumed.outcome, hero: resumed.heroHP, boss: resumed.bossHP, phase: resumed.phase, shield: resumed.shieldHP, state: resumed.reverse.state, meter: resumed.reverse.meter, returns: resumed.reverse.returnsTotal, checkpointed: resumed.checkpointed, from: resumed.resumedFrom, score: resumed.score },
+    { outcome: 'playing', hero: 4, boss: 66, phase: 2, shield: 6, state: 'READY', meter: 100, returns: lost2.reverse.returnsTotal, checkpointed: true, from: 2, score: lost2.score },
+    'R after a phase 2 defeat resumes at phase 2 with full hearts, a full meter and the score kept');
+  assert.ok(resumed.fightElapsedMs >= lost2.checkpoint.elapsedMs, 'resuming never resets the fight time (no time bonus abuse)');
+  assert.match(await page.locator('#view-help').innerText(), /PachaShift/);
+  await wait(() => window.pachaDebug().outcome === 'defeat', undefined, 90000);
+  const lostAgain = await snap();
+  assert.equal(lostAgain.panelHelp, TEXT.checkpointHelp(2));
+  await frames(10);
+  await page.keyboard.press('Enter');
+  await wait(previous => window.pachaDebug?.().sceneRun > previous && window.pachaDebug().realClock > 0, lostAgain.sceneRun);
+  const restarted = await snap();
+  assert.deepEqual(
+    { outcome: restarted.outcome, hero: restarted.heroHP, boss: restarted.bossHP, phase: restarted.phase, meter: restarted.reverse.meter, returns: restarted.reverse.returnsTotal, checkpointed: restarted.checkpointed },
+    { outcome: 'playing', hero: 4, boss: 100, phase: 1, meter: 0, returns: 0, checkpointed: false },
+    'Enter after a phase 2 defeat restarts the whole fight');
+  notes.push(`checkpoint: lost in phase 2 at boss HP ${lost2.bossHP}, R resumed at 66 with 4 hearts and meter 100; Enter restarted at 100`);
+  passed.push('5 checkpoint: a phase 2 defeat shows "R: REINTENTAR DESDE FASE 2" / "ENTER: DESDE EL INICIO  M: MAPA" (canvas and DOM help); R resumes at HP 66 with 4 hearts, a full meter, shield up, score and fight time kept; Enter restarts from phase 1');
 
   // ================================================================== 7. sound
   stage = '7 sound toggle';

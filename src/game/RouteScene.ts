@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME, canShoot, flight, frameDelta, playBounds, projectileExpired, shotVelocity } from './rules';
+import { GAME, canShoot, flight, frameDelta, oncePerEvent, playBounds, projectileExpired, shotVelocity } from './rules';
 import {
   ROUTE, RUN_KEY, WALLS, addMeter, cameraScroll, captionAt, glitchlingVelocity, mareaFront, mareaTouches, overlaps, pickupFragment,
   runningScore, segmentAt, spawnsDue, takeHit, wallRects, wallScreenX, wallTelegraph, type Health, type Rect, type RunState, type Spawn, type Tally,
@@ -36,6 +36,7 @@ const CAPTION = Object.freeze({ top: GAME.hudHeight + 2, textY: GAME.hudHeight +
 export class RouteScene extends Phaser.Scene {
   private player!: Sprite;
   private keys!: Keys;
+  private freshKey = oncePerEvent();
   private shots!: Phaser.Physics.Arcade.Group;
   private glitchlings!: Phaser.Physics.Arcade.Group;
   private fragments!: Phaser.Physics.Arcade.Group;
@@ -145,9 +146,10 @@ export class RouteScene extends Phaser.Scene {
       left: 'LEFT', right: 'RIGHT', up: 'UP', down: 'DOWN', a: 'A', d: 'D', w: 'W', s: 'S',
       space: 'SPACE', j: 'J', z: 'Z', esc: 'ESC', p: 'P', r: 'R', m: 'M',
     }) as Keys;
+    this.freshKey = oncePerEvent();
     for (const key of [this.keys.esc, this.keys.p]) key.setEmitOnRepeat(false).on('down', (_key: unknown, event?: KeyboardEvent) => {
-      // Ignore OS auto-repeat: after resetKeys a held key would otherwise toggle pause again.
-      if (this.focused && !event?.repeat) this.togglePause();
+      // Ignore OS auto-repeat and Phaser's same-frame queue replay: after resetKeys either would toggle pause again.
+      if (this.focused && !event?.repeat && this.freshKey(event)) this.togglePause();
     });
     this.keys.r.setEmitOnRepeat(false).on('down', () => { if (this.focused && !this.paused) this.retryRequested = true; });
     this.keys.m.setEmitOnRepeat(false).on('down', () => { if (this.focused && !this.paused) this.mapRequested = true; });

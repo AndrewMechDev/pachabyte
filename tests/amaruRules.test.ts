@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   AMARU, ATTACKS, PHASE_PATTERNS, attackFor, attackStage, bodyPositions, capturable, emissionVelocity, emissionsDue, headPosition,
-  hitBoss, initialBoss, isVulnerable, openWindow, phaseFor, shieldBlocks, shieldRing, tickBoss, victoryReady, waveGapY, waveHits, waveX,
-  type Boss,
+  checkpointAt, hitBoss, initialBoss, isVulnerable, openWindow, phaseFor, resumeFrom, shieldBlocks, shieldRing, tickBoss, victoryReady,
+  waveGapY, waveHits, waveX, type Boss,
 } from '../src/game/amaruRules';
-import { activateReverse, captureBolt, initialReverse, tickReverse } from '../src/game/reverseRules';
+import { REVERSE, activateReverse, captureBolt, initialReverse, tickReverse } from '../src/game/reverseRules';
 
 const at = (hp: number, extra: Partial<Boss> = {}): Boss => ({ ...initialBoss(), hp, phase: phaseFor(hp), ...extra });
 
@@ -38,9 +38,14 @@ describe('Amaru damage and shield', () => {
     expect(cracked).toMatchObject({ result: 'shieldHit', amount: 3, boss: { hp: 60, shield: 3 } });
     const broken = hitBoss(cracked.boss, 'returned', 1000);
     expect(broken).toMatchObject({ result: 'shieldBreak', boss: { hp: 60, shield: 0, vulnerableUntil: 1000 + AMARU.shieldWindowMs } });
-    expect(AMARU.shieldWindowMs).toBe(4000);
+    expect(AMARU.shieldWindowMs).toBe(6500);
   });
-  it('lets normal shots through during the 4 s window and regenerates the shield afterwards', () => {
+  it('lets normal shots through during the 6.5 s window and regenerates the shield to full only afterwards', () => {
+    const broken = hitBoss(at(60, { shield: 3 }), 'returned', 1000).boss;
+    expect(broken).toMatchObject({ shield: 0, vulnerableUntil: 7500 });
+    expect(tickBoss(broken, 7499)).toBe(broken);
+    expect(shieldBlocks(broken, 7499)).toBe(false);
+    expect(tickBoss(broken, 7500)).toMatchObject({ shield: AMARU.shieldMax, vulnerableUntil: 0 });
     const open = at(60, { shield: 0, vulnerableUntil: 5000 });
     expect(isVulnerable(open, 4999)).toBe(true);
     expect(hitBoss(open, 'normal', 4000)).toMatchObject({ result: 'damage', amount: 1, boss: { hp: 59 } });
@@ -72,7 +77,7 @@ describe('victory waits for REVERSE to resolve', () => {
   it('declares victory at 0 HP only when no SLOW or RELEASE is running', () => {
     const slow = captureBolt(activateReverse(initialReverse(100), 0), 1, true);
     expect(victoryReady(at(0), slow)).toBe(false);
-    const release = tickReverse(slow, 800).reverse;
+    const release = tickReverse(slow, REVERSE.slowMs).reverse;
     expect(release.state).toBe('RELEASE');
     expect(victoryReady(at(0), release)).toBe(false);
     expect(victoryReady(at(0), initialReverse())).toBe(true);
@@ -96,15 +101,41 @@ describe('attack patterns', () => {
     expect(pulse.recovery).toBeGreaterThan(0);
     expect(capturable('orb')).toBe(false);
   });
-  it('phase 2 loops are mostly capturable rhombus bolts plus a few orbs', () => {
+  it('phase 2 loops are mostly capturable rhombus bolts plus one sparse orb', () => {
     for (const kind of ['loopDown', 'loopUp'] as const) {
       const shapes = ATTACKS[kind].emissions.map(e => e.shape);
       const rhombi = shapes.filter(s => s === 'rhombus').length;
       expect(rhombi).toBeGreaterThanOrEqual(6);
-      expect(shapes.filter(s => s === 'orb').length).toBeGreaterThan(0);
+      expect(shapes.filter(s => s === 'orb').length).toBe(1);
       expect(rhombi).toBeGreaterThan(shapes.length / 2);
     }
     expect(capturable('rhombus')).toBe(true);
+  });
+  it('phase 2 loops aim their rhombi at or near Kipu so a capture is always within reach', () => {
+    const mouths = [{ x: 233, y: 70 }, { x: 233, y: 105 }, { x: 233, y: 139 }];
+    const kipus = [{ x: 30, y: 30 }, { x: 80, y: 94 }, { x: 140, y: 150 }, { x: 200, y: 40 }, { x: 60, y: 160 }];
+    for (const kind of ['loopDown', 'loopUp'] as const) {
+      const rhombi = ATTACKS[kind].emissions.filter(e => e.shape === 'rhombus');
+      expect(rhombi.every(e => e.aimed && Math.abs(e.angle) <= 0.35)).toBe(true);
+      for (const mouth of mouths) for (const kipu of kipus) {
+        // Closest approach of each rhombus ray to where Kipu was when it fired.
+        const reach = rhombi.filter(e => {
+          const v = emissionVelocity(e, mouth, kipu), speed = Math.hypot(v.vx, v.vy);
+          const dx = kipu.x - mouth.x, dy = kipu.y - mouth.y, along = (dx * v.vx + dy * v.vy) / speed;
+          return along > 0 && Math.abs(dx * v.vy - dy * v.vx) / speed <= REVERSE.captureRadius;
+        }).length;
+        expect(reach, `${kind} from ${mouth.y} to (${kipu.x}, ${kipu.y})`).toBeGreaterThanOrEqual(2);
+      }
+    }
+    // The two loops sweep in opposite orders, keeping the loop motif readable.
+    const sweep = (kind: 'loopDown' | 'loopUp') => ATTACKS[kind].emissions.filter(e => e.shape === 'rhombus').map(e => e.angle);
+    expect(sweep('loopUp')).toEqual(sweep('loopDown').map(a => -a));
+    // The one orb trails the rhombi instead of hiding among them.
+    for (const kind of ['loopDown', 'loopUp'] as const) {
+      const list = ATTACKS[kind].emissions, orbAt = list.find(e => e.shape === 'orb')!.at;
+      expect(list.filter(e => e.shape === 'rhombus').every(e => e.at < orbAt)).toBe(true);
+      expect(orbAt).toBeLessThan(ATTACKS[kind].action);
+    }
   });
   it('phase 3 mixes rhombus and orbs in bursts, then a wave, then a window', () => {
     const shapes = new Set(ATTACKS.burst.emissions.map(e => e.shape));
@@ -176,5 +207,24 @@ describe('shield ring', () => {
     expect(cracked.length).toBeLessThan(full.length);
     expect(shieldRing(30, 0, 6)).toEqual([]);
     for (const [x, y] of full) { expect(Number.isInteger(x)).toBe(true); expect(Number.isInteger(y)).toBe(true); }
+  });
+});
+
+describe('phase checkpoints (first human playtest, 2026-10-13)', () => {
+  it('offers a checkpoint only for a defeat in phase 2 or 3', () => {
+    expect(checkpointAt(1, 0, 20000)).toBeNull();
+    expect(checkpointAt(2, 3, 41000)).toEqual({ phase: 2, returnsTotal: 3, elapsedMs: 41000 });
+    expect(checkpointAt(3, 7, 90000)).toEqual({ phase: 3, returnsTotal: 7, elapsedMs: 90000 });
+  });
+  it('resumes at the phase start HP with full hearts, a full meter and the shield up, keeping the returns scored', () => {
+    const two = resumeFrom({ phase: 2, returnsTotal: 3, elapsedMs: 41000 });
+    expect(two.boss).toEqual({ hp: AMARU.phase2From, phase: 2, shield: AMARU.shieldMax, vulnerableUntil: 0, doubleDamage: false });
+    expect(two.boss.hp).toBe(66);
+    expect(two.heroHp).toBe(4);
+    expect(two.reverse).toMatchObject({ state: 'READY', meter: 100, captured: 0, pending: 0, activations: 0, returnsTotal: 3 });
+    const three = resumeFrom({ phase: 3, returnsTotal: 7, elapsedMs: 90000 });
+    expect(three.boss).toMatchObject({ hp: 33, phase: 3, shield: AMARU.shieldMax });
+    expect(phaseFor(three.boss.hp)).toBe(3);
+    expect(phaseFor(two.boss.hp)).toBe(2);
   });
 });

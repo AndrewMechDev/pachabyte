@@ -52,3 +52,16 @@ export const MAX_FRAME_MS = 100;
 export function frameDelta(raw: number): number {
   return clamp(raw, 0, MAX_FRAME_MS);
 }
+
+// Phaser 3.90 re-runs the frame's whole key queue on every DOM key event and only skips an event identical to the
+// one just processed. When a handler calls resetKeys() (pause does), the same keydown can reach it twice in one
+// frame, e.g. a key release followed by Esc paused and unpaused at once. Toggles act once per DOM event.
+export function oncePerEvent(): (event: object | undefined) => boolean {
+  const seen = new WeakSet<object>();
+  return event => {
+    if (!event) return true;
+    if (seen.has(event)) return false;
+    seen.add(event);
+    return true;
+  };
+}
