@@ -2,16 +2,20 @@
 
 ## Purpose and scope
 
-This folder is the canonical local PachaByte project. Preserve the approved MVP in `docs/GDD.md`: 320 × 180 side-view arcade, original turquoise-and-gold Kipu, movement, jump, shooting, practice targets, and provisional Arequipa-inspired scenery. The user approved a local Phase 3 slice: training completion, two functional map nodes, one-phase Amaru with two telegraphed attacks, HP/outcomes, and PachaShift capture/reversal. This local build does not require email evidence; preselection before October 14 with winners shown later is user-reported, not independently verified official rules. On 2026-10-12 the user also approved visual animation and feedback polish using existing art (`odd/tasks/animation-polish.md`). The user then approved synthesized WebAudio sound effects (generated in code, no audio files; `src/game/sfx.ts`). Hand-drawn production spritesheets, music, extra worlds, touch and backend remain deferred. Remote publication/submission still requires separate authorization.
+This folder is the canonical PachaByte project. **The design canon is `docs/design/` (Spanish, package v1, adopted 2026-10-12)**: read `docs/design/AGENTS.md` and `docs/design/DECISIONS.md` first. Its rules add to this file; where they conflict on game design, `docs/design/` wins, and on repository, Git and remote boundaries this file wins.
+
+Approved by the user on 2026-10-12: pivot from the old gravity platformer to free flight; build the full Ruta 01 of `docs/design/LEVEL_DESIGN.md` (arrival, Glitchlings, fragments and score, one obstacle, Marea del Desfase, sanctuary threshold, Amaru-01 with three health phases and REVERSE, liberation, Codex and score) before deploying; in-game text in Spanish (code, identifiers and technical docs stay English). Older docs in `docs/` (GDD, PROJECT_PLAN, VALIDATION_PLAN) are historical where they describe the platformer. The gap analysis is `docs/AUDIT_DESIGN_V1.md`.
+
+Missing definitive art follows `docs/design/ASSET_PIPELINE.md`: issue an ASSET REQUEST to the user and keep a clearly labelled procedural placeholder meanwhile. Remote publication requires separate authorization; the user asked for deploy last.
 
 ## Project map
 
 - `src/main.ts`: browser bootstrap and Phaser setup.
-- `src/game/ArcadeScene.ts`: scene, input, physics, camera, targets, lifecycle.
+- `src/game/` scenes (map, route, guardian), pure rules, animation, sound.
 - `src/game/rules.ts`: pure gameplay decisions and tuning.
 - `src/game/textures.ts`: procedural placeholder art.
 - `tests/`: deterministic rules and browser smoke tests.
-- `docs/`: design baseline, project plan, decisions, and verification.
+- `docs/design/`: canon design package (Spanish). `docs/`: audit, art bible, verification and history.
 
 ## Working method
 
