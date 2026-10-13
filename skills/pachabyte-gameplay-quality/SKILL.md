@@ -36,4 +36,5 @@ Return changed behavior, preserved invariants, observed checks, unavailable chec
 
 ## References
 - [Design principles](references/design-principles.md): sourced inspiration and project-specific interpretation.
+- [Asset preparation](references/asset-prep.md): adapting generated 8x sprites with `tools/prepare_sprite.py`.
 - [UI and motion principles](references/ui-motion-principles.md): adapted web-UI/animation rules, reduced motion, what was deliberately not adopted.
