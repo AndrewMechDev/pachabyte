@@ -3,16 +3,21 @@ import { NOKIA } from './nokiaPalette';
 // Pure animation decisions. Nothing here reads or writes gameplay state, and nothing scales a
 // physics sprite: Arcade bodies follow sprite scale, so visual change must stay independent.
 
-export const ANIM = Object.freeze({ landMs: 100, runStepMs: 110, breatheMs: 450, riseSpeed: 40, moveThreshold: 10 });
+export const ANIM = Object.freeze({ breatheMs: 450, riseSpeed: 40, maxTilt: 7 });
 
 export type KipuFrame = 'idle' | 'bob' | 'squash' | 'stretch';
-export interface PoseInput { grounded: boolean; velocityX: number; velocityY: number; now: number; landedAt: number }
+export interface PoseInput { velocityY: number; now: number }
 
+// Free-flight pose: stretch while rising fast, otherwise a slow hover breath. No ground, no landing squash.
 export function kipuFrame(input: PoseInput): KipuFrame {
-  if (!input.grounded) return input.velocityY < -ANIM.riseSpeed ? 'stretch' : 'idle';
-  if (input.now >= input.landedAt && input.now - input.landedAt < ANIM.landMs) return 'squash';
-  if (Math.abs(input.velocityX) > ANIM.moveThreshold) return Math.floor(input.now / ANIM.runStepMs) % 2 === 1 ? 'bob' : 'idle';
+  if (input.velocityY < -ANIM.riseSpeed) return 'stretch';
   return Math.floor(input.now / ANIM.breatheMs) % 2 === 1 ? 'bob' : 'idle';
+}
+
+// Rotation-only tilt in degrees (Arcade bodies ignore rotation): nose up when rising, lean into horizontal motion.
+export function flightTilt(velocityX: number, velocityY: number): number {
+  const raw = 3 * velocityX / 110 + 5 * velocityY / 110;
+  return Math.max(-ANIM.maxTilt, Math.min(ANIM.maxTilt, Math.round(raw * 2) / 2)) || 0;
 }
 
 export const KIPU_BASE = 'kipu-evaluation';

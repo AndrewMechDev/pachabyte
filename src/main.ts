@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
 import './style.css';
-import { ArcadeScene } from './game/ArcadeScene';
+import { RouteScene } from './game/RouteScene';
 import { MapScene } from './game/MapScene';
 import { GuardianScene } from './game/GuardianScene';
 import { GAME } from './game/rules';
 import { sfx } from './game/sfx';
 import { motion } from './game/motion';
 import { initialProgress } from './game/challengeRules';
+import { RUN_KEY } from './game/routeRules';
 import { VIEW_EVENT, FOCUS_EVENT, sceneForView, viewCopy, type ViewState, type View } from './game/viewState';
 
 const host = document.getElementById('game');
@@ -20,8 +21,8 @@ function render(state: ViewState): void {
   current = state;
   const copy = viewCopy(state);
   title.textContent = copy.title; help.textContent = copy.help; result.textContent = copy.result;
-  host!.setAttribute('aria-label', copy.title + '. Keyboard-controlled game.');
-  achievements.textContent = `Session achievements: Targets ${state.progress.training?'cleared':'not cleared'} · Amaru ${state.progress.guardian?'cleared':'not cleared'}`;
+  host!.setAttribute('aria-label', copy.title + '. Juego controlado con teclado.');
+  achievements.textContent = `Logros de la sesión: Ruta ${state.progress.route?'completada':'pendiente'} · Amaru ${state.progress.guardian?'liberado':'pendiente'}`;
   document.getElementById('choose')!.hidden = state.view==='map';
   document.getElementById('retry')!.hidden = state.view==='map';
   for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'))) button.setAttribute('aria-pressed',String(button.dataset.view===state.view));
@@ -33,8 +34,9 @@ const game = new Phaser.Game({
   parent: host, width: GAME.width, height: GAME.height,
   backgroundColor: '#284958', pixelArt: true, roundPixels: true,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  physics: { default:'arcade', arcade:{ gravity:{x:0,y:GAME.gravity}, debug:false } },
-  scene: [MapScene,ArcadeScene,GuardianScene],
+  // Free flight: no gravity anywhere.
+  physics: { default:'arcade', arcade:{ gravity:{x:0,y:0}, debug:false } },
+  scene: [MapScene,RouteScene,GuardianScene],
 });
 game.events.on(VIEW_EVENT,render);
 function focusState(): void {
@@ -46,7 +48,7 @@ function focusState(): void {
 }
 function syncMotionButton():void {
   const button=document.getElementById('motion')!;
-  button.textContent=motion.reduced?'Reduce motion: on':'Reduce motion: off';
+  button.textContent=motion.reduced?'Reducir movimiento: sí':'Reducir movimiento: no';
   button.setAttribute('aria-pressed',String(motion.reduced));
 }
 function toggleMotion():void { motion.set(!motion.reduced); syncMotionButton(); host!.focus(); focusState(); }
@@ -54,11 +56,13 @@ syncMotionButton();
 function toggleSound():void {
   sfx.setMuted(!sfx.isMuted());
   const button=document.getElementById('sound')!;
-  button.textContent=sfx.isMuted()?'Sound: off':'Sound: on';
+  button.textContent=sfx.isMuted()?'Sonido: no':'Sonido: sí';
   button.setAttribute('aria-pressed',String(!sfx.isMuted()));
   host!.focus(); focusState();
 }
-function navigate(view:View):void {
+// fresh: a page button entry. "Ir a Amaru" then starts with 4 HP and an empty meter; Retry keeps the carried run.
+function navigate(view:View,fresh=false):void {
+  if(fresh && view==='guardian') game.registry.remove(RUN_KEY);
   for(const scene of game.scene.getScenes(true)) {
     scene.input.keyboard?.resetKeys();
     game.scene.stop(scene.scene.key);
@@ -73,7 +77,7 @@ const clickNav=(event:Event)=>{
   const view=button.dataset.view as View|undefined;
   if(button.id==='sound') toggleSound();
   else if(button.id==='motion') toggleMotion();
-  else if(view) navigate(view);
+  else if(view) navigate(view,true);
   else if(button.id==='choose') navigate('map');
   else if(button.id==='retry') navigate(current.view);
 };

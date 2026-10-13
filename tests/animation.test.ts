@@ -1,28 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { ANIM, KIPU_EDITS, ParticlePool, bossAngle, burst, chargeLevel, fxColor, kipuFrame, reshapeRows } from '../src/game/animation';
+import { ANIM, KIPU_EDITS, ParticlePool, bossAngle, burst, chargeLevel, flightTilt, fxColor, kipuFrame, reshapeRows } from '../src/game/animation';
 import { NOKIA } from '../src/game/nokiaPalette';
 
-const grounded = { grounded: true, velocityX: 0, velocityY: 0, now: 5000, landedAt: -9999 };
+describe('kipuFrame (free flight)', () => {
+  it('stretches while rising fast and never while hovering or diving', () => {
+    expect(kipuFrame({ velocityY: -ANIM.riseSpeed - 1, now: 0 })).toBe('stretch');
+    expect(kipuFrame({ velocityY: -110, now: ANIM.breatheMs })).toBe('stretch');
+    expect(kipuFrame({ velocityY: 0, now: 0 })).not.toBe('stretch');
+    expect(kipuFrame({ velocityY: 110, now: 0 })).not.toBe('stretch');
+  });
+  it('breathes between the neutral and bob frames while hovering, never squashing', () => {
+    expect(kipuFrame({ velocityY: 0, now: 0 })).toBe('idle');
+    expect(kipuFrame({ velocityY: 0, now: ANIM.breatheMs })).toBe('bob');
+    expect(kipuFrame({ velocityY: 60, now: ANIM.breatheMs * 2 })).toBe('idle');
+    for (let t = 0; t < 3000; t += 37) expect(kipuFrame({ velocityY: 0, now: t })).not.toBe('squash');
+  });
+});
 
-describe('kipuFrame', () => {
-  it('stretches while rising and returns to the neutral frame at apex and while falling', () => {
-    expect(kipuFrame({ ...grounded, grounded: false, velocityY: -ANIM.riseSpeed - 1 })).toBe('stretch');
-    expect(kipuFrame({ ...grounded, grounded: false, velocityY: 0 })).toBe('idle');
-    expect(kipuFrame({ ...grounded, grounded: false, velocityY: 200 })).toBe('idle');
+describe('flightTilt', () => {
+  it('is level at rest, noses up while rising and leans forward when moving right', () => {
+    expect(flightTilt(0, 0)).toBe(0);
+    expect(flightTilt(0, -110)).toBeLessThan(0);
+    expect(flightTilt(0, 110)).toBeGreaterThan(0);
+    expect(flightTilt(110, 0)).toBeGreaterThan(0);
   });
-  it('squashes only during the landing window, then relaxes', () => {
-    expect(kipuFrame({ ...grounded, now: 1000, landedAt: 1000 })).toBe('squash');
-    expect(kipuFrame({ ...grounded, now: 1000 + ANIM.landMs - 1, landedAt: 1000 })).toBe('squash');
-    expect(kipuFrame({ ...grounded, now: 1000 + ANIM.landMs, landedAt: 1000 })).not.toBe('squash');
-  });
-  it('alternates a run cycle while moving and breathes slowly while idle', () => {
-    const run = (now: number) => kipuFrame({ ...grounded, velocityX: 100, now });
-    expect(run(0)).toBe('idle');
-    expect(run(ANIM.runStepMs)).toBe('bob');
-    expect(run(ANIM.runStepMs * 2)).toBe('idle');
-    const rest = (now: number) => kipuFrame({ ...grounded, now });
-    expect(rest(0)).toBe('idle');
-    expect(rest(ANIM.breatheMs)).toBe('bob');
+  it('stays within a small rotation-only range', () => {
+    for (const vx of [-110, -78, 0, 78, 110]) for (const vy of [-110, -78, 0, 78, 110]) expect(Math.abs(flightTilt(vx, vy))).toBeLessThanOrEqual(ANIM.maxTilt);
   });
 });
 

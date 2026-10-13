@@ -19,8 +19,12 @@ function fakeContext() {
 }
 
 describe('sound recipes', () => {
+  it('covers the flight route cues and drops the retired platformer ones', () => {
+    for (const name of ['fragment', 'enemyHit', 'enemyDown', 'firewall', 'pause']) expect(SFX_NAMES).toContain(name);
+    for (const name of ['jump', 'land', 'targetHit', 'complete']) expect(SFX_NAMES).not.toContain(name);
+  });
   it('defines a bounded recipe for every named effect', () => {
-    expect(SFX_NAMES.length).toBe(16);
+    expect(SFX_NAMES.length).toBe(17);
     for (const name of SFX_NAMES) {
       const voices = RECIPES[name];
       expect(voices.length).toBeGreaterThan(0);
@@ -38,16 +42,16 @@ describe('sound recipes', () => {
 describe('Sfx', () => {
   it('stays silent and safe when Web Audio is unavailable', () => {
     const sfx = new Sfx(() => null);
-    expect(() => sfx.play('jump')).not.toThrow();
+    expect(() => sfx.play('shot')).not.toThrow();
     expect(sfx.stats().played).toBe(0);
   });
   it('creates the context lazily from the first play and schedules every voice', () => {
     const { ctx, state } = fakeContext(); let created = 0;
     const sfx = new Sfx(() => { created++; return ctx as unknown as AudioContext; });
     expect(created).toBe(0);
-    sfx.play('complete');
+    sfx.play('victory');
     expect(created).toBe(1);
-    expect(state.oscillators).toBe(RECIPES.complete.length);
+    expect(state.oscillators).toBe(RECIPES.victory.length);
     expect(sfx.stats().played).toBe(1);
   });
   it('does not play while muted or inactive, and resumes after being re-enabled', () => {

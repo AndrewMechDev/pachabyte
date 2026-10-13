@@ -1,24 +1,31 @@
 import Phaser from 'phaser';
-import { GAME, movement, shouldJump, canShoot, type Facing } from './rules';
+import { GAME, flight, canShoot, type Facing } from './rules';
 import { COMBAT, activateShift, attackStage, boltExpired, canTakeDamage, capture, damage, initialShift, outcome, patternAt, release, shiftActive, type Outcome, type Shift } from './combatRules';
 import { NOKIA, convertPixels } from './nokiaPalette';
 import { createTextures, createRetroFont } from './textures';
 import { RETRO_FONT } from './retroFont';
-import { KIPU_FRAMES, ParticlePool, bossAngle, burst, chargeLevel, drawParticles, kipuTextureKey, type AttackPhase } from './animation';
+import { KIPU_FRAMES, ParticlePool, bossAngle, burst, chargeLevel, drawParticles, flightTilt, kipuTextureKey, type AttackPhase } from './animation';
 import { KipuAnimator } from './kipuAnimator';
 import { ensureKipuFrames } from './kipuTextures';
 import { sfx } from './sfx';
 import { motion } from './motion';
-import { initialProgress } from './challengeRules';
+import { freeGuardian, initialProgress } from './challengeRules';
+import { ROUTE, RUN_KEY, finalScore, readRunState, type RunState } from './routeRules';
+import { formatScore } from './hudRules';
+import { Hud, PauseOverlay } from './hud';
+import { TEXT } from './text';
+import { clearDebug, exposeDebug } from './debug';
 import { VIEW_EVENT, FOCUS_EVENT, type ViewState } from './viewState';
 import kipuUrl from '../../assets/prepared/kipu-v4-32x40.png';
 import headUrl from '../../assets/prepared/amaru-head-v1-64x64.png';
 import arenaUrl from '../../assets/prepared/arequipa-arena-v1-320x180.png';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
-type Keys = Record<'a'|'d'|'left'|'right'|'w'|'up'|'space'|'j'|'z'|'x'|'r'|'m'|'enter',Phaser.Input.Keyboard.Key>;
+const ARENA_FLOOR = 164;
+type Keys = Record<'a'|'d'|'w'|'s'|'left'|'right'|'up'|'down'|'space'|'j'|'z'|'shift'|'k'|'x'|'esc'|'p'|'r'|'m'|'enter',Phaser.Input.Keyboard.Key>;
 
 // One arena, one owned clock, bounded pools. Debug exposes values only, never commands.
+// F1 adaptation: free flight, Spanish text, shared HUD, Esc pause and the run state carried from the route.
 export class GuardianScene extends Phaser.Scene {
   private player!: Sprite;
   private boss!: Sprite;
@@ -27,11 +34,15 @@ export class GuardianScene extends Phaser.Scene {
   private enemies!: Phaser.Physics.Arcade.Group;
   private keys!: Keys;
   private graphics!: Phaser.GameObjects.Graphics;
-  private hud!: Phaser.GameObjects.BitmapText;
+  private hud!: Hud;
+  private pause!: PauseOverlay;
+  private status!: Phaser.GameObjects.BitmapText;
+  private bossLabel!: Phaser.GameObjects.BitmapText;
   private signal!: Phaser.GameObjects.BitmapText;
   private result!: Phaser.GameObjects.BitmapText;
   private clock = 0;
   private nextShot = 0;
+  private entry: RunState = readRunState(undefined);
   private heroHP: number = COMBAT.heroHP;
   private bossHP: number = COMBAT.bossHP;
   private invulnerableUntil = 0;
@@ -39,7 +50,7 @@ export class GuardianScene extends Phaser.Scene {
   private ending: Outcome = 'playing';
   private facing: Facing = 1;
   private focused = true;
-  private jump = false;
+  private paused = false;
   private shiftRequested = false;
   private retry = false;
   private mapRequested = false;
@@ -70,9 +81,12 @@ export class GuardianScene extends Phaser.Scene {
   }
   create(): void {
     if (!this.registry.has('progress')) this.registry.set('progress', initialProgress());
-    this.run++; this.clock=0; this.nextShot=0; this.heroHP=COMBAT.heroHP; this.bossHP=COMBAT.bossHP;
+    // Direct entry (map or page button) uses 4 HP and an empty meter; a finished route carries its state.
+    this.entry=readRunState(this.registry.get(RUN_KEY));
+    this.run++; this.clock=0; this.nextShot=0; this.heroHP=this.entry.hp; this.bossHP=COMBAT.bossHP;
     this.invulnerableUntil=0; this.shift=initialShift(); this.ending='playing'; this.facing=1;
-    this.focused=true; this.jump=false; this.shiftRequested=false; this.retry=false; this.mapRequested=false;
+    this.focused=true; this.paused=false; this.shiftRequested=false; this.retry=false; this.mapRequested=false;
+    this.time.paused=false;
     this.cycle=0; this.attackStart=1000; this.sampledCycle=-1; this.emitted=0;
     this.patternsSeen=new Set(); this.capturesTotal=0; this.reflectedHits=0; this.palette=false;
     this.anim=0; this.bossFlashUntil=0; this.deathAt=0; this.deathBursts=0;
@@ -82,12 +96,11 @@ export class GuardianScene extends Phaser.Scene {
     this.prepareFlash('amaru-head','amaru-head-flash',0xfff1c3); this.prepareFlash('amaru-head-nokia','amaru-head-flash-nokia',NOKIA[3]);
     this.backdrop=this.add.image(160,90,'amaru-arena');
     this.graphics=this.add.graphics().setDepth(3);
-    this.physics.world.setBounds(0,0,320,180);
-    const floor=this.physics.add.staticImage(160,172,'platform').setDisplaySize(320,16).refreshBody().setVisible(false);
-    this.player=this.physics.add.sprite(48,145,'kipu-evaluation').setOrigin(0.5,0.55).setSize(12,18).setOffset(10,14).setCollideWorldBounds(true).setDepth(5);
-    this.physics.add.collider(this.player,floor);
+    // Free flight between the HUD bar and the drawn floor line; no gravity, no floor collider.
+    this.physics.world.setBounds(0,GAME.playTop,GAME.width,ARENA_FLOOR-GAME.playTop);
+    this.player=this.physics.add.sprite(48,120,'kipu-evaluation').setOrigin(0.5,0.55).setSize(12,18).setOffset(10,14).setCollideWorldBounds(true).setDepth(5);
     this.fx=new ParticlePool(64,() => motion.reduced); this.fxGraphics=this.add.graphics().setDepth(6);
-    this.animator=new KipuAnimator(this.player,this.fx);
+    this.animator=new KipuAnimator(this.player);
     this.boss=this.physics.add.sprite(260,126,'amaru-head').setDepth(4);
     (this.boss.body as Phaser.Physics.Arcade.Body).setAllowGravity(false).setImmovable(true);
     this.boss.setSize(32,44).setOffset(8,20);
@@ -117,34 +130,37 @@ export class GuardianScene extends Phaser.Scene {
         this.finishIfNeeded();
       }
     });
-    this.hud=this.text(5,5,'').setDepth(10);
-    this.signal=this.text(5,31,'').setDepth(10);
-    this.result=this.text(39,70,'').setDepth(20);
-    this.keys=this.input.keyboard!.addKeys({ a:'A',d:'D',left:'LEFT',right:'RIGHT',w:'W',up:'UP',space:'SPACE',j:'J',z:'Z',x:'X',r:'R',m:'M',enter:'ENTER' }) as Keys;
-    for (const key of [this.keys.w,this.keys.up,this.keys.space]) key.setEmitOnRepeat(false).on('down',()=>{ if(this.focused) this.jump=true; });
-    this.keys.x.setEmitOnRepeat(false).on('down',()=>{ if(this.focused) this.shiftRequested=true; });
-    this.keys.r.setEmitOnRepeat(false).on('down',()=>{ if(this.focused) this.retry=true; });
-    this.keys.m.setEmitOnRepeat(false).on('down',()=>{ if(this.focused) this.mapRequested=true; });
+    this.hud=new Hud(this);
+    this.status=this.text(4,18,'').setDepth(10);
+    this.bossLabel=this.text(236,18,TEXT.guardianName).setDepth(10);
+    this.signal=this.text(4,27,'').setDepth(10);
+    this.result=this.text(39,66,'').setDepth(20);
+    this.pause=new PauseOverlay(this);
+    this.keys=this.input.keyboard!.addKeys({ a:'A',d:'D',w:'W',s:'S',left:'LEFT',right:'RIGHT',up:'UP',down:'DOWN',space:'SPACE',j:'J',z:'Z',shift:'SHIFT',k:'K',x:'X',esc:'ESC',p:'P',r:'R',m:'M',enter:'ENTER' }) as Keys;
+    for (const key of [this.keys.shift,this.keys.k,this.keys.x]) key.setEmitOnRepeat(false).on('down',()=>{ if(this.focused && !this.paused) this.shiftRequested=true; });
+    // OS auto-repeat is ignored so a held Esc cannot toggle pause twice.
+    for (const key of [this.keys.esc,this.keys.p]) key.setEmitOnRepeat(false).on('down',(_key:unknown,event?:KeyboardEvent)=>{ if(this.focused && !event?.repeat) this.togglePause(); });
+    this.keys.r.setEmitOnRepeat(false).on('down',()=>{ if(this.focused && !this.paused) this.retry=true; });
+    this.keys.m.setEmitOnRepeat(false).on('down',()=>{ if(this.focused && !this.paused) this.mapRequested=true; });
     this.keys.enter.setEmitOnRepeat(false).on('down',()=>{ if(this.focused && this.ending!=='playing') this.mapRequested=true; });
     window.addEventListener('blur',this.blur); window.addEventListener('focus',this.focus);
     this.game.events.on(FOCUS_EVENT,this.pageFocus,this);
     this.publishView();
     this.events.once('shutdown',this.shutdown,this);
-    if (new URLSearchParams(location.search).get('debug')==='1') Object.defineProperty(window,'pachaDebug',{configurable:true,value:()=>this.snapshot()});
+    exposeDebug(()=>this.snapshot());
     this.draw();
   }
   update(_time: number, delta: number): void {
     if (!this.focused) return;
     if (this.mapRequested) { this.scene.start('MapScene'); return; }
-    if (this.retry) { this.scene.restart(); return; }
+    if (this.retry) { this.input.keyboard?.resetKeys(); this.scene.restart(); return; }
+    if (this.paused) return;
     this.anim+=delta;
     if (this.ending!=='playing') { this.animate(delta); return; }
     this.clock+=delta;
-    const move=movement(this.keys.a.isDown||this.keys.left.isDown,this.keys.d.isDown||this.keys.right.isDown,this.facing);
-    this.facing=move.facing; this.player.setVelocityX(move.velocityX).setFlipX(this.facing===-1);
-    const body=this.player.body as Phaser.Physics.Arcade.Body;
-    if (shouldJump(this.jump,body.blocked.down||body.touching.down)) { this.player.setVelocityY(-GAME.jumpSpeed); sfx.play('jump'); }
-    this.jump=false;
+    const k=this.keys;
+    const move=flight({left:k.a.isDown||k.left.isDown,right:k.d.isDown||k.right.isDown,up:k.w.isDown||k.up.isDown,down:k.s.isDown||k.down.isDown},this.facing);
+    this.facing=move.facing; this.player.setVelocity(move.velocityX,move.velocityY).setFlipX(this.facing===-1);
     if (this.shiftRequested) {
       const before=this.shift; this.shift=activateShift(this.shift,this.clock);
       if (this.shift!==before) { sfx.play('shiftOn'); burst(this.fx,this.player.x,this.player.y-4,10,75,320,'teal',this.anim,2); }
@@ -153,7 +169,7 @@ export class GuardianScene extends Phaser.Scene {
     const released=release(this.shift,this.clock); this.shift=released.state;
     for (let i=0;i<released.count;i++) this.fireReturned(i);
     this.togglePalette(shiftActive(this.shift,this.clock));
-    if ((this.keys.j.isDown||this.keys.z.isDown) && canShoot(this.clock,this.nextShot,this.shots.countActive(false))) {
+    if ((k.space.isDown||k.j.isDown||k.z.isDown) && canShoot(this.clock,this.nextShot,this.shots.countActive(false))) {
       this.spawn(this.shots,this.player.x+this.facing*12,this.player.y-1,this.facing*GAME.bulletSpeed,0,false,GAME.bulletLifetimeMs);
       sfx.play('shot');
       this.nextShot=this.clock+GAME.shotCooldownMs;
@@ -177,10 +193,10 @@ export class GuardianScene extends Phaser.Scene {
   private animate(delta: number): void {
     const body=this.player.body as Phaser.Physics.Arcade.Body;
     if (this.ending==='playing') {
-      this.animator.update({now:this.anim,grounded:body.blocked.down||body.touching.down,velocityX:body.velocity.x,velocityY:body.velocity.y,
-        facing:this.facing,footX:this.player.x,footY:body.bottom,nokia:this.palette,reduced:motion.reduced});
-      if (this.animator.event==='land') sfx.play('land');
-    } else if (this.ending==='defeat') this.animator.hold('squash',false);
+      this.animator.update({now:this.anim,velocityY:body.velocity.y,nokia:this.palette,reduced:motion.reduced});
+      // Rotation-only tilt; flip mirrors the horizontal lean so the nose stays forward.
+      this.player.setAngle(motion.reduced ? 0 : flightTilt(body.velocity.x*this.facing,body.velocity.y)*this.facing);
+    } else if (this.ending==='defeat') { this.animator.hold('squash',false); this.player.setAngle(0); }
     let flash=this.anim<this.bossFlashUntil,angle=0,alpha=1;
     if (this.ending==='victory') {
       const t=this.anim-this.deathAt;
@@ -256,21 +272,23 @@ export class GuardianScene extends Phaser.Scene {
   private finishIfNeeded(): void {
     this.ending=outcome(this.heroHP,this.bossHP); if(this.ending==='playing') return;
     if(this.ending==='victory') {
-      this.registry.set('progress',{...this.registry.get('progress'),guardian:true});
+      this.registry.set('progress',freeGuardian(this.registry.get('progress') ?? initialProgress()));
       this.deathAt=this.anim; this.deathBursts=0; sfx.play('victory');
       burst(this.fx,this.player.x,this.player.y-10,12,60,600,'gold',this.anim,2);
     } else { sfx.play('defeat'); burst(this.fx,this.player.x,this.player.y-4,14,65,500,'violet',this.anim,2); }
     this.publishView();
     for (const group of [this.shots,this.enemies]) for(const child of group.getChildren()) (child as Sprite).disableBody(true,true);
     this.physics.world.pause(); this.player.setVisible(true); this.togglePalette(false);
-    this.draw(); this.result.setText(`${this.ending.toUpperCase()} - ${this.ending==='victory'?'AMARU CLEARED':'TRY AGAIN'}\n${this.statsLine()}R: RETRY   M OR ENTER: MAP`);
+    this.draw(); this.result.setText(`${this.ending==='victory'?TEXT.victory:TEXT.defeat}\n${this.statsLine()}${TEXT.guardianEndHelp}`);
   }
   // Session-only stats on the victory panel; read from the owned clock, never fed back into combat.
   private statsLine(): string {
     if (this.ending!=='victory') return '';
     const time=this.clock/1000,best=Math.min(time,this.registry.get('bestTime') ?? Infinity);
     this.registry.set('bestTime',best);
-    return `TIME ${time.toFixed(1)}S  HP ${this.heroHP}/3  BEST ${best.toFixed(1)}S\n`;
+    // Provisional score: route tally plus returned bolts, with the time bonus over route + arena seconds.
+    const score=finalScore({fragments:this.entry.fragments,bugs:this.entry.bugs,returns:this.reflectedHits},this.entry.routeSeconds+time);
+    return `${TEXT.timeLabel} ${time.toFixed(1)}S  ${TEXT.lifeLabel} ${this.heroHP}/${ROUTE.maxHp}  ${TEXT.bestLabel} ${best.toFixed(1)}S\n${TEXT.scoreLabel} ${formatScore(score)}\n`;
   }
   private text(x:number,y:number,text:string): Phaser.GameObjects.BitmapText { return this.add.bitmapText(x,y,RETRO_FONT,text,6).setTint(0xfff1c3); }
   private preparePalette(key:string): void {
@@ -289,17 +307,22 @@ export class GuardianScene extends Phaser.Scene {
       if(!active && group===this.enemies) bolt.setTint(0xc985ef);
     }
     // Canvas BitmapText ignores tint, so switch to a native green atlas.
-    for(const label of [this.hud,this.signal,this.result]) label.setFont(RETRO_FONT+(active?'-nokia':''),6).setTint(active?0xffffff:0xfff1c3);
+    for(const label of [this.status,this.bossLabel,this.signal,this.result]) label.setFont(RETRO_FONT+(active?'-nokia':''),6).setTint(active?0xffffff:0xfff1c3);
+    this.hud.setPalette(active); this.pause.setPalette(active);
   }
   private draw(): void {
     const colors=this.palette ? NOKIA : [0x16343c,0x70563e,0x59d3c4,0xfff1c3];
     const g=this.graphics.clear();
-    g.fillStyle(colors[1]).fillRect(0,164,320,16); g.fillStyle(colors[3]).fillRect(0,164,320,2);
-    g.fillStyle(colors[0]).fillRect(0,0,320,27);
+    g.fillStyle(colors[1]).fillRect(0,ARENA_FLOOR,320,180-ARENA_FLOOR); g.fillStyle(colors[3]).fillRect(0,ARENA_FLOOR,320,2);
+    g.fillStyle(colors[0]).fillRect(0,GAME.hudHeight,320,20);
+    this.hud.draw({hp:this.heroHP,maxHp:ROUTE.maxHp,meter:this.entry.meter,score:this.score(),now:this.anim});
     const active=shiftActive(this.shift,this.clock),ready=Math.max(0,Math.ceil((this.shift.readyAt-this.clock)/1000));
-    this.hud.setText(`KIPU HP ${this.heroHP}/3   AMARU ${this.bossHP}/12\nX ${active?'ACTIVE '+Math.ceil((this.shift.activeUntil-this.clock)/1000):ready?'COOLDOWN '+ready:'READY'}   ENERGY ${this.shift.captured}/3`);
+    this.status.setText(`${active?TEXT.shiftActive+' '+Math.ceil((this.shift.activeUntil-this.clock)/1000):ready?TEXT.shiftCooldown+' '+ready:TEXT.shiftReady}  ${TEXT.captured} ${this.shift.captured}/3`);
+    // Boss health bar beside its name, drawn with filled integer rectangles.
+    const barX=268,barWidth=48,fill=Math.round(barWidth*this.bossHP/COMBAT.bossHP);
+    g.fillStyle(colors[1]).fillRect(barX,19,barWidth,5); g.fillStyle(colors[2]).fillRect(barX,19,fill,5);
     const elapsed=this.clock-this.attackStart,pattern=patternAt(this.cycle),stage=attackStage(elapsed);
-    this.signal.setText(this.clock<this.attackStart?'GUARDIAN AWAKENS':stage==='anticipation'?(pattern==='pulse'?'PULSE - MOVE OR CAPTURE':'RUNE - LEAVE MARKED COLUMN'):stage==='action'?'ATTACK':'RECOVERY - STRIKE');
+    this.signal.setText(this.clock<this.attackStart?TEXT.guardianAwakens:stage==='anticipation'?(pattern==='pulse'?TEXT.guardianPulse:TEXT.guardianRune):stage==='action'?TEXT.guardianAttack:TEXT.guardianRecovery);
     if(this.ending!=='playing') {
       this.signal.setText(''); g.fillStyle(colors[0]).fillRect(26,60,268,48); return;
     }
@@ -337,25 +360,36 @@ export class GuardianScene extends Phaser.Scene {
     // Filled integer pixels avoid Canvas stroke antialiasing introducing extra palette colors.
     this.graphics.fillStyle(color).fillRect(x,y,width,1).fillRect(x,y+height-1,width,1).fillRect(x,y,1,height).fillRect(x+width-1,y,1,height);
   }
-  private blur=():void=> { this.focused=false; this.physics.world.pause(); this.input.keyboard?.resetKeys(); this.jump=false; this.shiftRequested=false; this.retry=false; this.mapRequested=false; this.player.setVelocityX(0); };
-  private focus=():void=> { if(document.activeElement?.id!=='game') return; this.focused=true; if(this.ending==='playing') this.physics.world.resume(); };
+  private score(): number { return this.entry.score+ROUTE.returnScore*this.reflectedHits; }
+  private togglePause(): void {
+    if(this.ending!=='playing') return;
+    this.paused=!this.paused; this.freeze(this.paused||!this.focused);
+    this.pause.setVisible(this.paused); sfx.play('pause');
+  }
+  // Esc pause and focus loss share one freeze: owned clocks stop in update(), physics pauses, input clears.
+  private freeze(frozen:boolean): void {
+    if(frozen) { this.physics.world.pause(); this.time.paused=true; this.input.keyboard?.resetKeys(); this.shiftRequested=false; this.retry=false; this.mapRequested=false; this.player.setVelocity(0,0); }
+    else { if(this.ending==='playing') this.physics.world.resume(); this.time.paused=false; }
+  }
+  private blur=():void=> { this.focused=false; this.freeze(true); };
+  private focus=():void=> { if(document.activeElement?.id!=='game') return; this.focused=true; this.freeze(this.paused); };
   private pageFocus(active:boolean):void { if(active) this.focus(); else this.blur(); }
   private publishView():void { this.game.events.emit(VIEW_EVENT,{view:'guardian',outcome:this.ending,progress:{...this.registry.get('progress')}} satisfies ViewState); }
   private shutdown():void {
     this.game.events.off(FOCUS_EVENT,this.pageFocus,this);
     window.removeEventListener('blur',this.blur); window.removeEventListener('focus',this.focus);
-    this.input.keyboard?.resetKeys(); Reflect.deleteProperty(window,'pachaDebug');
+    this.input.keyboard?.resetKeys(); clearDebug();
     // Phaser owns scene groups/graphics and destroys them during shutdown.
     // Do not clear already-destroyed groups from a later shutdown listener.
   }
   private snapshot() {
     const body=this.player.body as Phaser.Physics.Arcade.Body,bossBody=this.boss.body as Phaser.Physics.Arcade.Body;
-    return {scene:'guardian',assets:{background:this.backdrop.texture.key,head:this.boss.texture.key,arenaURL:arenaUrl,headURL:headUrl},sceneRun:this.run,clock:this.clock,focused:this.focused,outcome:this.ending,heroHP:this.heroHP,bossHP:this.bossHP,invulnerableUntil:this.invulnerableUntil,
+    return {scene:'guardian',paused:this.paused,run:{...this.entry},meter:this.entry.meter,score:this.score(),assets:{background:this.backdrop.texture.key,head:this.boss.texture.key,arenaURL:arenaUrl,headURL:headUrl},sceneRun:this.run,clock:this.clock,focused:this.focused,outcome:this.ending,heroHP:this.heroHP,bossHP:this.bossHP,invulnerableUntil:this.invulnerableUntil,
       shift:{...this.shift},nokia:this.palette,capturesTotal:this.capturesTotal,reflectedHits:this.reflectedHits,patternsSeen:[...this.patternsSeen],pattern:patternAt(this.cycle),stage:attackStage(this.clock-this.attackStart),
-      player:{x:this.player.x,y:this.player.y,velocityX:body.velocity.x,velocityY:body.velocity.y,grounded:body.blocked.down||body.touching.down,bodyWidth:body.width,bodyHeight:body.height,bodyRelativeX:body.x-this.player.x,bodyRelativeY:body.y-this.player.y,texture:this.player.texture.key,displayWidth:this.player.displayWidth,displayHeight:this.player.displayHeight},
+      player:{x:this.player.x,y:this.player.y,velocityX:body.velocity.x,velocityY:body.velocity.y,hp:this.heroHP,angle:this.player.angle,bodyWidth:body.width,bodyHeight:body.height,bodyRelativeX:body.x-this.player.x,bodyRelativeY:body.y-this.player.y,texture:this.player.texture.key,displayWidth:this.player.displayWidth,displayHeight:this.player.displayHeight},
       boss:{x:bossBody.center.x,y:bossBody.center.y,width:bossBody.width,height:bossBody.height},
       shots:this.shots.getChildren().filter(c=>c.active).map(c=>({x:(c as Sprite).x,y:(c as Sprite).y,reflected:(c as Sprite).getData('reflected')})),
       enemies:this.enemies.getChildren().filter(c=>c.active).map(c=>{const b=c as Sprite;return {x:b.x,y:b.y,vx:(b.body as Phaser.Physics.Arcade.Body).velocity.x,vy:(b.body as Phaser.Physics.Arcade.Body).velocity.y};}),
-      fx:{active:this.fx.activeCount,capacity:this.fx.items.length},audio:sfx.stats(),kipuFrame:this.animator.frame,bossAngle:this.boss.angle,bossAlpha:this.boss.alpha,bossTexture:this.boss.texture.key,shotCapacity:this.shots.getLength(),enemyCapacity:this.enemies.getLength(),hud:this.hud.text,result:this.result.text};
+      fx:{active:this.fx.activeCount,capacity:this.fx.items.length},audio:sfx.stats(),kipuFrame:this.animator.frame,bossAngle:this.boss.angle,bossAlpha:this.boss.alpha,bossTexture:this.boss.texture.key,shotCapacity:this.shots.getLength(),enemyCapacity:this.enemies.getLength(),hud:{score:this.hud.scoreText,status:this.status.text,signal:this.signal.text},result:this.result.text};
   }
 }

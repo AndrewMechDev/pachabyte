@@ -1,62 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import { ParticlePool, kipuTextureKey } from '../src/game/animation';
+import { kipuTextureKey } from '../src/game/animation';
 import { KIPU_BAND, KipuAnimator, deriveKipuTextureData } from '../src/game/kipuAnimator';
 
 const sprite = () => { const s = { texture: { key: 'kipu-evaluation' }, swaps: 0, setTexture(key: string) { s.texture.key = key; s.swaps++; } }; return s; };
-const tick = (over: Partial<Parameters<KipuAnimator['update']>[0]> = {}) => ({ now: 0, grounded: true, velocityX: 0, velocityY: 0, facing: 1 as const, footX: 50, footY: 155, nokia: false, ...over });
+const tick = (over: Partial<Parameters<KipuAnimator['update']>[0]> = {}) => ({ now: 0, velocityY: 0, nokia: false, ...over });
 
-describe('KipuAnimator', () => {
-  it('uses the stretch frame on takeoff and emits dust once', () => {
-    const s = sprite(), fx = new ParticlePool(32), a = new KipuAnimator(s, fx);
-    a.update(tick());
-    a.update(tick({ now: 16, grounded: false, velocityY: -250 }));
+describe('KipuAnimator (free flight)', () => {
+  it('uses the stretch frame while flying up fast', () => {
+    const s = sprite(), a = new KipuAnimator(s);
+    a.update(tick({ velocityY: -110 }));
     expect(s.texture.key).toBe('kipu-evaluation-stretch');
-    const after = fx.activeCount;
-    expect(after).toBeGreaterThan(0);
-    a.update(tick({ now: 32, grounded: false, velocityY: -240 }));
-    expect(fx.activeCount).toBe(after);
+    expect(a.frame).toBe('stretch');
   });
-  it('reports one-shot land and takeoff events for the audio layer', () => {
-    const a = new KipuAnimator(sprite(), new ParticlePool(32));
-    a.update(tick());
-    a.update(tick({ now: 16, grounded: false, velocityY: -250 }));
-    expect(a.event).toBe('takeoff');
-    a.update(tick({ now: 32, grounded: false, velocityY: 100 }));
-    expect(a.event).toBeNull();
-    a.update(tick({ now: 48 }));
-    expect(a.event).toBe('land');
-    a.update(tick({ now: 64 }));
-    expect(a.event).toBeNull();
-  });
-  it('squashes on a hard landing but not after a soft one', () => {
-    const s = sprite(), a = new KipuAnimator(s, new ParticlePool(32));
-    a.update(tick({ grounded: false, velocityY: 200 }));
-    a.update(tick({ now: 16 }));
-    expect(s.texture.key).toBe('kipu-evaluation-squash');
-    const soft = sprite(), b = new KipuAnimator(soft, new ParticlePool(32));
-    b.update(tick({ grounded: false, velocityY: 20 }));
-    b.update(tick({ now: 16 }));
-    expect(soft.texture.key).not.toBe('kipu-evaluation-squash');
+  it('hovers with a slow breathing cycle', () => {
+    const s = sprite(), a = new KipuAnimator(s);
+    a.update(tick({ now: 0 }));
+    expect(s.texture.key).toBe('kipu-evaluation');
+    a.update(tick({ now: 450 }));
+    expect(s.texture.key).toBe('kipu-evaluation-bob');
   });
   it('selects the four-green variant and avoids redundant texture swaps', () => {
-    const s = sprite(), a = new KipuAnimator(s, new ParticlePool(8));
+    const s = sprite(), a = new KipuAnimator(s);
     a.update(tick({ nokia: true }));
     expect(s.texture.key).toBe('kipu-evaluation-nokia');
     const swaps = s.swaps;
     a.update(tick({ now: 5, nokia: true }));
     expect(s.swaps).toBe(swaps);
   });
-  it('emits bounded run dust at a steady cadence and none while idle', () => {
-    const fx = new ParticlePool(64), a = new KipuAnimator(sprite(), fx);
-    for (let t = 0; t < 1000; t += 16) a.update(tick({ now: t, velocityX: 100 }));
-    expect(fx.activeCount).toBeGreaterThan(0);
-    expect(fx.activeCount).toBeLessThanOrEqual(10);
-    const idle = new ParticlePool(8), b = new KipuAnimator(sprite(), idle);
-    for (let t = 0; t < 1000; t += 16) b.update(tick({ now: t }));
-    expect(idle.activeCount).toBe(0);
-  });
   it('holds a requested frame regardless of motion', () => {
-    const s = sprite(), a = new KipuAnimator(s, new ParticlePool(4));
+    const s = sprite(), a = new KipuAnimator(s);
     a.hold('squash', true);
     expect(s.texture.key).toBe(kipuTextureKey('squash', true));
   });

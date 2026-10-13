@@ -1,17 +1,33 @@
-import type { Progress } from './challengeRules';
+import { nodeState, type Progress } from './challengeRules';
 
 export const VIEW_EVENT = 'pacha:view';
 export const FOCUS_EVENT = 'pacha:focus';
-export type View = 'map' | 'training' | 'guardian';
-export type ViewOutcome = 'playing' | 'complete' | 'victory' | 'defeat';
+export type View = 'map' | 'route' | 'guardian';
+export type ViewOutcome = 'playing' | 'victory' | 'defeat';
 export interface ViewState { view: View; outcome: ViewOutcome; progress: Progress }
-export const sceneForView = (view: View): string => ({ map: 'MapScene', training: 'ArcadeScene', guardian: 'GuardianScene' })[view];
-export function viewCopy({ view, outcome }: ViewState) {
-  if (view === 'map') return { title: 'Choose your challenge', help: 'Enter: Play Amaru · 2: Play Amaru · 1: Explore Arequipa', result: 'Both challenges are available. Achievements are earned by playing.' };
+export const sceneForView = (view: View): string => ({ map: 'MapScene', route: 'RouteScene', guardian: 'GuardianScene' })[view];
+
+// Page copy (Spanish) for the DOM bridge around the canvas.
+export function viewCopy({ view, outcome, progress }: ViewState) {
+  if (view === 'map') return {
+    title: 'Mapa de la Trama',
+    help: 'Enter: iniciar ruta · 2: ir a Amaru',
+    result: nodeState(progress) === 'restored'
+      ? 'Santuario de la Trama (Arequipa): nodo restaurado. Las demás rutas siguen bloqueadas.'
+      : 'Santuario de la Trama (Arequipa): nodo corrupto. Las demás rutas siguen bloqueadas.',
+  };
   const ended = outcome !== 'playing';
+  const move = 'Mover: WASD o flechas · Disparar: Espacio o J';
+  if (view === 'route') return {
+    title: 'Ruta 01 — Santuario de la Trama (Arequipa)',
+    help: ended ? 'R: reintentar · M: mapa' : `${move} · Pausa: Esc · Reintentar: R · Mapa: M`,
+    result: outcome === 'defeat' ? 'Kipu se desconecta. Reintenta cuando quieras.'
+      : 'Esquiva los Glitchlings, recoge fragmentos y busca la brecha del firewall. La ruta termina en Amaru.',
+  };
   return {
-    title: view === 'guardian' ? 'Amaru — Guardian arena' : 'Arequipa — Training route',
-    help: ended ? 'R: Retry · M or Enter: Choose challenge' : `Move: A/D or ←/→ · Jump: W/Space/↑ · Fire: J/Z${view === 'guardian' ? ' · PachaShift: X' : ''} · Retry: R · Choose challenge: M`,
-    result: outcome === 'complete' ? 'Training complete — four targets cleared.' : outcome === 'victory' ? 'Victory — Amaru cleared.' : outcome === 'defeat' ? 'Defeat — retry when ready.' : view === 'guardian' ? 'Evade marked columns and aimed pulses. X slows and captures nearby bolts; stored energy returns at expiry.' : 'Practice movement and shooting. Clear four targets; Amaru is already available.',
+    title: 'Amaru-01 — Arena del guardián',
+    help: ended ? 'R: reintentar · M o Enter: mapa' : `${move} · PachaShift: Shift o K · Pausa: Esc · Reintentar: R · Mapa: M`,
+    result: outcome === 'victory' ? 'Victoria: Amaru liberado.' : outcome === 'defeat' ? 'Derrota: reintenta cuando quieras.'
+      : 'Esquiva las columnas marcadas y los pulsos. Shift o K ralentiza y captura proyectiles cercanos; la energía guardada vuelve al terminar.',
   };
 }

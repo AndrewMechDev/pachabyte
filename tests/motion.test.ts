@@ -25,8 +25,8 @@ describe('reduced motion gates decorative effects only', () => {
   });
   it('keeps Kipu on the neutral frame when reduced', () => {
     const s = { texture: { key: 'kipu-evaluation' }, setTexture(key: string) { s.texture.key = key; } };
-    const a = new KipuAnimator(s, new ParticlePool(8));
-    a.update({ now: 0, grounded: false, velocityX: 0, velocityY: -250, facing: 1, footX: 0, footY: 0, nokia: false, reduced: true });
+    const a = new KipuAnimator(s);
+    a.update({ now: 450, velocityY: -110, nokia: false, reduced: true });
     expect(s.texture.key).toBe('kipu-evaluation');
   });
   it('lets the boss angle callers zero rotation; the pure function itself stays bounded', () => {

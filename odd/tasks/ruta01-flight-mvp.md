@@ -43,7 +43,7 @@ User approved on 2026-10-12: pivot to free flight; build every step of `docs/des
 - Map: Arequipa node "SANTUARIO DE LA TRAMA" corrupted before, restored after victory; other routes "BLOQUEADAS" without naming cities (order not approved).
 
 ## Tasks
-- [ ] F1 Foundation and route (delegated writer): free flight, controls, Esc pause, Spanish glyphs and copy, HUD (hearts, energy, score), pure rules (flight, timeline, score, glitchling, firewall, marea), RouteScene replacing ArcadeScene with all route steps 1-6, map update, carried state into GuardianScene, unit tests.
+- [x] F1 Foundation and route (delegated writer): free flight, controls, Esc pause, Spanish glyphs and copy, HUD (hearts, energy, score), pure rules (flight, timeline, score, glitchling, firewall, marea), RouteScene replacing ArcadeScene with all route steps 1-6, map update, carried state into GuardianScene, unit tests.
 - [ ] F2 Amaru and REVERSE (delegated writer): free-flight guardian, REVERSE state machine with world/real clocks, three phases, shield, wave, vulnerability windows, procedural modular body segments, corruption and liberation, dialogue, Codex, result screen with score, unit tests.
 - [ ] F3 Verification (delegated): rewrite browser smoke for the new flow in Canvas and WebGL, docs (README, CREDITS, VERIFICATION), asset requests file.
 - [ ] F4 Deploy (last, needs user go-ahead): merge, push, Pages, Cloudflare backup.
@@ -52,4 +52,4 @@ User approved on 2026-10-12: pivot to free flight; build every step of `docs/des
 F1 and F2 touch many non-trivial files: delegated to one writer each, sequentially (single writer at a time). Parent reviews diffs, spot-checks one command per task, and commits each task as a work unit on `feat/release-polish`.
 
 ## Progress
-(updated per task)
+- F1 (delegated writer, mapping+writer triggers): RED observed (23 failing tests, 3 suites missing modules) then GREEN. Writer: typecheck pass, 104/104 unit tests, build pass, headless probe (route runs, no gravity, no errors), full 70 s route reached guardian with carried state. Parent spot check: `npm.cmd test` 104/104, typecheck pass. Known gaps for F2: guardian shift still old cooldown (meter display only). Accented glyphs read like small caps; needs visual sign-off or a taller cell. Browser smoke obsolete until F3.

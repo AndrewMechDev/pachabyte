@@ -1,19 +1,15 @@
 // Original synthesized effects: oscillators and filtered noise generated at runtime.
 // No audio files, samples, libraries or third-party material, so there is nothing to license or credit.
 
-export type SfxName = 'jump' | 'land' | 'shot' | 'targetHit' | 'complete' | 'bossHit' | 'reflectHit' | 'heroHit'
-  | 'capture' | 'shiftOn' | 'release' | 'charge' | 'bossFire' | 'victory' | 'defeat' | 'select';
+export type SfxName = 'shot' | 'bossHit' | 'reflectHit' | 'heroHit' | 'capture' | 'shiftOn' | 'release' | 'charge'
+  | 'bossFire' | 'victory' | 'defeat' | 'select' | 'fragment' | 'enemyHit' | 'enemyDown' | 'firewall' | 'pause';
 
 export interface Voice { wave: 'square' | 'triangle' | 'sawtooth' | 'sine' | 'noise'; from: number; to: number; at: number; dur: number; gain: number }
 // For 'noise', from/to are the low-pass cutoff sweep in Hz instead of a pitch.
 const v = (wave: Voice['wave'], from: number, to: number, at: number, dur: number, gain: number): Voice => ({ wave, from, to, at, dur, gain });
 
 export const RECIPES: Readonly<Record<SfxName, readonly Voice[]>> = Object.freeze({
-  jump: [v('square', 220, 520, 0, 0.14, 0.5)],
-  land: [v('triangle', 140, 60, 0, 0.09, 0.6), v('noise', 900, 200, 0, 0.06, 0.3)],
   shot: [v('square', 880, 300, 0, 0.07, 0.3)],
-  targetHit: [v('square', 520, 1040, 0, 0.09, 0.45), v('triangle', 780, 1560, 0.05, 0.12, 0.4), v('noise', 3000, 800, 0, 0.08, 0.25)],
-  complete: [v('square', 523, 523, 0, 0.12, 0.4), v('square', 659, 659, 0.11, 0.12, 0.4), v('square', 784, 784, 0.22, 0.12, 0.4), v('square', 1046, 1046, 0.33, 0.3, 0.45)],
   bossHit: [v('sawtooth', 180, 90, 0, 0.1, 0.45), v('noise', 2000, 400, 0, 0.09, 0.4)],
   reflectHit: [v('sawtooth', 300, 60, 0, 0.25, 0.55), v('noise', 3500, 300, 0, 0.2, 0.5), v('square', 900, 200, 0, 0.15, 0.35)],
   heroHit: [v('sawtooth', 200, 50, 0, 0.3, 0.55), v('noise', 1800, 300, 0, 0.15, 0.4)],
@@ -25,6 +21,12 @@ export const RECIPES: Readonly<Record<SfxName, readonly Voice[]>> = Object.freez
   victory: [v('square', 392, 392, 0, 0.14, 0.4), v('square', 523, 523, 0.12, 0.14, 0.4), v('square', 659, 659, 0.24, 0.14, 0.4), v('square', 784, 784, 0.36, 0.14, 0.4), v('square', 1046, 1046, 0.48, 0.45, 0.45)],
   defeat: [v('sawtooth', 300, 60, 0, 0.7, 0.45), v('triangle', 200, 40, 0.1, 0.8, 0.4)],
   select: [v('square', 660, 880, 0, 0.06, 0.35)],
+  // Route cues: a bright two-step chime, a short tick, a downward pop, a buzzing barrier and a soft pause blip.
+  fragment: [v('triangle', 880, 880, 0, 0.06, 0.4), v('triangle', 1320, 1320, 0.05, 0.1, 0.4)],
+  enemyHit: [v('square', 420, 300, 0, 0.05, 0.3)],
+  enemyDown: [v('square', 600, 120, 0, 0.14, 0.4), v('noise', 2500, 400, 0, 0.1, 0.3)],
+  firewall: [v('sawtooth', 110, 90, 0, 0.18, 0.4), v('noise', 1200, 600, 0, 0.12, 0.25)],
+  pause: [v('sine', 520, 390, 0, 0.08, 0.35)],
 });
 export const SFX_NAMES = Object.keys(RECIPES) as SfxName[];
 

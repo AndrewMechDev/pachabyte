@@ -3,29 +3,91 @@ import { RETRO_FONT, CELL_WIDTH, CELL_HEIGHT, FONT_CHARACTERS, GLYPHS } from './
 
 // Original procedural placeholders. These are not animation spritesheets.
 export function createTextures(scene: Phaser.Scene): void {
-  if (scene.textures.exists('kipu')) return;
+  if (scene.textures.exists('bullet')) return;
   const g = scene.add.graphics();
-  g.fillStyle(0x163c43).fillRect(4, 2, 9, 16);
-  g.fillStyle(0x59d3c4).fillRect(3, 5, 10, 12).fillRect(5, 2, 7, 8);
-  g.fillStyle(0xedc76c).fillRect(2, 1, 3, 6).fillRect(12, 1, 3, 6);
-  g.fillRect(4, 13, 8, 3).fillRect(3, 18, 4, 2).fillRect(10, 18, 4, 2);
-  g.fillStyle(0x122e36).fillRect(9, 6, 2, 2);
-  g.fillStyle(0xf1efdb).fillRect(11, 9, 3, 2);
-  g.generateTexture('kipu', 16, 20);
-  g.clear().fillStyle(0xedc76c).fillRect(0, 0, 6, 3);
+  g.fillStyle(0xedc76c).fillRect(0, 0, 6, 3);
   g.fillStyle(0xfff3bf).fillRect(4, 0, 2, 3);
   g.generateTexture('bullet', 6, 3);
-  g.clear().fillStyle(0x493d35).fillRect(0, 0, 16, 8);
-  g.fillStyle(0xa27c52).fillRect(0, 2, 16, 3);
-  g.fillStyle(0xf1d18b).fillRect(0, 0, 16, 2);
-  g.fillStyle(0x70563e).fillRect(2, 5, 4, 1).fillRect(10, 5, 4, 1);
-  g.generateTexture('platform', 16, 8);
-  g.clear().fillStyle(0x473f43).fillRect(0, 0, 14, 20);
-  g.fillStyle(0xe2a170).fillRect(1, 1, 12, 18);
-  g.fillStyle(0x8d584e).fillRect(3, 4, 8, 12);
-  g.fillStyle(0xedc76c).fillRect(5, 7, 4, 6);
-  g.generateTexture('target', 14, 20);
   g.destroy();
+}
+
+type PixelRows = readonly string[];
+// '.' is transparent; every other character maps to one opaque color. Integer pixels only.
+function paint(scene: Phaser.Scene, key: string, rows: PixelRows, colors: Readonly<Record<string, number>>): void {
+  if (scene.textures.exists(key)) return;
+  const g = scene.add.graphics();
+  rows.forEach((row, y) => [...row].forEach((char, x) => {
+    if (char !== '.') g.fillStyle(colors[char]).fillRect(x, y, 1, 1);
+  }));
+  g.generateTexture(key, rows[0].length, rows.length);
+  g.destroy();
+}
+
+const GLITCH_COLORS = { p: 0x9b4fd0, d: 0x3b1850, e: 0xfff1c3, l: 0xd9a6f5 } as const;
+// PLACEHOLDER pending an asset request: Glitchling, a small jagged purple bug facing left (toward Kipu).
+// Silhouette is spiky and angular so it never reads as round turquoise Kipu or as a gold fragment ring.
+const GLITCHLING_A: PixelRows = [
+  '..p...p..p..',
+  '.ppp.ppp.pp.',
+  'pppppppppppp',
+  'pdeeppppdppp',
+  'pdeeppppppdp',
+  'pppppppppppp',
+  '.pppplppppp.',
+  'pp.pp.pp.pp.',
+  'p...p..p...p',
+  '............',
+];
+const GLITCHLING_B: PixelRows = [
+  '...p..p...p.',
+  '.pp.ppp.ppp.',
+  'pppppppppppp',
+  'pdeeppppdppp',
+  'pdeeppppppdp',
+  'pppppppppppp',
+  '.ppppplpppp.',
+  '.pp.pp.pp.pp',
+  '..p...p..p..',
+  '............',
+];
+// PLACEHOLDER pending an asset request: fragment, a gold ring with a hanging knot (never a rhombus:
+// rhombus silhouettes are reserved for capturable boss bolts).
+const FRAGMENT: PixelRows = [
+  '...ggg...',
+  '..gllgg..',
+  '.gl...gg.',
+  '.g.....g.',
+  '.g.....g.',
+  '.gg...gg.',
+  '..ggggg..',
+  '....o....',
+  '...ooo...',
+];
+// PLACEHOLDER pending an asset request: Firewall brick tile (repeated by a TileSprite, never scaled).
+const FIREWALL: PixelRows = [
+  'dddddddd',
+  'rrrodrrr',
+  'rrrrdrro',
+  'dddddddd',
+  'rdrrrrro',
+  'rdrorrrr',
+  'dddddddd',
+  'rrrodrrr',
+];
+
+export function createRouteTextures(scene: Phaser.Scene): void {
+  paint(scene, 'glitchling', GLITCHLING_A, GLITCH_COLORS);
+  paint(scene, 'glitchling-b', GLITCHLING_B, GLITCH_COLORS);
+  // Hit flash: same silhouette in one light color (derived texture; Canvas ignores tint).
+  paint(scene, 'glitchling-hit', GLITCHLING_A, { p: 0xfff1c3, d: 0xfff1c3, e: 0xfff1c3, l: 0xfff1c3 });
+  paint(scene, 'fragment', FRAGMENT, { g: 0xedc76c, l: 0xfff1c3, o: 0xa27c52 });
+  paint(scene, 'firewall', FIREWALL, { d: 0x6b2a22, r: 0xd8573f, o: 0xf2a65a });
+  // PLACEHOLDER pending an asset request: Marea del Desfase interference tile, purple scanlines with sparks.
+  if (!scene.textures.exists('marea')) {
+    const rows = Array.from({ length: 16 }, (_, y) => Array.from({ length: 16 }, (_, x) =>
+      (x * 7 + y * 3) % 11 === 0 ? 'l' : (x + y * 5) % 13 === 0 ? 'm' : y % 2 ? 'd' : 'p').join(''));
+    paint(scene, 'marea', rows, { d: 0x2a1438, p: 0x4a2266, m: 0x7a3fa8, l: 0xc985ef });
+  }
 }
 
 // Register once in the shared cache; restarting the scene reuses the native atlas.
@@ -48,29 +110,9 @@ export function createRetroFont(scene: Phaser.Scene, font = RETRO_FONT, color = 
   }));
 }
 
-// Independent native graphics preserve the invisible static body's original bounds.
-export function drawStoneSurface(scene: Phaser.Scene, x: number, y: number, width: number, height: number): void {
-  const g = scene.add.graphics().setDepth(-1);
-  g.fillStyle(0x8f8066).fillRect(x, y, width, height);
-  g.fillStyle(0xd5c5a1).fillRect(x, y + 1, width, height - 3);
-  g.fillStyle(0xf1d799).fillRect(x, y, width, 1);
-  g.fillStyle(0x655d50).fillRect(x, y + height - 2, width, 2);
-  for (let column = 12; column < width; column += 18) {
-    g.fillStyle(0xad9d7e).fillRect(x + column, y + 2, 1, Math.min(3, height - 4));
-  }
-  if (height > 8) {
-    g.fillStyle(0xb2a17f).fillRect(x, y + 7, width, 1);
-    for (let column = 4; column < width - 1; column += 18) {
-      g.fillStyle(0xa29173).fillRect(x + column, y + 8, 1, height - 10);
-      g.fillStyle(0xe1cfaa).fillRect(x + column + 4, y + 4, 2, 1);
-      g.fillStyle(0x8f8066).fillRect(x + column + 8, y + 10, 2, 1);
-    }
-  }
-}
-
-// Provisional original native art; decorative roofs never use the playable gold rim.
-export function drawScenery(scene: Phaser.Scene, width: number): void {
-  const sky = scene.add.graphics().setScrollFactor(0.25).setDepth(-10);
+// Provisional original native art; alpha lowers contrast so gameplay sprites stay the readable layer.
+export function drawScenery(scene: Phaser.Scene, width: number, alpha = 1): void {
+  const sky = scene.add.graphics().setScrollFactor(0.25).setDepth(-10).setAlpha(alpha);
   sky.fillStyle(0x243d4a).fillRect(0, 0, width, 180);
   sky.fillStyle(0x958e69).fillRect(235, 29, 12, 12);
   sky.fillStyle(0x294552).fillRect(0, 112, width, 68);
@@ -82,7 +124,7 @@ export function drawScenery(scene: Phaser.Scene, width: number): void {
     sky.fillStyle(0x304a55).fillTriangle(x - 25, 147, x + 25, 110, x + 110, 147);
     sky.fillStyle(0x354e59).fillTriangle(x + 100, 153, x + 167, 119, x + 236, 153);
   }
-  const town = scene.add.graphics().setScrollFactor(0.65).setDepth(-5);
+  const town = scene.add.graphics().setScrollFactor(0.65).setDepth(-5).setAlpha(alpha);
   for (let x = 0, index = 0; x < width; x += 84, index += 1) {
     const height = [29, 46, 34, 41][index % 4];
     const top = 154 - height;

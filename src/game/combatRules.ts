@@ -1,4 +1,4 @@
-export const COMBAT = Object.freeze({ heroHP: 3, bossHP: 12, invulnerability: 900, active: 2000, cooldown: 4000, radius: 52, capacity: 3, slow: 0.35 });
+export const COMBAT = Object.freeze({ heroHP: 4, bossHP: 12, invulnerability: 900, active: 2000, cooldown: 4000, radius: 52, capacity: 3, slow: 0.35 });
 export type Outcome = 'playing' | 'victory' | 'defeat';
 export type Pattern = 'pulse' | 'rune';
 export interface Shift { activeUntil: number; readyAt: number; captured: number }
