@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { CORRUPTED, NOKIA, paletteColor, convertPixels } from '../src/game/nokiaPalette';
+import { CORRUPTED, NOKIA, paletteColor, convertPixels, corruptPixels, tintPixels } from '../src/game/nokiaPalette';
 it('maps luminance into all four greens and preserves alpha and source bytes', () => {
   expect([0,80,150,255].map(n => paletteColor(n,n,n))).toEqual([...NOKIA]);
   const pixels = new Uint8ClampedArray([255,255,255,128,0,0,0,0]); const converted = convertPixels(pixels);
@@ -25,4 +25,20 @@ it('derives a purple corrupted variant with the same luminance mapping, keeping 
   expect([out[3], out[7]]).toEqual([200, 0]);
   expect(pixels[0]).toBe(255);
   for (const color of CORRUPTED) expect((color & 0xff)).toBeGreaterThan((color >> 8) & 0xff);
+});
+
+it('corrupts only cool (turquoise) pixels and keeps warm gold ornaments and alpha', () => {
+  const pixels = new Uint8ClampedArray([0x35,0xb9,0xae,255, 0xe7,0xbd,0x67,255, 0x35,0xb9,0xae,0]);
+  const out = corruptPixels(pixels);
+  expect(CORRUPTED).toContain((out[0]<<16)|(out[1]<<8)|out[2]);
+  expect([out[4],out[5],out[6],out[7]]).toEqual([0xe7,0xbd,0x67,255]);
+  expect(out[11]).toBe(0);
+  expect(pixels[0]).toBe(0x35);
+});
+
+it('tints toward a color by a clamped amount, keeping alpha', () => {
+  const pixels = new Uint8ClampedArray([200,100,0,77]);
+  expect([...tintPixels(pixels, 0x000000, 0.5)]).toEqual([100,50,0,77]);
+  expect([...tintPixels(pixels, 0xffffff, 0)]).toEqual([200,100,0,77]);
+  expect([...tintPixels(pixels, 0x102030, 2)]).toEqual([16,32,48,77]);
 });

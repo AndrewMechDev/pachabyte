@@ -109,8 +109,14 @@ export function pickupFragment(meter: number, tally: Tally): { meter: number; ta
 export function runningScore(t: Tally): number {
   return ROUTE.fragment.score * t.fragments + ROUTE.glitchling.score * t.bugs + ROUTE.returnScore * t.returns;
 }
+export interface ScoreBreakdown { fragments: number; bugs: number; returns: number; time: number; total: number }
+export function scoreBreakdown(t: Tally, seconds: number): ScoreBreakdown {
+  const fragments = ROUTE.fragment.score * t.fragments, bugs = ROUTE.glitchling.score * t.bugs, returns = ROUTE.returnScore * t.returns;
+  const time = 10 * Math.max(0, Math.floor(300 - seconds));
+  return { fragments, bugs, returns, time, total: fragments + bugs + returns + time };
+}
 export function finalScore(t: Tally, seconds: number): number {
-  return runningScore(t) + 10 * Math.max(0, Math.floor(300 - seconds));
+  return scoreBreakdown(t, seconds).total;
 }
 
 export interface Rect { x: number; y: number; width: number; height: number }

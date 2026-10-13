@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HEART, formatScore, heartStates, meterFill } from '../src/game/hudRules';
+import { HEART, formatScore, heartStates, meterDisplay, meterFill, wrapLines } from '../src/game/hudRules';
 
 describe('HUD helpers', () => {
   it('formats scores as six zero-padded digits and clamps the range', () => {
@@ -24,5 +24,18 @@ describe('HUD helpers', () => {
   it('draws hearts as small binary pixel masks', () => {
     expect(HEART.length).toBeLessThanOrEqual(7);
     for (const row of HEART) expect(row).toMatch(/^[01]{7}$/);
+  });
+  it('maps every REVERSE state to a distinct energy meter style', () => {
+    expect(meterDisplay('CHARGING', 40, 0)).toEqual({ fill: 0.4, style: 'charging' });
+    expect(meterDisplay('READY', 100, 0)).toEqual({ fill: 1, style: 'ready' });
+    expect(meterDisplay('SLOW', 0, 0.25)).toEqual({ fill: 0.25, style: 'draining' });
+    expect(meterDisplay('RELEASE', 0, 0)).toEqual({ fill: 0, style: 'returning' });
+    expect(meterDisplay('RECOVERY', 30, 0.5)).toEqual({ fill: 0.3, style: 'recovering' });
+    expect(meterDisplay('SLOW', 0, 3).fill).toBe(1);
+  });
+  it('wraps long canvas text on word boundaries', () => {
+    expect(wrapLines('UN BUCLE REPITE INSTRUCCIONES', 12)).toEqual(['UN BUCLE', 'REPITE', 'INSTRUCCIONES']);
+    expect(wrapLines('CORTO', 40)).toEqual(['CORTO']);
+    for (const line of wrapLines('A BB CCC DDDD EEEEE', 7)) expect(line.length).toBeLessThanOrEqual(7);
   });
 });

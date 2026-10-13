@@ -26,8 +26,8 @@ export function viewCopy({ view, outcome, progress }: ViewState) {
   };
   return {
     title: 'Amaru-01 — Arena del guardián',
-    help: ended ? 'R: reintentar · M o Enter: mapa' : `${move} · PachaShift: Shift o K · Pausa: Esc · Reintentar: R · Mapa: M`,
-    result: outcome === 'victory' ? 'Victoria: Amaru liberado.' : outcome === 'defeat' ? 'Derrota: reintenta cuando quieras.'
-      : 'Esquiva las columnas marcadas y los pulsos. Shift o K ralentiza y captura proyectiles cercanos; la energía guardada vuelve al terminar.',
+    help: outcome === 'victory' ? 'Enter: continuar · R: reintentar · M: mapa' : ended ? 'R: reintentar · M o Enter: mapa' : `${move} · PachaShift: Shift o K · Pausa: Esc · Reintentar: R · Mapa: M`,
+    result: outcome === 'victory' ? 'Victoria: Amaru liberado. Nodo Arequipa restaurado.' : outcome === 'defeat' ? 'Derrota: Kipu se desconecta. Reintenta cuando quieras.'
+      : 'Esquiva los orbes redondos. Con la energía llena, Shift o K ralentiza el mundo: atrapa los rombos y se devuelven solos para romper el escudo de Amaru.',
   };
 }

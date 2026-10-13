@@ -2,7 +2,8 @@
 // No audio files, samples, libraries or third-party material, so there is nothing to license or credit.
 
 export type SfxName = 'shot' | 'bossHit' | 'reflectHit' | 'heroHit' | 'capture' | 'shiftOn' | 'release' | 'charge'
-  | 'bossFire' | 'victory' | 'defeat' | 'select' | 'fragment' | 'enemyHit' | 'enemyDown' | 'firewall' | 'pause';
+  | 'bossFire' | 'victory' | 'defeat' | 'select' | 'fragment' | 'enemyHit' | 'enemyDown' | 'firewall' | 'pause'
+  | 'deflect' | 'shieldHit' | 'shieldBreak' | 'wave' | 'restore' | 'blip';
 
 export interface Voice { wave: 'square' | 'triangle' | 'sawtooth' | 'sine' | 'noise'; from: number; to: number; at: number; dur: number; gain: number }
 // For 'noise', from/to are the low-pass cutoff sweep in Hz instead of a pitch.
@@ -27,12 +28,23 @@ export const RECIPES: Readonly<Record<SfxName, readonly Voice[]>> = Object.freez
   enemyDown: [v('square', 600, 120, 0, 0.14, 0.4), v('noise', 2500, 400, 0, 0.1, 0.3)],
   firewall: [v('sawtooth', 110, 90, 0, 0.18, 0.4), v('noise', 1200, 600, 0, 0.12, 0.25)],
   pause: [v('sine', 520, 390, 0, 0.08, 0.35)],
+  // Amaru cues: a dull tick off the shield, a ringing crack, a glassy fracture, the wave's rumble,
+  // a rising restoration chord and a short dialogue blip.
+  deflect: [v('triangle', 1400, 1100, 0, 0.04, 0.25)],
+  shieldHit: [v('square', 700, 350, 0, 0.12, 0.4), v('noise', 4000, 1500, 0, 0.08, 0.3)],
+  shieldBreak: [v('noise', 6000, 500, 0, 0.45, 0.55), v('square', 1600, 200, 0, 0.35, 0.4), v('triangle', 900, 120, 0.05, 0.4, 0.35)],
+  wave: [v('sawtooth', 60, 110, 0, 0.9, 0.3), v('noise', 400, 1200, 0, 0.9, 0.2)],
+  restore: [v('triangle', 330, 330, 0, 0.3, 0.35), v('triangle', 415, 415, 0.15, 0.3, 0.35), v('triangle', 494, 494, 0.3, 0.3, 0.35), v('sine', 660, 990, 0.45, 0.6, 0.35)],
+  blip: [v('square', 980, 980, 0, 0.03, 0.2)],
 });
 export const SFX_NAMES = Object.keys(RECIPES) as SfxName[];
 
 export const MAX_VOICES = 12;
 const MIN_GAP_S = 0.05;
-const MASTER_GAIN = 0.16;
+export const MASTER_GAIN = 0.16;
+// "Audio se amortigua": the master gain drops while REVERSE is SLOW.
+export const DUCKED_GAIN = 0.05;
+const DUCK_RAMP_S = 0.06;
 
 const defaultFactory = (): AudioContext | null => {
   try {
@@ -46,6 +58,7 @@ export class Sfx {
   private master: GainNode | null = null;
   private noise: AudioBuffer | null = null;
   private muted = false;
+  private ducked = false;
   private active = true;
   private played = 0;
   private endTimes: number[] = [];
@@ -61,7 +74,21 @@ export class Sfx {
     if (!this.ctx) return;
     void (value ? this.ctx.resume() : this.ctx.suspend());
   }
-  stats(): { played: number; muted: boolean; state: string } { return { played: this.played, muted: this.muted, state: this.ctx?.state ?? 'none' }; }
+  stats(): { played: number; muted: boolean; ducked: boolean; gain: number; state: string } {
+    return { played: this.played, muted: this.muted, ducked: this.ducked, gain: this.target(), state: this.ctx?.state ?? 'none' };
+  }
+
+  setDucked(value: boolean): void {
+    if (this.ducked === value) return;
+    this.ducked = value;
+    if (!this.ctx || !this.master) return;
+    const gain = this.master.gain, now = this.ctx.currentTime;
+    gain.cancelScheduledValues(now);
+    gain.setValueAtTime(gain.value, now);
+    gain.linearRampToValueAtTime(this.target(), now + DUCK_RAMP_S);
+  }
+
+  private target(): number { return this.ducked ? DUCKED_GAIN : MASTER_GAIN; }
 
   // Called from input handlers, which satisfies browser autoplay rules for lazy creation.
   play(name: SfxName): void {
@@ -86,7 +113,7 @@ export class Sfx {
     if (!ctx) return null;
     this.ctx = ctx;
     this.master = ctx.createGain();
-    this.master.gain.value = MASTER_GAIN;
+    this.master.gain.value = this.target();
     this.master.connect(ctx.destination);
     return ctx;
   }

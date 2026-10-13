@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_VOICES, RECIPES, SFX_NAMES, Sfx } from '../src/game/sfx';
+import { DUCKED_GAIN, MASTER_GAIN, MAX_VOICES, RECIPES, SFX_NAMES, Sfx } from '../src/game/sfx';
 
-const param = () => ({ value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} });
+const ramps: number[] = [];
+const param = () => ({ value: 0, setValueAtTime() {}, cancelScheduledValues() {}, linearRampToValueAtTime(target: number) { ramps.push(target); }, exponentialRampToValueAtTime() {} });
 function fakeContext() {
   const state = { oscillators: 0, noise: 0, resumed: 0, suspended: 0 };
   const node = () => ({ connect() { return this; }, disconnect() {}, gain: param(), frequency: param(), type: '', buffer: null as unknown, start() {}, stop() {} });
@@ -23,8 +24,11 @@ describe('sound recipes', () => {
     for (const name of ['fragment', 'enemyHit', 'enemyDown', 'firewall', 'pause']) expect(SFX_NAMES).toContain(name);
     for (const name of ['jump', 'land', 'targetHit', 'complete']) expect(SFX_NAMES).not.toContain(name);
   });
+  it('covers the Amaru fight and liberation cues', () => {
+    for (const name of ['deflect', 'shieldHit', 'shieldBreak', 'wave', 'restore', 'blip']) expect(SFX_NAMES).toContain(name);
+  });
   it('defines a bounded recipe for every named effect', () => {
-    expect(SFX_NAMES.length).toBe(17);
+    expect(SFX_NAMES.length).toBe(23);
     for (const name of SFX_NAMES) {
       const voices = RECIPES[name];
       expect(voices.length).toBeGreaterThan(0);
@@ -80,5 +84,27 @@ describe('Sfx', () => {
     const { ctx } = fakeContext(); const sfx = new Sfx(() => ctx as unknown as AudioContext);
     sfx.play('shot'); ctx.currentTime = 1; sfx.play('shot');
     expect(sfx.stats().played).toBe(2);
+  });
+});
+
+describe('Sfx ducking', () => {
+  it('lowers the master gain while ducked and restores it afterwards', () => {
+    const { ctx } = fakeContext(); const sfx = new Sfx(() => ctx as unknown as AudioContext);
+    sfx.play('select');
+    ramps.length = 0;
+    sfx.setDucked(true);
+    expect(sfx.stats().ducked).toBe(true);
+    expect(ramps.at(-1)).toBeCloseTo(DUCKED_GAIN);
+    sfx.setDucked(false);
+    expect(sfx.stats().ducked).toBe(false);
+    expect(ramps.at(-1)).toBeCloseTo(MASTER_GAIN);
+    expect(DUCKED_GAIN).toBeLessThan(MASTER_GAIN);
+  });
+  it('remembers the duck before the context exists and applies it on creation', () => {
+    const { ctx } = fakeContext(); const sfx = new Sfx(() => ctx as unknown as AudioContext);
+    sfx.setDucked(true);
+    expect(sfx.stats()).toMatchObject({ ducked: true, state: 'none' });
+    sfx.play('shot');
+    expect(sfx.stats().gain).toBeCloseTo(DUCKED_GAIN);
   });
 });

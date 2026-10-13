@@ -9,3 +9,17 @@ export function convertPixels(pixels: Uint8ClampedArray, palette: Ramp = NOKIA):
     out[i] = c >> 16; out[i + 1] = (c >> 8) & 255; out[i + 2] = c & 255;
   }
   return out; }
+// Desfase corruption that keeps identity: cool pixels (turquoise scales, dark outline) take the purple ramp,
+// warm pixels (gold horns and ornaments) stay as they are. Alpha is untouched.
+export function corruptPixels(pixels: Uint8ClampedArray): Uint8ClampedArray { const out = pixels.slice();
+  for (let i = 0; i < out.length; i += 4) {
+    if (out[i + 2] < out[i]) continue;
+    const c = paletteColor(out[i], out[i + 1], out[i + 2], CORRUPTED);
+    out[i] = c >> 16; out[i + 1] = (c >> 8) & 255; out[i + 2] = c & 255;
+  }
+  return out; }
+// Mix every pixel toward one color (amount clamped to 0..1); used for the dimmed purple arena.
+export function tintPixels(pixels: Uint8ClampedArray, color: number, amount: number): Uint8ClampedArray { const out = pixels.slice();
+  const k = Math.min(1, Math.max(0, amount)), rgb = [color >> 16, (color >> 8) & 255, color & 255];
+  for (let i = 0; i < out.length; i += 4) for (let c = 0; c < 3; c++) out[i + c] = Math.round(out[i + c] * (1 - k) + rgb[c] * k);
+  return out; }
