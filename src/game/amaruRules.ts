@@ -58,7 +58,9 @@ export function hitBoss(b: Boss, kind: HitKind, now: number): Hit {
     : AMARU.normalDamage * (b.phase === 3 && b.doubleDamage && isVulnerable(b, now) ? AMARU.finalMultiplier : 1);
   const hp = Math.max(0, b.hp - amount), phase = phaseFor(hp);
   if (phase === b.phase) return { boss: { ...b, hp }, result: 'damage', amount, phaseChanged: false };
-  const raised = b.phase === 1 ? { shield: AMARU.shieldMax, vulnerableUntil: 0 } : {};
+  // Every phase entry raises a full shield and closes any open window, so a phase 2 window can
+  // never carry over and let normal fire finish Amaru before phase 3's wave is ever seen.
+  const raised = { shield: AMARU.shieldMax, vulnerableUntil: 0, doubleDamage: false };
   return { boss: { ...b, hp, phase, ...raised }, result: 'damage', amount, phaseChanged: true };
 }
 

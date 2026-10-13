@@ -232,3 +232,16 @@ describe('phase checkpoints (first human playtest, 2026-10-13)', () => {
     expect(phaseFor(two.boss.hp)).toBe(2);
   });
 });
+
+describe('phase 3 entry', () => {
+  it('closes a phase 2 vulnerability window and raises the shield so phase 3 is never skipped', () => {
+    const now = 1000;
+    const inWindow: Boss = { hp: AMARU.phase3From + 1, phase: 2, shield: 0, vulnerableUntil: now + AMARU.shieldWindowMs, doubleDamage: false };
+    const hit = hitBoss(inWindow, 'normal', now);
+    expect(hit.phaseChanged).toBe(true);
+    expect(hit.boss.phase).toBe(3);
+    expect(hit.boss.vulnerableUntil).toBe(0);
+    expect(hit.boss.shield).toBe(AMARU.shieldMax);
+    expect(hitBoss(hit.boss, 'normal', now + 1).result).toBe('deflect');
+  });
+});

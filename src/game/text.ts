@@ -45,7 +45,7 @@ export const TEXT = Object.freeze({
   reverseRecovery: 'PACHASHIFT: RECUPERANDO',
   attackPulse: 'TRIPLE PULSO: ESQUIVA',
   attackLoop: 'BUCLE: CAPTURA LOS ROMBOS',
-  attackBurst: 'RÁFAGA: ROMBOS Y ORBES',
+  attackBurst: 'DESCARGA: ROMBOS Y ORBES',
   attackWave: 'ONDA: CRUZA POR LA BRECHA',
   attackWindow: '¡VULNERABLE! DAÑO DOBLE',
   attackRecovery: 'RECUPERACIÓN: ¡DISPARA!',
