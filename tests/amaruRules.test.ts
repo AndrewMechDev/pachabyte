@@ -213,16 +213,20 @@ describe('shield ring', () => {
 describe('phase checkpoints (first human playtest, 2026-10-13)', () => {
   it('offers a checkpoint only for a defeat in phase 2 or 3', () => {
     expect(checkpointAt(1, 0, 20000)).toBeNull();
-    expect(checkpointAt(2, 3, 41000)).toEqual({ phase: 2, returnsTotal: 3, elapsedMs: 41000 });
-    expect(checkpointAt(3, 7, 90000)).toEqual({ phase: 3, returnsTotal: 7, elapsedMs: 90000 });
+    expect(checkpointAt(2, 3, 41000)).toEqual({ phase: 2, returnsTotal: 3, elapsedMs: 41000, comboBonus: 0 });
+    expect(checkpointAt(3, 7, 90000)).toEqual({ phase: 3, returnsTotal: 7, elapsedMs: 90000, comboBonus: 0 });
+  });
+  it('keeps the racha bonus already scored in the fight, so a resume keeps the score', () => {
+    expect(checkpointAt(2, 4, 50000, 600)).toEqual({ phase: 2, returnsTotal: 4, elapsedMs: 50000, comboBonus: 600 });
+    expect(checkpointAt(2, 4, 50000, -5)!.comboBonus).toBe(0);
   });
   it('resumes at the phase start HP with full hearts, a full meter and the shield up, keeping the returns scored', () => {
-    const two = resumeFrom({ phase: 2, returnsTotal: 3, elapsedMs: 41000 });
+    const two = resumeFrom({ phase: 2, returnsTotal: 3, elapsedMs: 41000, comboBonus: 0 });
     expect(two.boss).toEqual({ hp: AMARU.phase2From, phase: 2, shield: AMARU.shieldMax, vulnerableUntil: 0, doubleDamage: false });
     expect(two.boss.hp).toBe(66);
     expect(two.heroHp).toBe(4);
     expect(two.reverse).toMatchObject({ state: 'READY', meter: 100, captured: 0, pending: 0, activations: 0, returnsTotal: 3 });
-    const three = resumeFrom({ phase: 3, returnsTotal: 7, elapsedMs: 90000 });
+    const three = resumeFrom({ phase: 3, returnsTotal: 7, elapsedMs: 90000, comboBonus: 0 });
     expect(three.boss).toMatchObject({ hp: 33, phase: 3, shield: AMARU.shieldMax });
     expect(phaseFor(three.boss.hp)).toBe(3);
     expect(phaseFor(two.boss.hp)).toBe(2);

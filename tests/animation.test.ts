@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ANIM, KIPU_EDITS, ParticlePool, bossAngle, burst, chargeLevel, flightTilt, fxColor, kipuFrame, reshapeRows } from '../src/game/animation';
+import { ANIM, KIPU_EDITS, ParticlePool, bossAngle, burst, chargeLevel, dissolve, flightTilt, fxColor, kipuFrame, reshapeRows } from '../src/game/animation';
 import { NOKIA } from '../src/game/nokiaPalette';
 
 describe('kipuFrame (free flight)', () => {
@@ -129,5 +129,29 @@ describe('fxColor', () => {
   it('keeps the warm-gold and violet identities in the normal palette', () => {
     expect(fxColor('gold', false)).toBe(0xedc76c);
     expect(fxColor('violet', false)).toBe(0xc985ef);
+  });
+});
+
+describe('debugged bugs dissolve ("se depuran")', () => {
+  it('turn into rising turquoise and gold sparkles over the bug, never violet', () => {
+    const pool = new ParticlePool(32);
+    dissolve(pool, 100, 50, 12, 12, 0);
+    const sparks = pool.items.filter(p => p.active);
+    expect(sparks.length).toBe(9);
+    expect(new Set(sparks.map(p => p.slot))).toEqual(new Set(['teal', 'gold']));
+    for (const p of sparks) {
+      expect(p.vy).toBeLessThan(0);
+      expect(Math.abs(p.x - 100)).toBeLessThanOrEqual(6);
+      expect(Math.abs(p.y - 50)).toBeLessThanOrEqual(6);
+      expect(p.ttl).toBeLessThanOrEqual(520);
+    }
+    const again = new ParticlePool(32);
+    dissolve(again, 100, 50, 12, 12, 0);
+    expect(again.items.map(p => [p.x, p.y, p.vx, p.vy])).toEqual(pool.items.map(p => [p.x, p.y, p.vx, p.vy]));
+  });
+  it('emits nothing under reduced motion', () => {
+    const pool = new ParticlePool(32, () => true);
+    dissolve(pool, 0, 0, 12, 12, 0);
+    expect(pool.activeCount).toBe(0);
   });
 });

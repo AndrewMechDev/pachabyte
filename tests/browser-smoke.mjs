@@ -21,6 +21,9 @@ const TEXT = {
   flyToRhombi: 'VUELA HACIA LOS ROMBOS', shieldBroken: '¡ESCUDO ROTO! ¡DISPARA!',
   checkpointHelp: phase => `R: REINTENTAR DESDE FASE ${phase}\nENTER: DESDE EL INICIO  M: MAPA`,
 };
+// Route bug values (2026-10-13); mirror src/game/bugRules.ts and comboRules.ts.
+const BUG_SCORES = new Set([75, 150, 100, 40]);
+const comboMultiplier = hits => 1 + [5, 12, 20].filter(t => hits >= t).length;
 // REVERSE tuning from the first human playtest (2026-10-13); mirrors src/game/reverseRules.ts.
 const SLOW_MS = 1200, CAPTURE_RADIUS = 40;
 const phaseFor = hp => (hp > 66 ? 1 : hp > 33 ? 2 : 3);
@@ -142,10 +145,15 @@ try {
         else if (shot.screenX + 3 >= wall.screenX - 30) near++;
       }
     }
+    const smalls = s.enemyList.filter(e => e.type === 'shadow');
     return {
-      scene: 'route', run: s.sceneRun, c: s.clock, a: s.anim, seg: s.segment, cap: s.caption, hp: s.player.hp, m: s.meter, sc: s.score, fr: s.fragments, bg: s.bugs,
+      scene: 'route', run: s.sceneRun, c: s.clock, rc: s.realClock, cx: s.cameraX, a: s.anim, seg: s.segment, cap: s.caption, hp: s.player.hp, m: s.meter, sc: s.score, fr: s.fragments, bg: s.bugs,
       en: s.enemies, g1: s.glitchlings.filter(bug => bug.hp === 1).length, front: s.marea.front, left, right: left + w, top, bottom: s.player.bodyBottom,
       touch, beyond, near, out: s.outcome, p: s.paused, f: s.focused, shots: s.shotCount, y: s.player.y,
+      bp: s.bugPoints, cb: s.comboBonus, ch: s.combo.hits, cm: s.combo.multiplier, hc: s.hud.combo, hs: s.hitStop.active, hsc: s.hitStop.count, hst: s.hitStop.totalMs,
+      ct: s.enemyList.filter(e => e.type === 'corruptor').length, chg: s.enemyList.some(e => e.type === 'corruptor' && e.charging), oc: s.orbs.length,
+      lg: s.enemyList.filter(e => e.type === 'sombra').length, sm: smalls.length, smhp: Math.max(0, ...smalls.map(e => e.hp)),
+      dodge: s.enemyList.some(e => e.type === 'sombra' && e.dodge !== 'none'), dr: s.fragmentsDropped, dk: s.fragmentList.filter(k => k.dropped).length, fl: s.floaters.active,
     };
   });
   assert.equal(await page.locator('#view-title').innerText(), 'Ruta 01 — Santuario de la Trama (Arequipa)');
@@ -153,6 +161,7 @@ try {
   {
     const s = await snap();
     assert.equal(s.capacity.shots, 12); assert.equal(s.capacity.enemies, 12); assert.equal(s.capacity.fragments, 10);
+    assert.deepEqual([s.capacity.corruptors, s.capacity.shadows, s.capacity.orbs, s.capacity.floaters], [2, 3, 6, 8], 'bounded pools for the new bugs, orbs and floating numbers');
     assert.equal(s.player.bodyWidth, 12); assert.equal(s.player.bodyHeight, 18);
     assert.equal(s.player.displayWidth, 32); assert.equal(s.player.displayHeight, 40);
     assert.equal(s.hud.score, '000000');
@@ -176,7 +185,7 @@ try {
   const blurred = await checkFrozen(['clock', 'anim', 'cameraX'], 'focus leaves the game');
   await canvas.click();
   await wait(clock => window.pachaDebug().focused && window.pachaDebug().clock > clock, blurred.clock);
-  passed.push('2 route: Spanish arrival caption, bounded pools (12/12/10), 32x40 art with 12x18 body, no gravity, Esc pause and focus loss freeze clock/anim/camera and resume');
+  passed.push('2 route: Spanish arrival caption, bounded pools (12/12/10, Corruptors 2, shadows 3, orbs 6, floaters 8), 32x40 art with 12x18 body, no gravity, Esc pause and focus loss freeze clock/anim/camera and resume');
 
   stage = '2 route: 8-direction normalized flight and play-area clamps';
   const DIRECTIONS = [[['d'], 1, 0], [['ArrowRight', 'ArrowDown'], 1, 1], [['s'], 0, 1], [['a', 's'], -1, 1], [['ArrowLeft'], -1, 0], [['a', 'w'], -1, -1], [['ArrowUp'], 0, -1], [['d', 'w'], 1, -1]];
@@ -205,11 +214,33 @@ try {
 
   // ------------------------------------------------------------------ route bot
   stage = '2 route: scripted keyboard pilot through Ruta 01';
-  const route = { mareaTouched: false, rightDone: false, screenshot: false, deliberateWall: true };
+  const route = { mareaTouched: false, rightDone: false, screenshot: false, bugShot: false, deliberateWall: true };
+  // Forecast 0.6 s of the nine flight directions against round orbs and Corruptor bodies (screen space).
+  const avoid = (s, px, py, tx, ty) => {
+    const rate = s.worldRate ?? 1;
+    const threats = [
+      ...s.orbs.map(o => ({ x: o.screenX, y: o.y, vx: o.vx - s.scrollSpeed * rate, vy: o.vy, rx: 11, ry: 14 })),
+      ...s.enemyList.filter(e => e.type === 'corruptor').map(e => ({ x: e.screenX, y: e.y, vx: 0, vy: 0, rx: 20, ry: 20 })),
+    ];
+    if (!threats.length) return null;
+    let best = null;
+    for (const mx of [-1, 0, 1]) for (const my of [-1, 0, 1]) {
+      const norm = Math.hypot(mx, my) || 1, vx = 110 * mx / norm, vy = 110 * my / norm;
+      let cost = 0, reach = Infinity;
+      for (let step = 1; step <= 12; step++) {
+        const t = step * 0.05, x = Math.min(300, Math.max(12, px + vx * t)), y = Math.min(168, Math.max(28, py + vy * t));
+        for (const b of threats) if (Math.abs(b.x + b.vx * t - x) < b.rx && Math.abs(b.y + b.vy * t - (y + 1)) < b.ry) cost += (13 - step) * 40;
+        reach = Math.min(reach, Math.hypot(tx - x, ty - y));
+      }
+      cost += Math.min(reach, Math.hypot(tx - px, ty - py));
+      if (!best || cost < best.cost) best = { cost, mx, my };
+    }
+    return best.cost >= 40 || threats.some(b => Math.abs(b.x - px) < 70) ? best : null;
+  };
   const routeKeys = s => {
     const px = s.player.x - s.cameraX, py = s.player.y, t = s.clock, keys = new Set(['j']);
     let tx = 56, ty = 97;
-    const bugs = s.glitchlings.filter(bug => bug.x > s.player.x + 2).sort((a, b) => a.x - b.x);
+    const bugs = s.enemyList.filter(bug => bug.x > s.player.x + 2).sort((a, b) => a.x - b.x);
     const knots = s.fragmentList.filter(knot => knot.x > s.player.x - 4 && knot.x - s.cameraX > s.marea.front + 14).sort((a, b) => a.x - b.x);
     if (bugs.length) ty = bugs[0].y + 1; else if (knots.length) ty = knots[0].y;
     // Firewalls: aim for the gap; the first wall (gap 60) is touched on purpose at y 130 to prove its damage.
@@ -218,6 +249,12 @@ try {
     // Marea: wait at the left edge until its contact drains one heart, then flee right.
     if (t > 46500 && t < 62000) tx = route.mareaTouched ? 210 : 30;
     if (t >= 62000) { tx = route.rightDone ? 200 : 400; ty = 97; keys.delete('j'); }
+    const dodge = avoid(s, px, py, Math.min(tx, 300), ty);
+    if (dodge) {
+      if (dodge.mx > 0) keys.add('d'); else if (dodge.mx < 0) keys.add('a');
+      if (dodge.my > 0) keys.add('s'); else if (dodge.my < 0) keys.add('w');
+      return keys;
+    }
     return steer(keys, tx - px, ty - py, 3);
   };
   const flyRoute = async () => {
@@ -234,6 +271,10 @@ try {
       if (!route.screenshot && s.clock > 29000) {
         route.screenshot = true;
         await canvas.screenshot({ path: 'docs/ruta01-route.png' });
+      }
+      if (!route.bugShot && s.enemyList.some(e => e.type === 'corruptor' && e.charging) && s.enemyList.some(e => e.type !== 'glitchling' && e.type !== 'corruptor' || s.orbs.length)) {
+        route.bugShot = true;
+        await canvas.screenshot({ path: 'docs/ruta01-bugs.png' });
       }
       await setKeys(routeKeys(s));
       previous = s;
@@ -266,15 +307,20 @@ try {
   const pairs = R.slice(1).map((s, i) => [R[i], s]);
   assert.ok(R.some(s => s.shots > 0) && R.every(s => s.shots <= 12), 'shots fire and stay within the 12-shot pool');
   for (const [a, b] of pairs) {
-    assert.equal(b.sc - a.sc, 100 * (b.fr - a.fr) + 75 * (b.bg - a.bg), `score delta at ${b.c} ms`);
+    assert.equal(b.sc - a.sc, 100 * (b.fr - a.fr) + (b.bp - a.bp) + (b.cb - a.cb), `score delta at ${b.c} ms`);
     if (b.m < 100) assert.equal((b.m - a.m) % 10, 0, `meter moves in steps of 10 at ${b.c} ms`);
+    if (b.bg === a.bg + 1) {
+      assert.ok(BUG_SCORES.has(b.bp - a.bp), `a debugged bug scores its own value (${b.bp - a.bp}) at ${b.c} ms`);
+      assert.equal(b.cb - a.cb, (b.bp - a.bp) * (comboMultiplier(b.ch) - 1), `racha bonus = base x (multiplier - 1) at ${b.c} ms`);
+    }
   }
   const firstWound = pairs.find(([a, b]) => b.g1 > a.g1 && b.bg === a.bg && b.fr === a.fr && b.m < 100);
   assert.ok(firstWound, 'a Glitchling must lose one of its two HP to a shot');
   assert.equal(firstWound[1].m - firstWound[0].m, 10, 'each Glitchling hit adds +10 meter');
   const firstKill = pairs.find(([a, b]) => b.bg === a.bg + 1 && b.fr === a.fr);
   assert.ok(firstKill, 'a Glitchling must be destroyed by shots');
-  assert.equal(firstKill[1].sc - firstKill[0].sc, 75);
+  assert.equal(firstKill[1].bp - firstKill[0].bp, 75, 'the first debugged bug is a Glitchling worth 75');
+  assert.equal(firstKill[1].sc - firstKill[0].sc, 75 * comboMultiplier(firstKill[1].ch));
   if (firstKill[1].m < 100) assert.equal(firstKill[1].m - firstKill[0].m, 10, 'the killing hit adds +10 meter');
   const firstFragment = pairs.find(([a, b]) => b.fr === a.fr + 1 && b.bg === a.bg);
   assert.ok(firstFragment, 'a fragment must be collected');
@@ -289,11 +335,13 @@ try {
   const mareaHit = pairs.find(([a, b]) => b.hp < a.hp && b.front > 0 && b.front >= b.left - 1);
   assert.ok(mareaHit, 'contact with the Marea front must cost a heart');
   const threshold = R.filter(s => s.seg === 'threshold');
-  assert.ok(threshold.length > 30 && threshold.every(s => s.en === 0), 'at the threshold every Glitchling is gone and none spawn');
+  assert.ok(threshold.length > 30 && threshold.every(s => s.en === 0 && s.oc === 0), 'at the threshold every bug and orb is gone and none spawn');
   assert.ok(threshold.some(s => s.cap === TEXT.threshold), 'threshold line must show');
   const rightMost = Math.max(...threshold.map(s => s.right));
   assert.ok(rightMost >= 312.5 && rightMost <= 315, `right clamp keeps Kipu inside the play area (right edge ${rightMost})`);
   const final = R.at(-1);
+  assert.equal(arrival.combo.hits, final.ch, 'the racha carries into the guardian');
+  assert.deepEqual({ bugPoints: arrival.run.bugPoints, comboBonus: arrival.run.comboBonus, comboHits: arrival.run.comboHits }, { bugPoints: final.bp, comboBonus: final.cb, comboHits: final.ch });
   assert.deepEqual(
     { hp: arrival.run.hp, score: arrival.run.score, fragments: arrival.run.fragments, bugs: arrival.run.bugs, meter: arrival.run.meter },
     { hp: final.hp, score: final.sc, fragments: final.fr, bugs: final.bg, meter: final.m }, 'guardian must receive the route state');
@@ -301,7 +349,37 @@ try {
   assert.equal(arrival.heroHP, final.hp);
   assert.equal(arrival.reverse.meter, final.m);
   assert.equal(arrival.score, final.sc);
-  passed.push(`2 route: shots fire (pool <= 12), Glitchling wounded then destroyed (+10 meter per hit, +75 score), fragment +100/+20, Firewall contact costs a heart and stops shots, Marea advances and drains a heart, silent threshold with "${TEXT.threshold}", right clamp, transition carries hp ${final.hp} / score ${final.sc} / fragments ${final.fr} / meter ${final.m}`);
+  stage = '2 route B2: Corruptor, Sombra de Error, racha, hit-stop, debug-drop (sampled frames)';
+  const firstOrb = pairs.find(([a, b]) => b.oc > a.oc);
+  assert.ok(firstOrb, 'a Corruptor must fire an orb');
+  for (const [, b] of pairs.filter(([a, b]) => b.oc > a.oc)) {
+    const before = R.filter(s => s.c >= b.c - 650 && s.c < b.c);
+    assert.ok(before.some(s => s.chg), `every orb is telegraphed by a Corruptor charge in the previous 600 ms (orb at ${b.c} ms)`);
+  }
+  assert.ok(R.every(s => s.ct <= 2 && s.lg + s.sm <= 3), 'at most 2 Corruptors and 3 shadow units on screen');
+  assert.ok(R.filter(s => s.seg === 'firewall').every(s => s.ct === 0 && s.lg + s.sm === 0 && s.oc === 0), 'no Corruptor, Sombra or orb during the Firewall');
+  assert.ok(R.some(s => s.dodge), 'a Sombra de Error telegraphs a sideways dodge');
+  const split = pairs.find(([a, b]) => b.lg === a.lg - 1 && b.bg >= a.bg + 1 && b.sm === a.sm + 2);
+  assert.ok(split, 'a debugged Sombra splits into two small shadows');
+  for (const [a, b] of pairs) if (b.sm > a.sm) assert.ok(b.lg < a.lg, `small shadows appear only when a large Sombra splits (${b.c} ms)`);
+  assert.ok(R.every(s => s.smhp <= 1), 'small shadows have 1 HP');
+  const smallDown = pairs.find(([a, b]) => b.sm < a.sm && b.bg > a.bg && b.lg === a.lg);
+  if (smallDown) assert.ok(smallDown[1].sm === smallDown[0].sm - 1, 'a debugged small shadow never splits again');
+  assert.ok(R.some(s => s.cm >= 2 && s.hc === `RACHA ×${s.cm}`), 'the racha rises to x2 and shows "RACHA xN" in the HUD');
+  const hurts = pairs.filter(([a, b]) => b.hp < a.hp);
+  assert.ok(hurts.length > 0 && hurts.every(([a, b]) => b.ch === 0 || b.ch < a.ch), 'taking damage resets the racha');
+  assert.ok(hurts.some(([a, b]) => a.ch > 0 && b.ch === 0), 'a hit while on a racha resets it to zero');
+  for (const [a, b] of pairs) assert.ok(b.c - a.c <= b.rc - a.rc + 0.01, `the world clock never runs ahead of the real clock (${b.c} ms)`);
+  const stopped = pairs.filter(([a, b]) => b.rc > a.rc && b.c - a.c < b.rc - a.rc - 1);
+  assert.ok(stopped.length > 0, 'a heavy hit stops the world clock while the real clock keeps running');
+  for (const [a, b] of pairs.filter(([a, b]) => b.c === a.c && b.rc > a.rc)) assert.equal(b.cx, a.cx, 'the camera holds during a full hit-stop frame');
+  assert.ok(final.rc - final.c <= final.hst + 0.01 && final.rc - final.c >= final.hst - 50.01, `real - world equals the hit-stop total (${final.rc - final.c} vs ${final.hst})`);
+  assert.ok(final.hsc >= 1);
+  assert.ok(final.dr >= 1 && final.dr === Math.floor(final.bg / 4), `every 4th debugged bug drops a fragment (${final.dr} drops for ${final.bg} bugs)`);
+  assert.ok(R.some(s => s.dk > 0), 'a dropped fragment appears');
+  assert.ok(R.some(s => s.fl > 0) && R.every(s => s.fl <= 8), 'floating numbers show and stay within their pool');
+  passed.push(`2 route B2: Corruptor orbs telegraphed by a 600 ms charge, caps (2 Corruptors / 3 shadows) held, quiet Firewall, Sombra dodge and split into two 1 HP shadows, racha up to x${Math.max(...R.map(s => s.cm))} and reset on damage, ${final.hsc} hit-stops (${final.hst} ms) on the world clock only, ${final.dr} debug-drop fragment(s) for ${final.bg} bugs`);
+  passed.push(`2 route: shots fire (pool <= 12), Glitchling wounded then destroyed (+10 meter per hit, +75 score at x1), fragment +100/+20, Firewall contact costs a heart and stops shots, Marea advances and drains a heart, silent threshold with "${TEXT.threshold}", right clamp, transition carries hp ${final.hp} / score ${final.sc} / fragments ${final.fr} / meter ${final.m}`);
 
   // ================================================================== 3-5. guardian fight
   stage = '3-5 guardian: keyboard fight with REVERSE';
@@ -315,6 +393,7 @@ try {
       shapeOk: s.enemyBolts.every(b => b.capturable === (b.shape === 'rhombus')), shapes: [...new Set(s.enemyBolts.map(b => `${b.shape}:${b.texture}`))].join(','),
       out: s.outcome, lib: s.liberation ? `${s.liberation.stage}${s.liberation.dialogueIndex}` : '', p: s.paused, f: s.focused, nokia: s.nokia,
       msg: s.message, panel: s.panel, wave: s.wave ? (s.wave.active ? 'A' : 'T') : '', head: s.assets.head, dim: s.assets.dimAlpha, ov: s.assets.overlay,
+      hs: s.hitStop.active, hsc: s.hitStop.count, ch: s.combo.hits, cm: s.combo.multiplier, fb: s.fightBonus, sc: s.score, fl: s.floaters.active,
     };
   });
   const fight = { nokiaDone: false, pauseDone: false, shiftKey: 0, attempts: 0 };
@@ -496,6 +575,13 @@ try {
   assert.ok([...shapes].some(x => x.startsWith('rhombus:bolt-rhombus')) && [...shapes].some(x => x.startsWith('orb:bolt-orb')), `both silhouettes seen: ${[...shapes]}`);
   assert.ok(G.some(s => s.wave === 'A'), 'the non-capturable wave must run');
   assert.ok(F.some(s => s.p) && F.some(s => !s.f), 'Esc and focus pauses were exercised');
+  // Hit-stop in the fight: returned-bolt impacts and the shield break stop the world clock, never the real clock.
+  for (const [a, b] of gPairs) assert.ok(b.wc - a.wc <= Math.max(a.ws, b.ws) * (b.rc - a.rc) + 0.01, `the world never runs ahead (${b.rc} ms)`);
+  const gStopped = gPairs.filter(([a, b]) => b.rc > a.rc && b.wc - a.wc < Math.min(a.ws, b.ws) * (b.rc - a.rc) - 1);
+  assert.ok(gStopped.length > 0 && G.some(s => s.hsc > 0), 'a heavy hit on Amaru stops the world clock while the real clock runs');
+  assert.ok(G.some(s => s.fl > 0), 'damage numbers float over Amaru');
+  for (const [a, b] of gPairs) if (b.hero < a.hero) assert.ok(b.ch === 0 || b.ch < a.ch, 'damage resets the racha in the fight');
+  passed.push(`3 hit-stop and racha in the fight: ${gStopped.length} sampled frames with the world clock stopped while the real clock ran, damage numbers float, damage resets the racha`);
   passed.push(`3 REVERSE: READY only at 100, ${closed.length} SLOW windows of ${closed.map(r => Math.round(r.end.rc - r.start.rc)).join('/')} ms real at worldScale 0.2, ${captures.length} captures all within reach and never harmful, <= 6 per activation, shield drops only with returned bolts, rhombus/orb silhouettes, wave seen, Esc and focus pause froze real and world clocks`);
 
   stage = '5 phases, victory and liberation (sampled frames)';
@@ -522,7 +608,9 @@ try {
   assert.equal(result[0], TEXT.result);
   const points = label => Number(result.find(line => line.startsWith(label)).trim().split(/\s+/).at(-1));
   const count = label => Number(result.find(line => line.startsWith(label)).slice(16).trim().split(/\s+/)[0]);
-  assert.equal(points('TOTAL'), points('FRAGMENTOS') + points('BUGS') + points('DEVOLUCIONES') + points('BONO DE TIEMPO'), 'score breakdown adds up');
+  assert.equal(points('TOTAL'), points('FRAGMENTOS') + points('BUGS') + points('DEVOLUCIONES') + points('RACHA') + points('BONO DE TIEMPO'), 'score breakdown adds up');
+  assert.equal(points('RACHA'), won.run.comboBonus + won.fightBonus, 'the racha line adds the route and fight bonuses');
+  assert.equal(points('BUGS'), won.run.bugPoints);
   assert.equal(count('DEVOLUCIONES'), won.reverse.returnsTotal);
   assert.equal(count('FRAGMENTOS'), won.run.fragments); assert.equal(count('BUGS'), won.run.bugs);
   assert.equal(points('FRAGMENTOS'), 100 * won.run.fragments); assert.equal(points('DEVOLUCIONES'), 200 * won.reverse.returnsTotal);
@@ -530,7 +618,7 @@ try {
   assert.equal(map.node, 'restored'); assert.equal(map.progress.guardian, true);
   assert.match(await page.locator('#view-result').innerText(), /nodo restaurado/);
   assert.match(await page.locator('#achievements').innerText(), /Amaru liberado/);
-  passed.push(`5 phases 1-2-3 by HP thresholds, corrupted head while fighting, victory, liberation: corruption overlay recedes > color wave restores the arena > two dialogue lines > codex > result (total ${points('TOTAL')} = fragments + bugs + returns + time), Enter to map with restored node and progress.guardian true`);
+  passed.push(`5 phases 1-2-3 by HP thresholds, corrupted head while fighting, victory, liberation: corruption overlay recedes > color wave restores the arena > two dialogue lines > codex > result (total ${points('TOTAL')} = fragments + bugs + returns + racha + time), Enter to map with restored node and progress.guardian true`);
 
   stage = '5 defeat path, READY gate and full retry reset';
   await page.keyboard.press('2');

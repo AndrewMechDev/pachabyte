@@ -42,16 +42,24 @@ describe('liberation sequence', () => {
 });
 
 describe('result screen', () => {
+  it('shows the racha bonus on its own line and adds it to the total', () => {
+    const tally = { fragments: 2, bugs: 3, returns: 1, bugPoints: 325, comboBonus: 450 };
+    const breakdown = scoreBreakdown(tally, 300);
+    expect(breakdown.total).toBe(200 + 325 + 200 + 450);
+    const combo = resultLines(breakdown, tally, 300).find(line => line.startsWith(TEXT.resultCombo))!;
+    expect(combo.trim().endsWith('450')).toBe(true);
+  });
   it('lists the provisional score breakdown with a total and the retry/map help', () => {
     const tally = { fragments: 3, bugs: 4, returns: 5 };
     const breakdown = scoreBreakdown(tally, 150.6);
-    expect(breakdown).toEqual({ fragments: 300, bugs: 300, returns: 1000, time: 1490, total: 3090 });
+    expect(breakdown).toEqual({ fragments: 300, bugs: 300, returns: 1000, combo: 0, time: 1490, total: 3090 });
     const lines = resultLines(breakdown, tally, 150.6);
     expect(lines[0]).toBe(TEXT.resultTitle);
     expect(lines.join('\n')).toContain('3090');
     expect(lines.join('\n')).toContain(TEXT.resultTotal);
     expect(lines.join('\n')).toContain(`150 ${TEXT.secondsUnit}`);
     expect(lines.at(-1)).toBe(TEXT.resultHelp);
+    expect(lines.some(line => line.startsWith(TEXT.resultCombo))).toBe(true);
     for (const line of lines) {
       expect(line.length * 6).toBeLessThanOrEqual(300);
       expect(missingGlyphs(line)).toEqual([]);

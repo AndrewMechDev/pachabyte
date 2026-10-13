@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ATLAS_HEIGHT, CELL_WIDTH, CELL_HEIGHT, FONT_CHARACTERS, FONT_COLORS, GLYPHS, LETTER_ROWS, fontKey, glyphCell } from './retroFont';
+import { CORRUPTOR_COLORS, CORRUPTOR_FRAMES, FRAGMENT_SMALL, ORB, ORB_COLORS, SHADOW_FRAMES, SOMBRA_COLORS, SOMBRA_FRAMES, silhouette } from './bugArt';
 
 // Original procedural placeholders. These are not animation spritesheets.
 export function createTextures(scene: Phaser.Scene): void {
@@ -88,6 +89,30 @@ export function createRouteTextures(scene: Phaser.Scene): void {
       (x * 7 + y * 3) % 11 === 0 ? 'l' : (x + y * 5) % 13 === 0 ? 'm' : y % 2 ? 'd' : 'p').join(''));
     paint(scene, 'marea', rows, { d: 0x2a1438, p: 0x4a2266, m: 0x7a3fa8, l: 0xc985ef });
   }
+}
+
+// PLACEHOLDER textures pending the asset requests BUG_CORRUPTOR and BUG_SOMBRA_DE_ERROR (see bugArt.ts), plus the
+// Corruptor's round orb and the small fragment that every 4th debugged bug drops. Hit flashes are derived silhouettes.
+export const BUG_TEXTURES = Object.freeze({
+  corruptor: 'corruptor', corruptorSway: 'corruptor-b', corruptorCharge: 'corruptor-charge', corruptorHit: 'corruptor-hit',
+  sombra: 'sombra', sombraB: 'sombra-b', sombraBlink: 'sombra-blink', sombraHit: 'sombra-hit',
+  shadow: 'shadow', shadowB: 'shadow-b', shadowHit: 'shadow-hit', orb: 'corrupt-orb', fragmentSmall: 'fragment-small',
+});
+export function createBugTextures(scene: Phaser.Scene): void {
+  const t = BUG_TEXTURES, flash = { h: 0xfff1c3 };
+  paint(scene, t.corruptor, CORRUPTOR_FRAMES.idle, CORRUPTOR_COLORS);
+  paint(scene, t.corruptorSway, CORRUPTOR_FRAMES.sway, CORRUPTOR_COLORS);
+  paint(scene, t.corruptorCharge, CORRUPTOR_FRAMES.charge, CORRUPTOR_COLORS);
+  paint(scene, t.corruptorHit, silhouette(CORRUPTOR_FRAMES.idle), flash);
+  paint(scene, t.sombra, SOMBRA_FRAMES.drift, SOMBRA_COLORS);
+  paint(scene, t.sombraB, SOMBRA_FRAMES.driftB, SOMBRA_COLORS);
+  paint(scene, t.sombraBlink, SOMBRA_FRAMES.blink, SOMBRA_COLORS);
+  paint(scene, t.sombraHit, silhouette(SOMBRA_FRAMES.drift), flash);
+  paint(scene, t.shadow, SHADOW_FRAMES.drift, SOMBRA_COLORS);
+  paint(scene, t.shadowB, SHADOW_FRAMES.driftB, SOMBRA_COLORS);
+  paint(scene, t.shadowHit, silhouette(SHADOW_FRAMES.drift), flash);
+  paint(scene, t.orb, ORB, ORB_COLORS);
+  paint(scene, t.fragmentSmall, FRAGMENT_SMALL, { g: 0xedc76c, l: 0xfff1c3, o: 0xa27c52 });
 }
 
 // One pre-colored atlas per text color; registered once in the shared cache and reused on restart.

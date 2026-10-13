@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ROUTE, SEGMENTS, SPAWNS, WALLS, addMeter, cameraScroll, captionAt, directEntry, finalScore, glitchlingVelocity, mareaFront,
-  mareaTouches, overlaps, pickupFragment, readRunState, runningScore, segmentAt, spawnsDue, takeHit, wallRects, wallScreenX, wallTelegraph,
+  ROUTE, SEGMENTS, SPAWNS, WALLS, addMeter, cameraScroll, captionAt, defeatBug, directEntry, finalScore, glitchlingVelocity, mareaFront,
+  mareaTouches, overlaps, pickupFragment, quietSegment, readRunState, runningScore, scoreBreakdown, segmentAt, spawnsDue, takeHit, wallRects, wallScreenX, wallTelegraph, type Tally,
 } from '../src/game/routeRules';
+import { BUGS, corruptorLifetime, sombraTravelMs } from '../src/game/bugRules';
 import { GAME } from '../src/game/rules';
 import { TEXT } from '../src/game/text';
 
@@ -62,6 +63,27 @@ describe('scripted spawns', () => {
     const ys = new Set(SPAWNS.filter(s => segmentAt(s.at) === 'fragments' && s.kind === 'fragment').map(s => s.y));
     expect(ys.size).toBeGreaterThanOrEqual(3);
   });
+  it('adds Corruptors and Sombras de Error to the script, never inside the Firewall or the threshold', () => {
+    const corruptors = SPAWNS.filter(s => s.kind === 'corruptor'), sombras = SPAWNS.filter(s => s.kind === 'sombra');
+    expect(corruptors.length).toBeGreaterThanOrEqual(2);
+    expect(sombras.length).toBeGreaterThanOrEqual(2);
+    expect(quietSegment('firewall')).toBe(true);
+    expect(quietSegment('threshold')).toBe(true);
+    expect(quietSegment('swarm')).toBe(false);
+    const quiet = SEGMENTS.filter(s => quietSegment(s.name));
+    const windows = [...corruptors.map(s => [s.at, s.at + corruptorLifetime()]), ...sombras.map(s => [s.at, s.at + sombraTravelMs()])];
+    for (const [from, to] of windows) for (const q of quiet) expect(from >= q.end || to <= q.start, `${from}-${to} overlaps ${q.name}`).toBe(true);
+    // The Corruptor sways 14 px around its spawn height and must stay inside the band.
+    for (const s of corruptors) { expect(s.y).toBeGreaterThanOrEqual(GAME.playTop + 26); expect(s.y).toBeLessThanOrEqual(GAME.playBottom - 26); }
+  });
+  it('never schedules more than 2 Corruptors or more than one large Sombra on screen at once', () => {
+    const alive = (kind: string, life: number, t: number) => SPAWNS.filter(s => s.kind === kind && t >= s.at && t < s.at + life).length;
+    for (let t = 0; t < ROUTE.transitionMs; t += 100) {
+      expect(alive('corruptor', corruptorLifetime(), t), `corruptors at ${t}`).toBeLessThanOrEqual(BUGS.caps.corruptors);
+      expect(alive('sombra', sombraTravelMs(), t), `sombras at ${t}`).toBeLessThanOrEqual(1);
+    }
+    expect(SPAWNS.filter(s => s.kind === 'corruptor').some(a => SPAWNS.some(b => b !== a && b.kind === 'corruptor' && Math.abs(b.at - a.at) < corruptorLifetime()))).toBe(true);
+  });
   it('releases each spawn exactly once as the clock advances', () => {
     let cursor = 0; const seen: number[] = [];
     for (let t = 0; t <= 70000; t += 16) { const step = spawnsDue(cursor, t); cursor = step.next; seen.push(...step.due.map(s => s.at)); }
@@ -106,6 +128,17 @@ describe('fragments, meter and score', () => {
     expect(runningScore(tally)).toBe(300 + 300 + 400);
     expect(finalScore(tally, 100)).toBe(1000 + 2000);
     expect(finalScore(tally, 400)).toBe(1000);
+  });
+  it('scores each defeated bug by its own value and keeps the racha bonus as a separate line', () => {
+    let tally: Tally = { fragments: 0, bugs: 0, returns: 0, bugPoints: 0, comboBonus: 0 };
+    let step = defeatBug(tally, 75, 0);
+    expect(step.points).toBe(75);
+    tally = step.tally;
+    step = defeatBug(tally, 150, 12);
+    expect(step.points).toBe(450);
+    expect(step.tally).toEqual({ fragments: 0, bugs: 2, returns: 0, bugPoints: 225, comboBonus: 300 });
+    expect(runningScore(step.tally)).toBe(525);
+    expect(scoreBreakdown(step.tally, 300)).toEqual({ fragments: 0, bugs: 225, returns: 0, combo: 300, time: 0, total: 525 });
   });
 });
 
@@ -174,13 +207,18 @@ describe('Kipu health', () => {
 
 describe('run state carried into the guardian', () => {
   it('defaults to a fresh direct entry with 4 HP and an empty meter', () => {
-    expect(directEntry()).toEqual({ hp: 4, score: 0, fragments: 0, bugs: 0, meter: 0, routeSeconds: 0 });
+    expect(directEntry()).toEqual({ hp: 4, score: 0, fragments: 0, bugs: 0, meter: 0, routeSeconds: 0, bugPoints: 0, comboBonus: 0, comboHits: 0 });
     expect(readRunState(undefined)).toEqual(directEntry());
     expect(readRunState({ hp: 'x' })).toEqual(directEntry());
   });
   it('accepts a carried state and clamps out-of-range values', () => {
     expect(readRunState({ hp: 2, score: 900, fragments: 5, bugs: 4, meter: 140, routeSeconds: 70 }))
-      .toEqual({ hp: 2, score: 900, fragments: 5, bugs: 4, meter: 100, routeSeconds: 70 });
+      .toEqual({ hp: 2, score: 900, fragments: 5, bugs: 4, meter: 100, routeSeconds: 70, bugPoints: 300, comboBonus: 0, comboHits: 0 });
     expect(readRunState({ hp: 9, score: -1, fragments: 0, bugs: 0, meter: 0, routeSeconds: 0 }).hp).toBe(4);
+  });
+  it('carries the racha, the bug points and the racha bonus', () => {
+    const carried = readRunState({ hp: 3, score: 1600, fragments: 4, bugs: 5, meter: 60, routeSeconds: 70, bugPoints: 640, comboBonus: 560, comboHits: 14.6 });
+    expect(carried).toMatchObject({ bugPoints: 640, comboBonus: 560, comboHits: 14 });
+    expect(readRunState({ hp: 3, score: 0, fragments: 0, bugs: 0, meter: 0, routeSeconds: 0, comboHits: -5, comboBonus: 'x' })).toMatchObject({ comboHits: 0, comboBonus: 0 });
   });
 });

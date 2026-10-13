@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME } from './rules';
 import { CELL_WIDTH, fontKey } from './retroFont';
-import { HEART, formatScore, heartStates, meterFill, type MeterStyle } from './hudRules';
+import { HEART, comboLabel, formatScore, heartStates, meterFill, type MeterStyle } from './hudRules';
 import { NOKIA } from './nokiaPalette';
 import { TEXT } from './text';
 
@@ -10,27 +10,37 @@ const GREEN = { bar: NOKIA[0], line: NOKIA[1], heart: NOKIA[3], empty: NOKIA[1],
 const METER = { x: 92, y: 5, width: 40, height: 6 };
 
 // meterStyle/meterLevel come from meterDisplay() in the guardian; the route derives them from the meter alone.
-export interface HudValues { hp: number; maxHp: number; meter: number; score: number; now: number; meterStyle?: MeterStyle; meterLevel?: number; reduced?: boolean }
+// combo is the racha multiplier (x1 hides the label); comboHot briefly colors it gold after a tier-up.
+export interface HudValues {
+  hp: number; maxHp: number; meter: number; score: number; now: number; meterStyle?: MeterStyle; meterLevel?: number; reduced?: boolean;
+  combo?: number; comboHot?: boolean;
+}
 
 // Top bar (16 px): pixel hearts for HP, the ENERGÍA meter and a six-digit score. Fixed to the screen.
 export class Hud {
   private readonly g: Phaser.GameObjects.Graphics;
   private readonly energy: Phaser.GameObjects.BitmapText;
   private readonly score: Phaser.GameObjects.BitmapText;
+  private readonly combo: Phaser.GameObjects.BitmapText;
+  private comboFont = '';
   private nokia = false;
 
   constructor(scene: Phaser.Scene) {
     this.g = scene.add.graphics().setScrollFactor(0).setDepth(40);
     this.energy = scene.add.bitmapText(46, 4, fontKey(NORMAL.text), TEXT.energy, CELL_WIDTH).setScrollFactor(0).setDepth(41);
     this.score = scene.add.bitmapText(GAME.width - 4 - 6 * CELL_WIDTH, 4, fontKey(NORMAL.text), formatScore(0), CELL_WIDTH).setScrollFactor(0).setDepth(41);
+    // "RACHA ×N" between the meter and the score.
+    this.combo = scene.add.bitmapText(142, 4, fontKey(NORMAL.text), '', CELL_WIDTH).setScrollFactor(0).setDepth(41);
   }
 
   get scoreText(): string { return this.score.text; }
+  get comboText(): string { return this.combo.text; }
 
   // Canvas BitmapText ignores tint, so colors come from pre-colored atlases; four-green mode uses the Nokia one.
   setPalette(nokia: boolean): void {
     this.nokia = nokia;
     for (const label of [this.energy, this.score]) label.setFont(fontKey((nokia ? GREEN : NORMAL).text), CELL_WIDTH);
+    this.comboFont = '';
   }
 
   draw(values: HudValues): void {
@@ -66,6 +76,11 @@ export class Hud {
     } else g.fillStyle(c.meter).fillRect(METER.x + 1, top, fill, height);
     const text = formatScore(values.score);
     if (this.score.text !== text) this.score.setText(text);
+    const label = comboLabel(values.combo ?? 1);
+    if (this.combo.text !== label) this.combo.setText(label);
+    // A tier-up colors the label gold for a moment (a color step, never a flash); four-green mode keeps one green.
+    const font = fontKey(this.nokia ? GREEN.text : values.comboHot ? NORMAL.title : NORMAL.text);
+    if (font !== this.comboFont) { this.combo.setFont(font, CELL_WIDTH); this.comboFont = font; }
   }
 }
 

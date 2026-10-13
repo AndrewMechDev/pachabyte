@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { HEART, formatScore, heartStates, meterDisplay, meterFill, wrapLines } from '../src/game/hudRules';
+import { HEART, comboLabel, formatScore, heartStates, meterDisplay, meterFill, wrapLines } from '../src/game/hudRules';
+import { TEXT } from '../src/game/text';
+import { missingGlyphs } from '../src/game/retroFont';
 
 describe('HUD helpers', () => {
+  it('shows "RACHA xN" only once the multiplier is above x1', () => {
+    expect(comboLabel(1)).toBe('');
+    expect(comboLabel(2)).toBe(`${TEXT.combo} ×2`);
+    expect(comboLabel(4)).toBe('RACHA ×4');
+    expect(missingGlyphs(comboLabel(3))).toEqual([]);
+    expect(comboLabel(4).length * 6).toBeLessThanOrEqual(130);
+  });
   it('formats scores as six zero-padded digits and clamps the range', () => {
     expect(formatScore(0)).toBe('000000');
     expect(formatScore(1275)).toBe('001275');

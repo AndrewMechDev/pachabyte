@@ -54,6 +54,7 @@ export function resultLines(b: ScoreBreakdown, t: Tally, seconds: number): strin
     row(TEXT.resultFragments, String(t.fragments), b.fragments),
     row(TEXT.resultBugs, String(t.bugs), b.bugs),
     row(TEXT.resultReturns, String(t.returns), b.returns),
+    row(TEXT.resultCombo, '', b.combo),
     // A spaced unit: in the 5x7 font a bare "47S" reads as "475".
     row(TEXT.resultTime, `${Math.floor(seconds)} ${TEXT.secondsUnit}`, b.time),
     row(TEXT.resultTotal, '', b.total),

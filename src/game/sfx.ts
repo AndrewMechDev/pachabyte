@@ -3,7 +3,8 @@
 
 export type SfxName = 'shot' | 'bossHit' | 'reflectHit' | 'heroHit' | 'capture' | 'shiftOn' | 'release' | 'charge'
   | 'bossFire' | 'victory' | 'defeat' | 'select' | 'fragment' | 'enemyHit' | 'enemyDown' | 'firewall' | 'pause'
-  | 'deflect' | 'shieldHit' | 'shieldBreak' | 'wave' | 'restore' | 'blip';
+  | 'deflect' | 'shieldHit' | 'shieldBreak' | 'wave' | 'restore' | 'blip'
+  | 'corruptorCharge' | 'corruptorShot' | 'sombraDodge' | 'sombraSplit' | 'comboUp';
 
 export interface Voice { wave: 'square' | 'triangle' | 'sawtooth' | 'sine' | 'noise'; from: number; to: number; at: number; dur: number; gain: number }
 // For 'noise', from/to are the low-pass cutoff sweep in Hz instead of a pitch.
@@ -36,6 +37,13 @@ export const RECIPES: Readonly<Record<SfxName, readonly Voice[]>> = Object.freez
   wave: [v('sawtooth', 60, 110, 0, 0.9, 0.3), v('noise', 400, 1200, 0, 0.9, 0.2)],
   restore: [v('triangle', 330, 330, 0, 0.3, 0.35), v('triangle', 415, 415, 0.15, 0.3, 0.35), v('triangle', 494, 494, 0.3, 0.3, 0.35), v('sine', 660, 990, 0.45, 0.6, 0.35)],
   blip: [v('square', 980, 980, 0, 0.03, 0.2)],
+  // Route bugs (2026-10-13): the Corruptor's rising hum before a shot and its dull spit, the Sombra's glitch
+  // chirp when it dodges and a doubled pop when it splits, and a two-step climb when the racha reaches a new tier.
+  corruptorCharge: [v('sawtooth', 90, 260, 0, 0.55, 0.16), v('sine', 300, 700, 0, 0.55, 0.12)],
+  corruptorShot: [v('square', 260, 110, 0, 0.16, 0.32), v('noise', 1400, 300, 0, 0.1, 0.22)],
+  sombraDodge: [v('triangle', 700, 1400, 0, 0.06, 0.22), v('triangle', 1400, 700, 0.05, 0.06, 0.18)],
+  sombraSplit: [v('square', 500, 160, 0, 0.16, 0.32), v('square', 750, 240, 0.03, 0.16, 0.28), v('noise', 3000, 600, 0, 0.12, 0.22)],
+  comboUp: [v('square', 660, 660, 0, 0.06, 0.28), v('square', 990, 990, 0.06, 0.1, 0.3)],
 });
 export const SFX_NAMES = Object.keys(RECIPES) as SfxName[];
 

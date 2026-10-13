@@ -11,6 +11,8 @@ import {
   type Attack, type AttackKind, type Boss, type Checkpoint, type Emission, type HitKind, type Phase, type Stage,
 } from './amaruRules';
 import { coach, initialCoach, type Coach, type CoachEvent } from './coachRules';
+import { breakCombo, comboMultiplier, comboPoints, initialCombo, registerHit, type Combo } from './comboRules';
+import { FloaterPool, floaterView, hitStopActive, initialHitStop, stoppedPart, triggerHitStop, type FloaterSlot, type HitStop } from './effectsRules';
 import { advanceLiberation, resultLines, stageProgress, startLiberation, tickLiberation, variantKey, type Liberation } from './liberationRules';
 import { ARENA, ARENA_DIM, BODY_TEXTURES, BOLT_TEXTURES, HEAD, HEAD_FLASH, createAmaruTextures, derive } from './amaruTextures';
 import { NOKIA, convertPixels } from './nokiaPalette';
@@ -39,9 +41,12 @@ type Keys = Record<'a'|'d'|'w'|'s'|'left'|'right'|'up'|'down'|'space'|'j'|'z'|'s
 const ARENA_FLOOR = 164;
 // Kipu stays left of Amaru's head, so the head's forgiving body is never a contact hazard.
 const KIPU_RIGHT = 230;
-const POOL = Object.freeze({ shots: GAME.bulletCapacity, returns: REVERSE.maxCaptures, enemies: 40, particles: 96 });
+const POOL = Object.freeze({ shots: GAME.bulletCapacity, returns: REVERSE.maxCaptures, enemies: 40, particles: 96, floaters: 8 });
 const TIMING = Object.freeze({ boltTtl: 7000, returnTtl: 1800, returnSpeed: 240, flashMs: 80, noCaptureMs: 900 });
 const SHIELD_RADIUS = 30;
+// Soft ring pulse when the shield breaks: two hard-pixel rings grow outward in the arena palette (no screen flash).
+const PULSE = Object.freeze({ ms: 360, from: SHIELD_RADIUS, to: SHIELD_RADIUS + 18 });
+const COMBO_HOT_MS = 450;
 // Extra pixels between stacked lines (12 px pitch): accent marks rise MARK_ROWS above the 8 px line cell and still keep
 // two clear rows to the letters above, so a mark never reads as belonging to the previous line.
 const LINE_GAP = MARK_ROWS + 1;
@@ -96,6 +101,8 @@ export class GuardianScene extends Phaser.Scene {
   private fx!: ParticlePool;
   private fxGraphics!: Phaser.GameObjects.Graphics;
   private animator!: KipuAnimator;
+  private floaters = new FloaterPool(POOL.floaters);
+  private floaterTexts: Phaser.GameObjects.BitmapText[] = [];
 
   private run = 0;
   private clocks: Clocks = { real: 0, world: 0 };
@@ -139,6 +146,13 @@ export class GuardianScene extends Phaser.Scene {
   private noCaptureUntil = 0;
   private cueShown = false;
   private nextAuraAt = 0;
+  // Racha (carried from the route), the racha bonus scored in this fight, and the world-clock hit-stop.
+  private combo: Combo = initialCombo();
+  private comboHotUntil = 0;
+  private fightBonus = 0;
+  private hitStop: HitStop = initialHitStop();
+  private worldRate = 1;
+  private pulseAt = -Infinity;
 
   constructor() { super('GuardianScene'); }
 
@@ -172,6 +186,9 @@ export class GuardianScene extends Phaser.Scene {
     this.messages = resume ? [{ text: PHASE_NAME[resume.phase], ms: 1700 }] : [{ text: TEXT.guardianAwakens, ms: 1500 }, { text: PHASE_NAME[1], ms: 1700 }];
     this.messageUntil = 0;
     this.bossFlashUntil = 0; this.noCaptureUntil = 0; this.cueShown = false; this.nextAuraAt = 0;
+    // A checkpoint resume follows a defeat, which already broke the racha; it keeps the racha bonus already scored.
+    this.combo = initialCombo(resume ? 0 : this.entry.comboHits); this.comboHotUntil = 0; this.fightBonus = resume?.comboBonus ?? 0;
+    this.hitStop = initialHitStop(); this.worldRate = 1; this.pulseAt = -Infinity;
     this.time.paused = false;
     sfx.setDucked(false);
 
@@ -239,6 +256,8 @@ export class GuardianScene extends Phaser.Scene {
     this.panelText = this.text(0, 0, '').setDepth(51).setLineSpacing(LINE_GAP);
     this.panelHelp = this.text(0, 0, '').setDepth(51).setCenterAlign().setLineSpacing(LINE_GAP);
     this.pause = new PauseOverlay(this);
+    this.floaterTexts = this.floaters.items.map(() => this.text(0, 0, '').setDepth(9.5).setVisible(false));
+    this.floaters.clear();
 
     this.keys = this.input.keyboard!.addKeys({ a:'A',d:'D',w:'W',s:'S',left:'LEFT',right:'RIGHT',up:'UP',down:'DOWN',space:'SPACE',j:'J',z:'Z',shift:'SHIFT',k:'K',x:'X',esc:'ESC',p:'P',r:'R',m:'M',enter:'ENTER' }) as Keys;
     for (const key of [this.keys.shift, this.keys.k, this.keys.x]) key.setEmitOnRepeat(false).on('down', () => { if (this.focused && !this.paused) this.shiftRequested = true; });
@@ -288,7 +307,10 @@ export class GuardianScene extends Phaser.Scene {
   }
 
   private play(delta: number): void {
-    this.clocks = advanceClocks(this.clocks, delta, worldScale(this.reverse));
+    // Hit-stop removes its part of this real step from the world only; REVERSE timers stay on the real clock.
+    const scale = worldScale(this.reverse), stopped = stoppedPart(this.hitStop, this.clocks.real, delta);
+    this.worldRate = stopped > 0 && delta > 0 ? scale * (delta - stopped) / delta : scale;
+    this.clocks = { real: this.clocks.real + Math.max(0, delta), world: this.clocks.world + scale * (Math.max(0, delta) - stopped) };
     const now = this.clocks.real, world = this.clocks.world, k = this.keys;
     const move = flight({ left: k.a.isDown || k.left.isDown, right: k.d.isDown || k.right.isDown, up: k.w.isDown || k.up.isDown, down: k.s.isDown || k.down.isDown }, this.facing);
     this.facing = move.facing;
@@ -366,6 +388,16 @@ export class GuardianScene extends Phaser.Scene {
     // Every normal shot that reaches Amaru charges REVERSE, deflected ones included; returns do not.
     if (kind === 'normal') this.reverse = chargeReverse(this.reverse, REVERSE.perHit);
     const center = (this.boss.body as Body).center;
+    // Racha: every hit that lands (not a deflection) counts; a returned bolt's 200 points use the multiplier.
+    if (step.result !== 'deflect') {
+      const hit = registerHit(this.combo);
+      this.combo = hit.combo;
+      if (hit.tierUp) { sfx.play('comboUp'); this.comboHotUntil = now + COMBO_HOT_MS; }
+      if (kind === 'returned') this.fightBonus += comboPoints(ROUTE.returnScore, this.combo.hits).bonus;
+      if (step.amount > 0) this.floater(String(step.amount), x, y - 8, kind === 'returned' ? 'points' : 'damage');
+    }
+    // Heavy hits stop the world for 50 ms: a returned-bolt impact or the shield breaking.
+    if (!motion.reduced && (kind === 'returned' || step.result === 'shieldBreak')) this.hitStop = triggerHitStop(this.hitStop, now);
     switch (step.result) {
       case 'deflect':
         sfx.play('deflect'); burst(this.fx, x, y, 4, 34, 150, 'light', now); break;
@@ -374,7 +406,7 @@ export class GuardianScene extends Phaser.Scene {
       case 'shieldBreak':
         sfx.play('shieldBreak');
         burst(this.fx, center.x, center.y, 16, 80, 480, 'teal', now, 2); burst(this.fx, center.x, center.y, 8, 45, 380, 'light', now, 2);
-        if (!motion.reduced) this.cameras.main.shake(140, 0.006);
+        if (!motion.reduced) { this.cameras.main.shake(140, 0.006); this.pulseAt = now; }
         this.coachSay('shieldBreak');
         break;
       case 'damage':
@@ -439,7 +471,7 @@ export class GuardianScene extends Phaser.Scene {
     const bolt = this.enemies.getFirstDead(false) as Sprite | null;
     if (!bolt) return; // bounded pool: a full pool drops the emission by design
     const mouth = mouthOf(headPosition(world)), v = emissionVelocity(e, mouth, { x: this.player.x, y: this.player.y });
-    const base = e.shape === 'rhombus' ? BOLT_TEXTURES.rhombus : BOLT_TEXTURES.orb, scale = worldScale(this.reverse);
+    const base = e.shape === 'rhombus' ? BOLT_TEXTURES.rhombus : BOLT_TEXTURES.orb, scale = this.worldRate;
     bolt.enableBody(true, mouth.x, mouth.y, true, true);
     bolt.setTexture(variantKey(base, false, this.palette)).setData({ vx: v.vx, vy: v.vy, base, shape: e.shape, capturable: capturable(e.shape), expires: world + TIMING.boltTtl });
     // Forgiving hitboxes, smaller than the drawn bolts.
@@ -448,7 +480,8 @@ export class GuardianScene extends Phaser.Scene {
   }
 
   private stepEnemies(world: number): void {
-    const scale = worldScale(this.reverse);
+    // World rate: 20 % while SLOW, 0 during a hit-stop.
+    const scale = this.worldRate;
     for (const bolt of this.alive(this.enemies)) {
       if (isSlow(this.reverse) && this.tryCapture(bolt)) continue;
       // Enemy velocities follow the world clock: 20 % while SLOW.
@@ -488,8 +521,9 @@ export class GuardianScene extends Phaser.Scene {
     if (this.bossDown) return;
     const next = takeHit(this.health, this.clocks.real);
     if (next === this.health) return;
-    // Damage never costs or refills REVERSE.
+    // Damage never costs or refills REVERSE; it breaks the racha.
     this.health = next;
+    this.combo = breakCombo(this.combo);
     sfx.play('heroHit');
     burst(this.fx, this.player.x, this.player.y - 4, 10, 60, 320, 'violet', this.clocks.real, 2);
     if (!motion.reduced) this.cameras.main.shake(110, 0.006);
@@ -515,7 +549,7 @@ export class GuardianScene extends Phaser.Scene {
     this.animator.hold('squash', false); this.player.setAngle(0);
     sfx.play('defeat');
     burst(this.fx, this.player.x, this.player.y - 4, 14, 65, 500, 'violet', this.clocks.real, 2);
-    this.checkpoint = checkpointAt(this.bossState.phase, this.reverse.returnsTotal, this.priorMs + this.clocks.real);
+    this.checkpoint = checkpointAt(this.bossState.phase, this.reverse.returnsTotal, this.priorMs + this.clocks.real, this.fightBonus);
     const help = this.checkpoint ? `${TEXT.checkpointRetry} ${this.checkpoint.phase}\n${TEXT.checkpointHelp}` : TEXT.resultHelp;
     this.showPanel('center', TEXT.routeDefeat, help);
     this.publishView();
@@ -548,7 +582,10 @@ export class GuardianScene extends Phaser.Scene {
         this.showPanel('codex', [TEXT.codexTitle, '', ...wrapLines(TEXT.codexBody, 40), '', TEXT.codexFind].join('\n'), TEXT.dialogueHelp);
         break;
       case 'result': {
-        const tally = { fragments: this.entry.fragments, bugs: this.entry.bugs, returns: this.reverse.returnsTotal };
+        const tally = {
+          fragments: this.entry.fragments, bugs: this.entry.bugs, returns: this.reverse.returnsTotal,
+          bugPoints: this.entry.bugPoints, comboBonus: this.entry.comboBonus + this.fightBonus,
+        };
         const seconds = this.entry.routeSeconds + this.fightMs / 1000;
         const lines = resultLines(scoreBreakdown(tally, seconds), tally, seconds);
         this.resultText = lines.join('\n');
@@ -647,7 +684,23 @@ export class GuardianScene extends Phaser.Scene {
     });
     this.fx.step(now, delta / 1000, 0);
     this.fxGraphics.clear(); drawParticles(this.fxGraphics, this.fx, nokia);
+    this.floaters.step(now);
+    this.floaters.items.forEach((f, i) => {
+      const label = this.floaterTexts[i];
+      label.setVisible(f.active);
+      if (!f.active) return;
+      const view = floaterView(f, now, motion.reduced);
+      // Four-green mode keeps alpha 1: blending would add colors outside the exact palette.
+      label.setPosition(Math.round(view.x - f.text.length * CELL_WIDTH / 2), view.y).setAlpha(nokia ? 1 : view.alpha);
+    });
   }
+
+  private floater(text: string, x: number, y: number, slot: FloaterSlot): void {
+    const f = this.floaters.spawn(text, x, y, slot, this.clocks.real), label = this.floaterTexts[this.floaters.items.indexOf(f)];
+    label.setFont(this.floaterFont(slot), CELL_WIDTH).setText(text).setData('slot', slot);
+  }
+
+  private floaterFont(slot: FloaterSlot): string { return fontKey(this.palette ? NOKIA[3] : slot === 'points' ? COLORS.normal.gold : COLORS.normal.light); }
 
   private setVariant(image: Phaser.GameObjects.Image, base: string, corrupt: boolean, nokia: boolean): void {
     const key = variantKey(base, corrupt, nokia);
@@ -673,7 +726,10 @@ export class GuardianScene extends Phaser.Scene {
     f.fillStyle(c.floor).fillRect(0, ARENA_FLOOR, 320, 180 - ARENA_FLOOR).fillStyle(c.light).fillRect(0, ARENA_FLOOR, 320, 2);
     f.fillStyle(c.dark).fillRect(0, GAME.hudHeight, 320, BAND.height);
     const display = meterDisplay(this.reverse.state, this.reverse.meter, (this.reverse.until - now) / REVERSE.slowMs);
-    this.hud.draw({ hp: this.health.hp, maxHp: ROUTE.maxHp, meter: this.reverse.meter, score: this.score(), now, meterStyle: display.style, meterLevel: display.fill, reduced: motion.reduced });
+    this.hud.draw({
+      hp: this.health.hp, maxHp: ROUTE.maxHp, meter: this.reverse.meter, score: this.score(), now, meterStyle: display.style, meterLevel: display.fill, reduced: motion.reduced,
+      combo: comboMultiplier(this.combo.hits), comboHot: now < this.comboHotUntil,
+    });
     const b = this.bossState, world = this.clocks.world;
     this.bossHud.draw({ hp: b.hp, maxHp: AMARU.maxHP, phase: b.phase, shield: b.shield, shieldMax: AMARU.shieldMax, shieldUp: b.phase >= 2 && b.shield > 0 && !isVulnerable(b, world), vulnerable: isVulnerable(b, world), now });
     this.drawStatus();
@@ -682,6 +738,7 @@ export class GuardianScene extends Phaser.Scene {
     const center = (this.boss.body as Body).center;
     if (!this.bossDown) this.drawAura(g, center, c);
     if (shieldBlocks(b, world)) for (const [x, y] of shieldRing(SHIELD_RADIUS, b.shield, AMARU.shieldMax)) g.fillStyle(c.mid).fillRect(Math.round(center.x) + x, Math.round(center.y) + y, 1, 1);
+    this.drawPulse(g, center, c, now);
     this.drawTelegraph(g, c);
     if (isSlow(this.reverse)) {
       // The capture field is drawn at its real radius (REVERSE.captureRadius) in hard pixels.
@@ -711,6 +768,15 @@ export class GuardianScene extends Phaser.Scene {
     this.message.setX(x);
     const height = MESSAGE.textY - MESSAGE.top + lines.length * (CELL_HEIGHT + LINE_GAP) - LINE_GAP + 2;
     box.fillStyle(c.dark).fillRect(x - 4, MESSAGE.top, width + 8, height).fillStyle(c.gold).fillRect(x - 4, MESSAGE.top, width + 8, 1).fillRect(x - 4, MESSAGE.top + height - 1, width + 8, 1);
+  }
+
+  private drawPulse(g: Phaser.GameObjects.Graphics, center: Phaser.Math.Vector2, c: typeof COLORS.normal, now: number): void {
+    const t = (now - this.pulseAt) / PULSE.ms;
+    if (motion.reduced || t < 0 || t >= 1) return;
+    // Two dotted rings; the outer one thins out as it grows, so the pulse fades by density, not by alpha.
+    const radius = Math.round(PULSE.from + (PULSE.to - PULSE.from) * t), every = 1 + Math.floor(t * 3);
+    shieldRing(radius, 1, 1).forEach(([x, y], i) => { if (i % every === 0) g.fillStyle(c.mid).fillRect(Math.round(center.x) + x, Math.round(center.y) + y, 1, 1); });
+    if (t < 0.5) shieldRing(Math.max(1, radius - 5), 1, 1).forEach(([x, y], i) => { if (i % 2 === 0) g.fillStyle(c.light).fillRect(Math.round(center.x) + x, Math.round(center.y) + y, 1, 1); });
   }
 
   private drawAura(g: Phaser.GameObjects.Graphics, center: Phaser.Math.Vector2, c: typeof COLORS.normal): void {
@@ -802,11 +868,13 @@ export class GuardianScene extends Phaser.Scene {
     for (const label of [this.status, this.signal, this.cue, this.message, this.panelText, this.panelHelp]) {
       label.setFont(fontKey((active ? COLORS.nokia : COLORS.normal).text), CELL_WIDTH);
     }
+    for (const label of this.floaterTexts) label.setFont(this.floaterFont((label.getData('slot') as FloaterSlot | undefined) ?? 'damage'), CELL_WIDTH);
     this.hud.setPalette(active); this.bossHud.setPalette(active); this.pause.setPalette(active);
     this.animate(0);
   }
 
-  private score(): number { return this.entry.score + ROUTE.returnScore * this.reverse.returnsTotal; }
+  // Route score + 200 per returned bolt (the provisional formula) + the racha bonus scored in this fight.
+  private score(): number { return this.entry.score + ROUTE.returnScore * this.reverse.returnsTotal + this.fightBonus; }
 
   private togglePause(): void {
     if (this.ending !== 'playing') return;
@@ -855,6 +923,9 @@ export class GuardianScene extends Phaser.Scene {
       panel: this.panelText.text, panelHelp: this.panelHelp.text, resultText: this.resultText,
       checkpoint: this.checkpoint ? { ...this.checkpoint } : null, checkpointed: this.resumedFrom !== null, resumedFrom: this.resumedFrom?.phase ?? null,
       fightElapsedMs: this.priorMs + this.clocks.real, coach: { ...this.coachState },
+      combo: { hits: this.combo.hits, best: this.combo.best, multiplier: comboMultiplier(this.combo.hits) }, fightBonus: this.fightBonus, worldRate: this.worldRate,
+      hitStop: { active: hitStopActive(this.hitStop, this.clocks.real), from: this.hitStop.from, until: this.hitStop.until, count: this.hitStop.count, totalMs: this.hitStop.totalMs },
+      floaters: { active: this.floaters.activeCount, capacity: this.floaters.items.length, texts: this.floaters.items.filter(f => f.active).map(f => f.text) },
       enemyBolts: this.alive(this.enemies).map(bolt => { const v = (bolt.body as Body).velocity; return { x: bolt.x, y: bolt.y, vx: v.x, vy: v.y, capturable: bolt.getData('capturable') === true, shape: bolt.getData('shape'), texture: bolt.texture.key }; }),
       alliedShots: [...this.alive(this.shots).map(s => ({ x: s.x, y: s.y, returned: false })), ...this.alive(this.returns).map(s => ({ x: s.x, y: s.y, returned: true }))],
       pools: { shots: this.shots.getLength(), returns: this.returns.getLength(), enemies: this.enemies.getLength(), orbit: this.orbit.length, particles: this.fx.items.length, particlesActive: this.fx.activeCount },
@@ -865,7 +936,7 @@ export class GuardianScene extends Phaser.Scene {
       },
       boss: { x: bossBody.center.x, y: bossBody.center.y, width: bossBody.width, height: bossBody.height, angle: this.boss.angle, texture: this.boss.texture.key, displayWidth: this.boss.displayWidth, displayHeight: this.boss.displayHeight },
       assets: { background: this.backdrop.texture.key, dim: this.backdropDim.texture.key, dimAlpha: this.backdropDim.alpha, head: this.boss.texture.key, segment: this.segments[0].texture.key, overlay: this.headOverlay.visible ? this.headOverlay.alpha : 0, arenaURL: arenaUrl, headURL: headUrl },
-      hud: { score: this.hud.scoreText, phase: this.bossHud.phaseText, status: this.status.text, signal: this.signal.text },
+      hud: { score: this.hud.scoreText, combo: this.hud.comboText, phase: this.bossHud.phaseText, status: this.status.text, signal: this.signal.text },
       audio: sfx.stats(), kipuFrame: this.animator.frame,
     };
   }

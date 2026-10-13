@@ -79,10 +79,11 @@ export function victoryReady(b: Boss, r: Reverse): boolean {
 
 // ---------------------------------------------------------------- phase checkpoints
 // Playtest (2026-10-13): a defeat in phase 2 or 3 may resume at that phase's start. The returns already scored
-// and the fight time already spent carry over, so a checkpoint never earns a larger time bonus.
-export interface Checkpoint { readonly phase: 2 | 3; readonly returnsTotal: number; readonly elapsedMs: number }
-export function checkpointAt(phase: Phase, returnsTotal: number, elapsedMs: number): Checkpoint | null {
-  return phase === 1 ? null : { phase, returnsTotal, elapsedMs };
+// and the fight time already spent carry over, so a checkpoint never earns a larger time bonus. The racha bonus
+// already scored in the fight carries too, so a resume keeps the score shown at the defeat.
+export interface Checkpoint { readonly phase: 2 | 3; readonly returnsTotal: number; readonly elapsedMs: number; readonly comboBonus: number }
+export function checkpointAt(phase: Phase, returnsTotal: number, elapsedMs: number, comboBonus = 0): Checkpoint | null {
+  return phase === 1 ? null : { phase, returnsTotal, elapsedMs, comboBonus: Math.max(0, comboBonus) };
 }
 // Full hearts, a full meter and the shield raised, at the HP where the phase begins.
 export function resumeFrom(c: Checkpoint): { boss: Boss; reverse: Reverse; heroHp: number } {

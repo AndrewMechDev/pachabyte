@@ -114,6 +114,19 @@ export function burst(pool: ParticlePool, x: number, y: number, count: number, s
   }
 }
 
+// "Reparar, no exterminar": a debugged bug dissolves into rising turquoise and gold sparkles on a fixed 3x3 grid
+// over its body, instead of a violet explosion. Deterministic; suppressed with the pool under reduced motion.
+export function dissolve(pool: ParticlePool, x: number, y: number, width: number, height: number, now: number): void {
+  for (let row = 0; row < 3; row++) for (let col = 0; col < 3; col++) {
+    const i = row * 3 + col;
+    const spec = {
+      x: x - width / 2 + (col + 0.5) * width / 3, y: y - height / 2 + (row + 0.5) * height / 3,
+      vx: (col - 1) * 6, vy: -14 - (i * 7 % 3) * 6, ttl: 320 + (i % 3) * 90, slot: (i % 2 ? 'gold' : 'teal') as FxSlot, size: i % 4 === 0 ? 2 : 1,
+    };
+    if (!pool.emit(spec, now)) return;
+  }
+}
+
 interface RectPainter { fillStyle(color: number): unknown; fillRect(x: number, y: number, width: number, height: number): unknown }
 // Integer hard-pixel squares only: no alpha or antialiasing, so the four-green palette stays exact.
 export function drawParticles(painter: RectPainter, pool: ParticlePool, nokia: boolean): void {

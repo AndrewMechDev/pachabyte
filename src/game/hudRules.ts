@@ -1,5 +1,6 @@
 // Pure HUD helpers shared by the route and the guardian arena.
 import type { ReverseState } from './reverseRules';
+import { TEXT } from './text';
 
 export function formatScore(score: number): string {
   const value = Math.min(999999, Math.max(0, Math.floor(Number.isFinite(score) ? score : 0)));
@@ -47,4 +48,9 @@ export function wrapLines(text: string, max: number): string[] {
   }
   if (line) lines.push(line);
   return lines;
+}
+
+// "RACHA ×N" in the top bar once the racha multiplies the score; hidden at ×1 so the bar stays quiet.
+export function comboLabel(multiplier: number): string {
+  return multiplier >= 2 ? `${TEXT.combo} ×${Math.floor(multiplier)}` : '';
 }

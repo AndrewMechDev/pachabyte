@@ -27,8 +27,11 @@ describe('sound recipes', () => {
   it('covers the Amaru fight and liberation cues', () => {
     for (const name of ['deflect', 'shieldHit', 'shieldBreak', 'wave', 'restore', 'blip']) expect(SFX_NAMES).toContain(name);
   });
+  it('covers the Corruptor, the Sombra de Error and the racha tier-up', () => {
+    for (const name of ['corruptorCharge', 'corruptorShot', 'sombraDodge', 'sombraSplit', 'comboUp']) expect(SFX_NAMES).toContain(name);
+  });
   it('defines a bounded recipe for every named effect', () => {
-    expect(SFX_NAMES.length).toBe(23);
+    expect(SFX_NAMES.length).toBe(28);
     for (const name of SFX_NAMES) {
       const voices = RECIPES[name];
       expect(voices.length).toBeGreaterThan(0);

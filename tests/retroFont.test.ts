@@ -13,7 +13,7 @@ describe('native retro glyph atlas', () => {
     expect(new Set(FONT_CHARACTERS).size).toBe(FONT_CHARACTERS.length);
   });
   it('covers Spanish accented capitals and punctuation', () => {
-    for (const char of "ÁÉÍÓÚÑÜ¡!¿?,'()+%>") expect(GLYPHS[char], char).toBeDefined();
+    for (const char of "ÁÉÍÓÚÑÜ¡!¿?,'()+%>×") expect(GLYPHS[char], char).toBeDefined();
   });
   it('uses binary 5x7 letters in 6x8 line cells, with mark rows only above accented capitals', () => {
     expect(CELL_WIDTH).toBe(6);

@@ -1,13 +1,19 @@
 import Phaser from 'phaser';
 import { GAME, canShoot, flight, frameDelta, oncePerEvent, playBounds, projectileExpired, shotVelocity } from './rules';
 import {
-  ROUTE, RUN_KEY, WALLS, addMeter, cameraScroll, captionAt, glitchlingVelocity, mareaFront, mareaTouches, overlaps, pickupFragment,
+  ROUTE, RUN_KEY, WALLS, addMeter, cameraScroll, captionAt, defeatBug, glitchlingVelocity, mareaFront, mareaTouches, overlaps, pickupFragment, quietSegment,
   runningScore, segmentAt, spawnsDue, takeHit, wallRects, wallScreenX, wallTelegraph, type Health, type Rect, type RunState, type Spawn, type Tally,
 } from './routeRules';
+import {
+  BUGS, BUG_STATS, corruptorCharge, corruptorScreen, corruptorShotsDue, dodgeStage, dropsFragment, linedUpShot, orbExpired, orbVelocity, shadowPosition,
+  sombraWorldX, splitCount, startSombra, stepSombra, type EnemyType, type SombraMotion,
+} from './bugRules';
+import { breakCombo, comboMultiplier, initialCombo, registerHit, type Combo } from './comboRules';
+import { FloaterPool, floaterView, hitStopActive, initialHitStop, triggerHitStop, worldStep, type FloaterSlot, type HitStop } from './effectsRules';
 import { completeRoute, initialProgress, type Progress } from './challengeRules';
-import { createTextures, createRetroFonts, createRouteTextures, drawScenery } from './textures';
+import { BUG_TEXTURES, createBugTextures, createTextures, createRetroFonts, createRouteTextures, drawScenery } from './textures';
 import { CELL_HEIGHT, CELL_WIDTH, MARK_ROWS, fontKey } from './retroFont';
-import { ParticlePool, burst, drawParticles, flightTilt } from './animation';
+import { ParticlePool, burst, dissolve, drawParticles, flightTilt } from './animation';
 import { KipuAnimator } from './kipuAnimator';
 import { ensureKipuFrames } from './kipuTextures';
 import { sfx } from './sfx';
@@ -25,20 +31,33 @@ type KeyName = 'left' | 'right' | 'up' | 'down' | 'a' | 'd' | 'w' | 's' | 'space
 type Keys = Record<KeyName, Phaser.Input.Keyboard.Key>;
 type Ending = 'playing' | 'defeat' | 'transition';
 
-const POOL = { shots: GAME.bulletCapacity, glitchlings: 12, fragments: 10, particles: 96 } as const;
+const POOL = {
+  shots: GAME.bulletCapacity, glitchlings: 12, fragments: 10, particles: 128, floaters: 8,
+  corruptors: BUGS.caps.corruptors, shadows: BUGS.caps.shadows, orbs: BUGS.caps.orbs,
+} as const;
 const BACKDROP = { alpha: 0.45, scrollFactor: 0.15 } as const;
-const LIGHT = 0xfff1c3, GOLD = 0xedc76c, TEAL = 0x59d3c4, DIM = 0x3a6770, BAR = 0x16343c;
+const LIGHT = 0xfff1c3, GOLD = 0xedc76c, TEAL = 0x59d3c4, DIM = 0x3a6770, BAR = 0x16343c, VIOLET = 0xc985ef;
 // Caption strip under the HUD: one clear row, the accent rows, the 8 px line cell and one more clear row.
 const CAPTION = Object.freeze({ top: GAME.hudHeight + 2, textY: GAME.hudHeight + 3 + MARK_ROWS, height: 1 + MARK_ROWS + CELL_HEIGHT + 1 });
+// Forgiving bodies, smaller than the drawn placeholders; the art is never scaled.
+const BODY: Readonly<Record<EnemyType, readonly [number, number]>> = { glitchling: [8, 8], corruptor: [18, 16], sombra: [12, 13], shadow: [8, 8] };
+const DRAWN: Readonly<Record<EnemyType, number>> = { glitchling: 12, corruptor: 24, sombra: 20, shadow: 12 };
+// Small shadows ignore shots for a moment after a split, so both pieces read before they can be hit.
+const SPLIT_GRACE_MS = 140;
+const FLASH_MS = 90, COMBO_HOT_MS = 450;
 
-// Ruta 01: free-flight, auto-scrolling route that ends at Amaru. Two owned clocks: `clock` drives every
-// gameplay decision; `anim` drives visuals only. Focus loss and Esc pause freeze both, plus physics.
+// Ruta 01: free-flight, auto-scrolling route that ends at Amaru. Owned clocks: `real` drives Kipu (flight, shots,
+// invulnerability); `clock` is the WORLD clock (camera, timeline, Firewall, Marea, bugs, orbs) and only differs from
+// real by the 50 ms hit-stops on heavy hits; `anim` drives visuals. Focus loss and Esc pause freeze all of them.
 export class RouteScene extends Phaser.Scene {
   private player!: Sprite;
   private keys!: Keys;
   private freshKey = oncePerEvent();
   private shots!: Phaser.Physics.Arcade.Group;
   private glitchlings!: Phaser.Physics.Arcade.Group;
+  private corruptors!: Phaser.Physics.Arcade.Group;
+  private shadows!: Phaser.Physics.Arcade.Group;
+  private orbs!: Phaser.Physics.Arcade.Group;
   private fragments!: Phaser.Physics.Arcade.Group;
   private walls: Phaser.GameObjects.TileSprite[][] = [];
   private marea!: Phaser.GameObjects.TileSprite;
@@ -53,19 +72,28 @@ export class RouteScene extends Phaser.Scene {
   private fx!: ParticlePool;
   private fxGraphics!: Phaser.GameObjects.Graphics;
   private animator!: KipuAnimator;
+  private floaters = new FloaterPool(POOL.floaters);
+  private floaterTexts: Phaser.GameObjects.BitmapText[] = [];
 
   private sceneRun = 0;
   private clock = 0;
+  private real = 0;
   private anim = 0;
+  private worldRate = 1;
   private focused = true;
   private paused = false;
   private ending: Ending = 'playing';
   private health: Health = { hp: ROUTE.maxHp, invulnerableUntil: 0 };
   private meter = 0;
-  private tally: Tally = { fragments: 0, bugs: 0, returns: 0 };
+  private tally: Tally = { fragments: 0, bugs: 0, returns: 0, bugPoints: 0, comboBonus: 0 };
+  private combo: Combo = initialCombo();
+  private comboHotUntil = 0;
+  private hitStop: HitStop = initialHitStop();
+  private fragmentsDropped = 0;
   private nextShotAt = 0;
   private spawnCursor = 0;
   private thresholdStarted = false;
+  private firewallPurged = false;
   private retryRequested = false;
   private mapRequested = false;
   private nextGlintAt = 0;
@@ -80,11 +108,13 @@ export class RouteScene extends Phaser.Scene {
   create(): void {
     if (!this.registry.has('progress')) this.registry.set('progress', initialProgress());
     this.sceneRun += 1;
-    this.clock = 0; this.anim = 0; this.focused = true; this.paused = false; this.ending = 'playing';
-    this.health = { hp: ROUTE.maxHp, invulnerableUntil: 0 }; this.meter = 0; this.tally = { fragments: 0, bugs: 0, returns: 0 };
-    this.nextShotAt = 0; this.spawnCursor = 0; this.thresholdStarted = false; this.retryRequested = false; this.mapRequested = false; this.nextGlintAt = 0;
+    this.clock = 0; this.real = 0; this.anim = 0; this.worldRate = 1; this.focused = true; this.paused = false; this.ending = 'playing';
+    this.health = { hp: ROUTE.maxHp, invulnerableUntil: 0 }; this.meter = 0; this.tally = { fragments: 0, bugs: 0, returns: 0, bugPoints: 0, comboBonus: 0 };
+    this.combo = initialCombo(); this.comboHotUntil = 0; this.hitStop = initialHitStop(); this.fragmentsDropped = 0;
+    this.nextShotAt = 0; this.spawnCursor = 0; this.thresholdStarted = false; this.firewallPurged = false;
+    this.retryRequested = false; this.mapRequested = false; this.nextGlintAt = 0;
     this.time.paused = false;
-    createTextures(this); createRouteTextures(this); createRetroFonts(this); ensureKipuFrames(this);
+    createTextures(this); createRouteTextures(this); createBugTextures(this); createRetroFonts(this); ensureKipuFrames(this);
 
     this.cameras.main.setBackgroundColor(BAR).setBounds(0, 0, ROUTE.worldWidth, GAME.height).setScroll(0, 0);
     // Low-contrast parallax: the existing arena art repeated without stretching, under the provisional scenery.
@@ -101,27 +131,30 @@ export class RouteScene extends Phaser.Scene {
     this.animator = new KipuAnimator(this.player);
 
     this.shots = this.pool('bullet', POOL.shots, 6, 3, 6);
-    this.glitchlings = this.pool('glitchling', POOL.glitchlings, 8, 8, 4);
+    this.glitchlings = this.pool('glitchling', POOL.glitchlings, ...BODY.glitchling, 4);
+    this.corruptors = this.pool(BUG_TEXTURES.corruptor, POOL.corruptors, ...BODY.corruptor, 4);
+    this.shadows = this.pool(BUG_TEXTURES.sombra, POOL.shadows, ...BODY.sombra, 4);
+    this.orbs = this.pool(BUG_TEXTURES.orb, POOL.orbs, 4, 4, 6);
     this.fragments = this.pool('fragment', POOL.fragments, 7, 7, 3);
     this.walls = WALLS.map(wall => wallRects(wall, 0).map(rect => this.add.tileSprite(0, rect.y, rect.width, rect.height, 'firewall').setOrigin(0).setScrollFactor(0).setDepth(4).setVisible(false)));
     this.marea = this.add.tileSprite(0, GAME.playTop, ROUTE.marea.maxFront, GAME.playBottom - GAME.playTop, 'marea').setOrigin(0).setScrollFactor(0).setDepth(8).setVisible(false);
     this.overlay = this.add.graphics().setScrollFactor(0).setDepth(9);
     this.pattern = this.add.graphics().setScrollFactor(0).setDepth(2);
 
-    this.physics.add.overlap(this.shots, this.glitchlings, (first, second) => {
-      const shot = (this.shots.contains(first as Sprite) ? first : second) as Sprite;
-      const bug = (shot === first ? second : first) as Sprite;
-      if (!shot.active || !bug.active || this.ending !== 'playing') return;
-      shot.disableBody(true, true);
-      this.hitGlitchling(bug);
-    });
-    this.physics.add.overlap(this.player, this.glitchlings, (first, second) => {
-      const bug = (this.glitchlings.contains(first as Sprite) ? first : second) as Sprite;
-      if (!bug.active || this.ending !== 'playing') return;
-      bug.disableBody(true, true);
-      burst(this.fx, bug.x, bug.y, 6, 40, 260, 'violet', this.anim);
-      this.hurt('bug');
-    });
+    for (const group of [this.glitchlings, this.corruptors, this.shadows]) {
+      this.physics.add.overlap(this.shots, group, (first, second) => {
+        const shot = (this.shots.contains(first as Sprite) ? first : second) as Sprite;
+        const bug = (shot === first ? second : first) as Sprite;
+        if (!shot.active || !bug.active || this.ending !== 'playing' || this.clock < Number(bug.getData('graceUntil') ?? 0)) return;
+        shot.disableBody(true, true);
+        this.hitEnemy(bug);
+      });
+    }
+    this.physics.add.overlap(this.player, this.glitchlings, (first, second) => this.touchBug(first, second, this.glitchlings, true));
+    this.physics.add.overlap(this.player, this.shadows, (first, second) => this.touchBug(first, second, this.shadows, true));
+    // The Corruptor is a heavy block: touching it costs a heart but does not destroy it.
+    this.physics.add.overlap(this.player, this.corruptors, (first, second) => this.touchBug(first, second, this.corruptors, false));
+    this.physics.add.overlap(this.player, this.orbs, (first, second) => this.touchBug(first, second, this.orbs, true));
     this.physics.add.overlap(this.player, this.fragments, (first, second) => {
       const knot = (this.fragments.contains(first as Sprite) ? first : second) as Sprite;
       if (!knot.active || this.ending !== 'playing') return;
@@ -132,6 +165,8 @@ export class RouteScene extends Phaser.Scene {
       burst(this.fx, knot.x, knot.y, 8, 45, 320, 'gold', this.anim, 2);
     });
 
+    this.floaterTexts = this.floaters.items.map(() => this.add.bitmapText(0, 0, fontKey(LIGHT), '', CELL_WIDTH).setDepth(12).setVisible(false));
+    this.floaters.clear();
     this.captionBox = this.add.rectangle(0, CAPTION.top, 0, CAPTION.height, BAR).setOrigin(0).setScrollFactor(0).setDepth(29).setVisible(false);
     this.caption = this.add.bitmapText(0, CAPTION.textY, fontKey(LIGHT), '', CELL_WIDTH).setScrollFactor(0).setDepth(30);
     this.panel = this.add.rectangle(GAME.width / 2, 90, 200, 40, BAR).setScrollFactor(0).setDepth(50).setVisible(false);
@@ -171,46 +206,55 @@ export class RouteScene extends Phaser.Scene {
     const delta = frameDelta(rawDelta);
     this.anim += delta;
     if (this.ending !== 'playing') { this.animate(delta, 0); return; }
-    const now = this.clock += delta;
+    // The world clock skips only the hit-stopped part of this real step; Kipu keeps the full step.
+    const worldDelta = worldStep(this.hitStop, this.real, delta, 1);
+    this.worldRate = delta > 0 ? worldDelta / delta : 1;
+    const real = this.real += delta;
+    const now = this.clock += worldDelta;
     if (now >= ROUTE.transitionMs) { this.transition(); return; }
 
     const cameraX = cameraScroll(now);
     this.cameras.main.setScroll(cameraX, 0);
     const bounds = playBounds(cameraX);
     this.physics.world.setBounds(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
-    const carry = cameraX < ROUTE.worldWidth - GAME.width ? ROUTE.scrollSpeed : 0;
+    const carry = (cameraX < ROUTE.worldWidth - GAME.width ? ROUTE.scrollSpeed : 0) * this.worldRate;
     const k = this.keys;
     const move = flight({ left: k.a.isDown || k.left.isDown, right: k.d.isDown || k.right.isDown, up: k.w.isDown || k.up.isDown, down: k.s.isDown || k.down.isDown }, 1);
     // Kipu is carried by the scroll: its screen-relative flight is added to the camera speed.
     this.player.setVelocity(move.velocityX + carry, move.velocityY);
-    if ((k.space.isDown || k.j.isDown || k.z.isDown) && canShoot(now, this.nextShotAt, this.shots.countActive(false))) this.fire(now, carry);
+    if ((k.space.isDown || k.j.isDown || k.z.isDown) && canShoot(real, this.nextShotAt, this.shots.countActive(false))) this.fire(real, carry);
 
     const step = spawnsDue(this.spawnCursor, now);
     this.spawnCursor = step.next;
-    for (const spawn of step.due) this.spawn(spawn, cameraX);
-    if (!this.thresholdStarted && segmentAt(now) === 'threshold') this.enterThreshold();
+    const segment = segmentAt(now);
+    for (const spawn of step.due) this.spawn(spawn, cameraX, now);
+    if (!this.thresholdStarted && segment === 'threshold') this.enterThreshold();
+    if (!this.firewallPurged && quietSegment(segment) && !this.thresholdStarted) this.purgeRanged();
 
     for (const bug of this.alive(this.glitchlings)) {
       if (bug.x < cameraX - 16) { bug.disableBody(true, true); continue; }
       const v = glitchlingVelocity(bug.y, this.player.y);
-      bug.setVelocity(v.vx, v.vy);
+      bug.setVelocity(v.vx * this.worldRate, v.vy * this.worldRate);
     }
+    this.stepCorruptors(now, cameraX);
+    this.stepShadows(now, worldDelta / 1000, cameraX);
+    this.stepOrbs(now, cameraX);
     const front = mareaFront(now);
     for (const knot of this.alive(this.fragments)) {
       if (knot.x < cameraX - 12) knot.disableBody(true, true);
       else if (mareaTouches(front, knot.x - cameraX)) { knot.disableBody(true, true); burst(this.fx, knot.x, knot.y, 5, 30, 240, 'violet', this.anim); }
     }
     for (const shot of this.alive(this.shots)) {
-      if (projectileExpired(now, Number(shot.getData('expiresAt')), shot.x, cameraX - 8, cameraX + GAME.width + 8)) shot.disableBody(true, true);
+      if (projectileExpired(real, Number(shot.getData('expiresAt')), shot.x, cameraX - 8, cameraX + GAME.width + 8)) shot.disableBody(true, true);
     }
     this.updateWalls(now, cameraX);
     this.updateMarea(front, cameraX);
     if (this.ending !== 'playing') return;
 
-    const blinking = now < this.health.invulnerableUntil;
-    this.player.setAlpha(!blinking ? 1 : motion.reduced ? 0.5 : Math.floor(now / 90) % 2 ? 0.25 : 1);
+    const blinking = real < this.health.invulnerableUntil;
+    this.player.setAlpha(!blinking ? 1 : motion.reduced ? 0.5 : Math.floor(real / 90) % 2 ? 0.25 : 1);
     this.updateCaption(captionAt(now));
-    this.drawOverlay(now, front);
+    this.drawOverlay(now, front, cameraX);
     this.animate(delta, carry);
     this.drawHud();
   }
@@ -231,13 +275,27 @@ export class RouteScene extends Phaser.Scene {
     return group.getChildren().filter(child => child.active) as Sprite[];
   }
 
-  private spawn(spawn: Spawn, cameraX: number): void {
-    const group = spawn.kind === 'glitchling' ? this.glitchlings : this.fragments;
+  private spawn(spawn: Spawn, cameraX: number, now: number): void {
+    const group = spawn.kind === 'glitchling' ? this.glitchlings : spawn.kind === 'corruptor' ? this.corruptors : spawn.kind === 'sombra' ? this.shadows : this.fragments;
     const sprite = group.getFirstDead(false) as Sprite | null;
-    if (!sprite) return; // bounded pool: a full pool drops the spawn by design
+    if (!sprite) return; // bounded pool: a full pool drops the spawn by design (this is also the on-screen cap)
     sprite.enableBody(true, cameraX + GAME.width + 10, spawn.y, true, true);
     sprite.setVelocity(0, 0).setAlpha(1);
-    if (spawn.kind === 'glitchling') sprite.setTexture('glitchling').setData({ hp: ROUTE.glitchling.hp, hitUntil: 0 });
+    switch (spawn.kind) {
+      case 'glitchling': sprite.setTexture('glitchling').setData({ type: 'glitchling', hp: BUG_STATS.glitchling.hp, hitUntil: 0, graceUntil: 0 }); break;
+      case 'fragment': sprite.setTexture('fragment').setData({ dropped: false }); (sprite.body as Body).setSize(7, 7, true); break;
+      case 'corruptor': {
+        const p = corruptorScreen(0, spawn.y);
+        sprite.setTexture(BUG_TEXTURES.corruptor).setData({ type: 'corruptor', hp: BUG_STATS.corruptor.hp, hitUntil: 0, graceUntil: 0, born: now, baseY: spawn.y, fired: 0, charging: false });
+        (sprite.body as Body).reset(cameraX + p.x, p.y);
+        break;
+      }
+      case 'sombra':
+        sprite.setTexture(BUG_TEXTURES.sombra).setData({ type: 'sombra', hp: BUG_STATS.sombra.hp, hitUntil: 0, graceUntil: 0, born: now, spawnX: cameraX + BUGS.sombra.spawnX, motion: startSombra(spawn.y) });
+        (sprite.body as Body).setSize(...BODY.sombra, true);
+        (sprite.body as Body).reset(cameraX + BUGS.sombra.spawnX, spawn.y);
+        break;
+    }
   }
 
   private fire(now: number, carry: number): void {
@@ -251,29 +309,143 @@ export class RouteScene extends Phaser.Scene {
     this.nextShotAt = now + GAME.shotCooldownMs;
   }
 
-  private hitGlitchling(bug: Sprite): void {
+  // ------------------------------------------------------------------ bugs
+  private stepCorruptors(now: number, cameraX: number): void {
+    for (const c of this.alive(this.corruptors)) {
+      const age = now - Number(c.getData('born')), p = corruptorScreen(age, Number(c.getData('baseY')));
+      if (p.gone) { c.disableBody(true, true); continue; }
+      (c.body as Body).reset(cameraX + p.x, p.y);
+      const charging = corruptorCharge(age) > 0;
+      if (charging && !c.getData('charging')) sfx.play('corruptorCharge');
+      c.setData('charging', charging);
+      const due = corruptorShotsDue(age);
+      while (Number(c.getData('fired')) < due) { c.setData('fired', Number(c.getData('fired')) + 1); this.fireOrb(c, now, cameraX); }
+    }
+  }
+
+  private fireOrb(c: Sprite, now: number, cameraX: number): void {
+    const orb = this.orbs.getFirstDead(false) as Sprite | null;
+    if (!orb) return; // bounded pool
+    const vent = { x: c.x - cameraX + BUGS.corruptor.ventDx, y: c.y + BUGS.corruptor.ventDy };
+    const v = orbVelocity(vent, { x: this.player.x - cameraX, y: this.player.y });
+    orb.enableBody(true, cameraX + vent.x, vent.y, true, true);
+    orb.setVelocity(0, 0).setData({ born: now, ox: cameraX + vent.x, oy: vent.y, vx: v.vx, vy: v.vy });
+    sfx.play('corruptorShot');
+    burst(this.fx, cameraX + vent.x, vent.y, 4, 26, 180, 'violet', this.anim);
+  }
+
+  private stepOrbs(now: number, cameraX: number): void {
+    for (const orb of this.alive(this.orbs)) {
+      const age = now - Number(orb.getData('born'));
+      const x = Number(orb.getData('ox')) + Number(orb.getData('vx')) * age / 1000, y = Number(orb.getData('oy')) + Number(orb.getData('vy')) * age / 1000;
+      if (orbExpired(age, x - cameraX, y)) { orb.disableBody(true, true); continue; }
+      (orb.body as Body).reset(x, y);
+    }
+  }
+
+  private stepShadows(now: number, dt: number, cameraX: number): void {
+    const shots = this.alive(this.shots).map(s => ({ x: s.x, y: s.y }));
+    for (const s of this.alive(this.shadows)) {
+      const age = now - Number(s.getData('born'));
+      let x: number, y: number;
+      if (s.getData('type') === 'sombra') {
+        const before = s.getData('motion') as SombraMotion;
+        x = sombraWorldX(Number(s.getData('spawnX')), age);
+        const after = stepSombra(before, now, dt, this.player.y, linedUpShot({ x, y: before.y }, shots));
+        if (after.dodgeAt !== before.dodgeAt) sfx.play('sombraDodge');
+        s.setData('motion', after);
+        y = after.y;
+      } else {
+        const p = shadowPosition({ x: Number(s.getData('ox')), y: Number(s.getData('oy')) }, Number(s.getData('dir')) as -1 | 1, age);
+        x = p.x; y = p.y;
+      }
+      if (x < cameraX - 16) { s.disableBody(true, true); continue; }
+      (s.body as Body).reset(x, y);
+    }
+  }
+
+  private hitEnemy(bug: Sprite): void {
     const hp = Number(bug.getData('hp')) - 1;
     this.meter = addMeter(this.meter, ROUTE.meterPerHit);
+    const step = registerHit(this.combo);
+    this.combo = step.combo;
+    if (step.tierUp) { sfx.play('comboUp'); this.comboHotUntil = this.anim + COMBO_HOT_MS; }
     if (hp > 0) {
-      bug.setData({ hp, hitUntil: this.anim + 90 });
+      bug.setData({ hp, hitUntil: this.anim + FLASH_MS });
       sfx.play('enemyHit');
       burst(this.fx, bug.x, bug.y, 3, 30, 160, 'light', this.anim);
+      this.floater('1', bug.x, bug.y - 8, 'damage');
       return;
     }
+    this.debugBug(bug);
+  }
+
+  // "Se depura": the bug dissolves into turquoise and gold sparkles, scores at the racha multiplier and, every 4th
+  // time, leaves a small fragment. A Sombra splits into two small shadows. A heavy hit stops the world for 50 ms.
+  private debugBug(bug: Sprite): void {
+    const type = bug.getData('type') as EnemyType, x = bug.x, y = bug.y;
+    const result = defeatBug(this.tally, BUG_STATS[type].score, this.combo.hits);
+    this.tally = result.tally;
     bug.disableBody(true, true);
-    this.tally = { ...this.tally, bugs: this.tally.bugs + 1 };
+    dissolve(this.fx, x, y, DRAWN[type], DRAWN[type], this.anim);
+    this.floater(`+${result.points}`, x, y - 10, 'points');
     sfx.play('enemyDown');
-    burst(this.fx, bug.x, bug.y, 10, 55, 360, 'violet', this.anim, 2);
+    if (!motion.reduced) this.hitStop = triggerHitStop(this.hitStop, this.real);
+    if (type === 'sombra') this.split(x, y);
+    if (dropsFragment(this.tally.bugs)) this.dropFragment(x, y);
+  }
+
+  private split(x: number, y: number): void {
+    const free = this.shadows.getChildren().filter(child => !child.active).length, count = splitCount(free);
+    if (count === 0) return;
+    sfx.play('sombraSplit');
+    for (let i = 0; i < count; i++) {
+      const dir: -1 | 1 = count === 1 ? (y > (GAME.playTop + GAME.playBottom) / 2 ? -1 : 1) : i === 0 ? -1 : 1;
+      const small = this.shadows.getFirstDead(false) as Sprite | null;
+      if (!small) return;
+      small.enableBody(true, x, y, true, true);
+      small.setVelocity(0, 0).setAlpha(1).setTexture(BUG_TEXTURES.shadow)
+        .setData({ type: 'shadow', hp: BUG_STATS.shadow.hp, hitUntil: 0, graceUntil: this.clock + SPLIT_GRACE_MS, born: this.clock, ox: x, oy: y, dir });
+      (small.body as Body).setSize(...BODY.shadow, true);
+    }
+  }
+
+  private dropFragment(x: number, y: number): void {
+    const knot = this.fragments.getFirstDead(false) as Sprite | null;
+    if (!knot) return; // bounded pool
+    knot.enableBody(true, x, y, true, true);
+    knot.setVelocity(0, 0).setAlpha(1).setTexture(BUG_TEXTURES.fragmentSmall).setData({ dropped: true });
+    (knot.body as Body).setSize(5, 5, true);
+    this.fragmentsDropped += 1;
+    burst(this.fx, x, y, 4, 22, 220, 'gold', this.anim);
+  }
+
+  private touchBug(first: unknown, second: unknown, group: Phaser.Physics.Arcade.Group, consumed: boolean): void {
+    const bug = (group.contains(first as Sprite) ? first : second) as Sprite;
+    if (!bug.active || this.ending !== 'playing') return;
+    if (consumed) {
+      // Touching a bug never debugs it: no score, no drop, no split; it just bursts into the Desfase.
+      bug.disableBody(true, true);
+      burst(this.fx, bug.x, bug.y, 6, 40, 260, 'violet', this.anim);
+    }
+    this.hurt('bug');
   }
 
   private hurt(source: 'bug' | 'firewall' | 'marea'): void {
-    const next = takeHit(this.health, this.clock);
+    const next = takeHit(this.health, this.real);
     if (next === this.health) return;
     this.health = next;
+    this.combo = breakCombo(this.combo);
     sfx.play(source === 'firewall' ? 'firewall' : 'heroHit');
     burst(this.fx, this.player.x, this.player.y - 4, 10, 60, 320, 'violet', this.anim, 2);
     if (!motion.reduced) this.cameras.main.shake(110, 0.006);
     if (next.hp <= 0) this.defeat();
+  }
+
+  private floater(text: string, x: number, y: number, slot: FloaterSlot): void {
+    const f = this.floaters.spawn(text, x, y, slot, this.anim);
+    const label = this.floaterTexts[this.floaters.items.indexOf(f)];
+    label.setFont(fontKey(slot === 'points' ? GOLD : LIGHT), CELL_WIDTH).setText(text);
   }
 
   // Walls and the Marea live in screen space; the player body is converted with the camera offset.
@@ -309,16 +481,25 @@ export class RouteScene extends Phaser.Scene {
     if (mareaTouches(front, this.playerRect(cameraX).x)) this.hurt('marea');
   }
 
+  // Ranged bugs and their orbs never share the screen with the Firewall gaps: the barrier filters them out.
+  private purgeRanged(): void {
+    this.firewallPurged = true;
+    for (const group of [this.corruptors, this.shadows, this.orbs]) for (const sprite of this.alive(group)) {
+      burst(this.fx, sprite.x, sprite.y, 5, 30, 300, 'violet', this.anim);
+      sprite.disableBody(true, true);
+    }
+  }
+
   private enterThreshold(): void {
     // Enemies stop and dissolve; the route falls quiet before the guardian.
     this.thresholdStarted = true;
-    for (const bug of this.alive(this.glitchlings)) {
+    for (const group of [this.glitchlings, this.corruptors, this.shadows, this.orbs]) for (const bug of this.alive(group)) {
       burst(this.fx, bug.x, bug.y, 6, 30, 400, 'violet', this.anim);
       bug.disableBody(true, true);
     }
   }
 
-  private drawOverlay(now: number, front: number): void {
+  private drawOverlay(now: number, front: number, cameraX: number): void {
     const g = this.overlay.clear();
     const blink = motion.reduced || Math.floor(this.anim / 200) % 2 === 0;
     for (const wall of WALLS) {
@@ -341,6 +522,15 @@ export class RouteScene extends Phaser.Scene {
         const reach = 1 + ((y * 7 + phase * 3) % 5);
         g.fillStyle(0xc985ef).fillRect(Math.round(front), y, reach, 4);
       }
+    }
+    // Corruptor telegraph: the vent charge grows through the 600 ms before each orb (kept under reduced motion).
+    for (const c of this.alive(this.corruptors)) {
+      const level = corruptorCharge(now - Number(c.getData('born')));
+      if (level <= 0) continue;
+      const size = 1 + 2 * Math.round(2 * level), half = Math.floor(size / 2);
+      const vx = Math.round(c.x - cameraX + BUGS.corruptor.ventDx - 3), vy = Math.round(c.y + BUGS.corruptor.ventDy);
+      g.fillStyle(VIOLET).fillRect(vx - half, vy - half, size, size);
+      if (size >= 3) g.fillStyle(LIGHT).fillRect(vx, vy, 1, 1);
     }
     this.drawThresholdPattern(now);
   }
@@ -380,9 +570,19 @@ export class RouteScene extends Phaser.Scene {
       this.player.setAngle(motion.reduced ? 0 : flightTilt(body.velocity.x - carry, body.velocity.y));
     }
     const wiggle = !motion.reduced && Math.floor(this.anim / 140) % 2 === 1;
-    for (const bug of this.alive(this.glitchlings)) {
-      const key = this.anim < Number(bug.getData('hitUntil')) ? 'glitchling-hit' : wiggle ? 'glitchling-b' : 'glitchling';
-      if (bug.texture.key !== key) bug.setTexture(key);
+    const sway = !motion.reduced && Math.floor(this.anim / 260) % 2 === 1;
+    const hit = (bug: Sprite) => this.anim < Number(bug.getData('hitUntil'));
+    for (const bug of this.alive(this.glitchlings)) this.setKey(bug, hit(bug) ? 'glitchling-hit' : wiggle ? 'glitchling-b' : 'glitchling');
+    for (const c of this.alive(this.corruptors)) {
+      const t = BUG_TEXTURES, charging = corruptorCharge(this.clock - Number(c.getData('born'))) > 0;
+      this.setKey(c, hit(c) ? t.corruptorHit : charging ? t.corruptorCharge : sway ? t.corruptorSway : t.corruptor);
+    }
+    for (const s of this.alive(this.shadows)) {
+      const t = BUG_TEXTURES;
+      if (s.getData('type') === 'sombra') {
+        const blink = dodgeStage(s.getData('motion') as SombraMotion, this.clock) === 'telegraph';
+        this.setKey(s, hit(s) ? t.sombraHit : blink ? t.sombraBlink : wiggle ? t.sombraB : t.sombra);
+      } else this.setKey(s, hit(s) ? t.shadowHit : wiggle ? t.shadowB : t.shadow);
     }
     if (this.anim >= this.nextGlintAt) {
       const knots = this.alive(this.fragments);
@@ -393,14 +593,30 @@ export class RouteScene extends Phaser.Scene {
     this.fx.step(this.anim, delta / 1000, 20);
     this.fxGraphics.clear();
     drawParticles(this.fxGraphics, this.fx, false);
+    this.floaters.step(this.anim);
+    this.floaters.items.forEach((f, i) => {
+      const label = this.floaterTexts[i];
+      label.setVisible(f.active);
+      if (!f.active) return;
+      const view = floaterView(f, this.anim, motion.reduced);
+      label.setPosition(Math.round(view.x - f.text.length * CELL_WIDTH / 2), view.y).setAlpha(view.alpha);
+    });
   }
 
+  private setKey(sprite: Sprite, key: string): void { if (sprite.texture.key !== key) sprite.setTexture(key); }
+
   private drawHud(): void {
-    this.hud.draw({ hp: this.health.hp, maxHp: ROUTE.maxHp, meter: this.meter, score: runningScore(this.tally), now: this.anim });
+    this.hud.draw({
+      hp: this.health.hp, maxHp: ROUTE.maxHp, meter: this.meter, score: runningScore(this.tally), now: this.anim,
+      combo: comboMultiplier(this.combo.hits), comboHot: this.anim < this.comboHotUntil,
+    });
   }
 
   private runState(): RunState {
-    return { hp: this.health.hp, score: runningScore(this.tally), fragments: this.tally.fragments, bugs: this.tally.bugs, meter: this.meter, routeSeconds: this.clock / 1000 };
+    return {
+      hp: this.health.hp, score: runningScore(this.tally), fragments: this.tally.fragments, bugs: this.tally.bugs, meter: this.meter, routeSeconds: this.clock / 1000,
+      bugPoints: this.tally.bugPoints ?? 0, comboBonus: this.tally.comboBonus ?? 0, comboHits: this.combo.hits,
+    };
   }
 
   private transition(): void {
@@ -470,11 +686,20 @@ export class RouteScene extends Phaser.Scene {
   }
 
   private snapshot() {
-    const body = this.player.body as Body;
+    const body = this.player.body as Body, cameraX = this.cameras.main.scrollX;
+    const enemy = (e: Sprite) => {
+      const type = e.getData('type') as EnemyType, age = this.clock - Number(e.getData('born') ?? 0);
+      return {
+        type, x: e.x, y: e.y, screenX: e.x - cameraX, hp: Number(e.getData('hp')), texture: e.texture.key,
+        charging: type === 'corruptor' ? corruptorCharge(age) > 0 : false,
+        dodge: type === 'sombra' ? dodgeStage(e.getData('motion') as SombraMotion, this.clock) : 'none',
+      };
+    };
+    const enemyList = [...this.alive(this.glitchlings), ...this.alive(this.corruptors), ...this.alive(this.shadows)].map(enemy);
     return {
-      scene: 'route', sceneRun: this.sceneRun, clock: this.clock, anim: this.anim, segment: segmentAt(this.clock),
+      scene: 'route', sceneRun: this.sceneRun, clock: this.clock, realClock: this.real, anim: this.anim, worldRate: this.worldRate, segment: segmentAt(this.clock),
       caption: this.caption.text, paused: this.paused, focused: this.focused, outcome: this.ending,
-      cameraX: this.cameras.main.scrollX, scrollSpeed: ROUTE.scrollSpeed, transitionMs: ROUTE.transitionMs,
+      cameraX, scrollSpeed: ROUTE.scrollSpeed, transitionMs: ROUTE.transitionMs,
       player: {
         x: this.player.x, y: this.player.y, velocityX: body.velocity.x, velocityY: body.velocity.y,
         hp: this.health.hp, invulnerableUntil: this.health.invulnerableUntil, angle: this.player.angle, flipX: this.player.flipX,
@@ -484,16 +709,25 @@ export class RouteScene extends Phaser.Scene {
         bodyTop: body.top, bodyBottom: body.bottom,
       },
       score: runningScore(this.tally), fragments: this.tally.fragments, bugs: this.tally.bugs, meter: this.meter,
-      enemies: this.glitchlings.countActive(true), fragmentCount: this.fragments.countActive(true), shotCount: this.shots.countActive(true),
-      capacity: { shots: this.shots.getLength(), enemies: this.glitchlings.getLength(), fragments: this.fragments.getLength(), particles: this.fx.items.length },
+      bugPoints: this.tally.bugPoints ?? 0, comboBonus: this.tally.comboBonus ?? 0,
+      combo: { hits: this.combo.hits, best: this.combo.best, multiplier: comboMultiplier(this.combo.hits) },
+      hitStop: { active: hitStopActive(this.hitStop, this.real), from: this.hitStop.from, until: this.hitStop.until, count: this.hitStop.count, totalMs: this.hitStop.totalMs },
+      floaters: { active: this.floaters.activeCount, capacity: this.floaters.items.length, texts: this.floaters.items.filter(f => f.active).map(f => f.text) },
+      fragmentsDropped: this.fragmentsDropped,
+      enemies: enemyList.length, enemyList, fragmentCount: this.fragments.countActive(true), shotCount: this.shots.countActive(true),
+      orbs: this.alive(this.orbs).map(o => ({ x: o.x, y: o.y, screenX: o.x - cameraX, vx: Number(o.getData('vx')), vy: Number(o.getData('vy')) })),
+      capacity: {
+        shots: this.shots.getLength(), enemies: this.glitchlings.getLength(), corruptors: this.corruptors.getLength(), shadows: this.shadows.getLength(),
+        orbs: this.orbs.getLength(), fragments: this.fragments.getLength(), particles: this.fx.items.length, floaters: this.floaters.items.length,
+      },
       marea: { front: mareaFront(this.clock) },
       walls: WALLS.map((wall, index) => ({ screenX: wallScreenX(this.clock, wall), gapY: wall.gapY, visible: this.walls[index][0].visible, telegraph: wallTelegraph(this.clock, wall) }))
         .filter(wall => wall.visible || wall.telegraph),
       glitchlings: this.alive(this.glitchlings).map(bug => ({ x: bug.x, y: bug.y, hp: Number(bug.getData('hp')) })),
-      fragmentList: this.alive(this.fragments).map(knot => ({ x: knot.x, y: knot.y })),
-      shots: this.alive(this.shots).map(shot => ({ x: shot.x, y: shot.y, screenX: shot.x - this.cameras.main.scrollX })),
+      fragmentList: this.alive(this.fragments).map(knot => ({ x: knot.x, y: knot.y, dropped: knot.getData('dropped') === true })),
+      shots: this.alive(this.shots).map(shot => ({ x: shot.x, y: shot.y, screenX: shot.x - cameraX })),
       fx: { active: this.fx.activeCount, capacity: this.fx.items.length },
-      audio: sfx.stats(), kipuFrame: this.animator.frame, hud: { score: this.hud.scoreText }, panel: this.panelText.text,
+      audio: sfx.stats(), kipuFrame: this.animator.frame, hud: { score: this.hud.scoreText, combo: this.hud.comboText }, panel: this.panelText.text,
     };
   }
 }
