@@ -17,3 +17,8 @@ Parent inline for small config/docs units; delegate larger multi-file work to a 
 
 ## Boundaries
 No push without confirmation. No third-party skill install. Art license choice pending the user (CREDITS reserves art rights).
+
+## Pending (user asked to hold, Oct 12)
+- [ ] Merge `feat/release-polish` into `main` and push (needs user's go-ahead after enabling Pages: Settings > Pages > Source: GitHub Actions).
+- [ ] Confirm the deployed Pages URL loads and plays.
+- [ ] Cloudflare Pages backup (build `npm run build`, output `dist`, `NODE_VERSION=22`).
