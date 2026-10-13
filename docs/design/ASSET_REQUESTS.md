@@ -1,45 +1,104 @@
-# Asset requests pendientes (Ruta 01)
+# Asset requests (Ruta 01)
 
-Estado de cada pedido: `requested → review → approved → integrated → verified`. Mientras no llegue el asset, el juego usa un **placeholder procedural** etiquetado en el código. Adjunta siempre la lámina aprobada `assets/references/pachabyte-phase3-concept.png` en el chat de arte.
+Status flow: `requested → review → approved → integrated → verified`. Until an asset arrives the game uses a labelled procedural placeholder.
 
-Nota técnica: la fuente puede ser más grande que el tamaño nativo. El proyecto la adapta con nearest-neighbor y alfa binaria (ver `docs/ART_BIBLE.md`). Lo importante es silueta legible, fondo realmente transparente y nada recortado.
+**How to use:** open a new image chat, attach the approved sheet `assets/references/pachabyte-phase3-concept.png` (plus any extra reference listed), paste the prompt exactly, and bring the result back. The project adapts sizes itself: prompts ask for an 8× pixel grid so the image can be reduced to its native size with nearest-neighbor sampling. If the tool cannot produce real transparency, a flat `#FF00FF` magenta background is accepted and keyed out during preparation.
 
-| Prioridad | ID | Uso | Estado |
-|---|---|---|---|
-| 1 | `BUG_GLITCHLING` | Enemigo de la ruta | requested |
-| 2 | `AMARU_SEGMENT`, `AMARU_TAIL`, `AMARU_CORE` | Cuerpo modular del jefe | requested |
-| 3 | `AMARU_RESTORED` | Cabeza serena tras la liberación | requested |
-| 4 | `KIPU_SHOOT`, `KIPU_SHIFT` | Frames de disparo y PachaShift | requested (opcional para MVP) |
+| Priority | ID | Native size | Used for | Status |
+|---|---|---|---|---|
+| 1 | `BUG_GLITCHLING` | 4 frames × 16×16 | Route enemy | requested |
+| 2 | `AMARU_BODY` (segment, tail, core) | 24×24, 32×32, 2 × 16×16 | Amaru's modular body | requested |
+| 3 | `AMARU_RESTORED` | 64×64 | Head after liberation | requested |
+| 4 | `BG_AREQUIPA_ROUTE` | 3 layers, 640×180 each | Route parallax background | requested |
+| 5 | `KIPU_FLY_ACTIONS` | 2 × 4 frames × 32×40 | Kipu shooting and PachaShift | requested (optional) |
 
 ---
 
 ## 1. BUG_GLITCHLING
 
-**Objetivo jugable:** enemigo pequeño que persigue a Kipu en la ruta de Arequipa; muere con dos disparos.
-**Estado:** sprite final. **Orientación:** mirando a la IZQUIERDA (entra por la derecha).
-**Tamaño nativo:** 16×16 por frame, 4 frames en una tira horizontal de 64×16, sin padding. Pivote al centro (8,8). Hitbox ~10×10 centrada.
-**Exclusiones:** sin texto, sin fondo, sin sombras proyectadas, sin parecerse a Kipu ni a mascotas o logos existentes.
+Attach: the approved sheet.
 
-> Proyecto PachaByte: usa la imagen aprobada ADJUNTA solo como referencia de estilo y paleta. Necesito un sprite final de un enemigo pequeño llamado Glitchling para un arcade 2D de 320×180 en pixel art retro andino híbrido. Es un error digital vivo: cuerpo compacto y anguloso de base morada (#8759AD) con bordes oscuros, un único ojo o núcleo brillante, y fragmentos de píxeles desplazados que sugieren interferencia (glitch). Silueta claramente distinta de Kipu (Kipu es redondo, turquesa y con antenas doradas) y que se reconozca aunque la pantalla esté en verde monocromo, es decir, por forma y no solo por color. Mira hacia la izquierda. Crea una tira horizontal de 4 frames de 16×16 píxeles nativos cada uno (64×16 en total), animación de flotar/vibrar en bucle, con el mismo pivote central en todos los frames, sobre fondo PNG realmente transparente. No añadas texto, logos, armas, fondo ni sombras. No copies obras o mascotas ajenas. Si no puedes garantizar el tamaño nativo y la transparencia reales, dilo explícitamente y entrega solo una propuesta visual a mayor tamaño.
+```text
+Original pixel-art game sprite for "PachaByte", a 320x180 side-scrolling arcade. Use the attached concept sheet ONLY as a style and palette reference; do not copy its characters.
 
-## 2. AMARU_SEGMENT, AMARU_TAIL, AMARU_CORE
+Subject: a "Glitchling", a small living software bug enemy. Compact, angular, jagged body with a dark outline, base color muted purple #8759AD with darker purple shading, one bright glowing eye or core in light violet #C985EF, and a few displaced pixel fragments around the edges that suggest digital glitch interference. It must read clearly by SHAPE alone (also when the whole screen turns monochrome green), and must look nothing like the hero Kipu (Kipu is round, turquoise, with two golden antennae).
 
-**Objetivo jugable:** cuerpo modular serpentino que sigue a la cabeza existente (`assets/prepared/amaru-head-v1-64x64.png`).
-**Tamaño nativo:** segmento 24×24 (1 frame), cola 32×32 (1 frame, apuntando a la DERECHA porque la cabeza mira a la izquierda), núcleo 16×16 (2 frames de brillo, tira 32×16). Pivotes al centro.
-**Exclusiones:** sin cabeza, sin fondo, sin efectos fuera de la silueta.
+Facing: LEFT (it flies in from the right side of the screen).
 
-> Proyecto PachaByte: usa la lámina aprobada ADJUNTA como referencia obligatoria de Amaru-01. Necesito tres módulos sueltos del cuerpo de Amaru-01 para un arcade 2D de 320×180 en pixel art: (1) un segmento de cuerpo de 24×24 píxeles nativos con escamas turquesa, anillo dorado y una gema morada, visto de perfil; (2) una cola de 32×32 apuntando hacia la derecha, con el mismo estilo; (3) un núcleo brillante de 16×16 en dos frames (tira horizontal de 32×16) con brillo violeta pulsante. Conserva exactamente la paleta y el estilo de escamas de la lámina, contorno oscuro, clusters de píxeles intencionales y fondo PNG realmente transparente. Cada módulo en su propio archivo, centrado y sin recortes. No añadas la cabeza, texto, fondo, sombras ni brillos fuera de la silueta. No copies obras ajenas. Si no puedes garantizar tamaño nativo y transparencia reales, dilo y entrega solo una propuesta visual.
+Layout: one horizontal strip of 4 animation frames (floating / jittering idle loop). Each frame is a 16x16 logical-pixel sprite drawn at exactly 8x scale, so every logical pixel is a perfectly square 8x8 block of one flat color. Each frame cell is 128x128 px; the full strip is 512x128 px. Same center pivot and same body position in every frame; only small jitter and the displaced fragments change.
+
+Style: crisp hard-edged pixel art, limited palette (max 8 colors), no anti-aliasing, no gradients, no blur, no glow outside the pixel grid.
+
+Background: real transparent PNG. If true transparency is impossible, use a single flat #FF00FF magenta background with no shadows or noise.
+
+Do NOT include: text, labels, grid lines, frame borders, ground, shadows, weapons, logos, mascots of programming languages, or any character from existing games.
+```
+
+## 2. AMARU_BODY (segment, tail, core)
+
+Attach: the approved sheet and `assets/prepared/amaru-head-v1-64x64.png`.
+
+```text
+Original pixel-art game assets for "PachaByte", a 320x180 side-scrolling arcade. The attached concept sheet shows the boss Amaru-01, a serpent guardian, and its modules panel (SEGMENTO A, SEGMENTO B, COLA, NUCLEO). Match its palette and scale style exactly: turquoise/teal scales #35B9AE with dark teal outline, warm gold #E7BD67 rings and trim, small violet #8759AD gem accents. The second attached image is the existing head these parts must connect to.
+
+Produce ONE image containing three separate parts on one row, evenly spaced, each centered in its own cell, drawn at exactly 8x scale (every logical pixel is a square 8x8 block of one flat color):
+1. BODY SEGMENT: 24x24 logical pixels (192x192 px cell). A round serpent body segment seen from the side, scales plus one gold ring and a small violet gem.
+2. TAIL: 32x32 logical pixels (256x256 px cell). The tapered tail end of the same serpent, pointing to the RIGHT (the head faces left).
+3. CORE: two frames of 16x16 logical pixels (128x128 px cells each), a glowing violet crystal core, frame 2 slightly brighter for a pulse.
+
+Total image: 192 + 256 + 128 + 128 = 704 px wide, 256 px tall, parts vertically centered.
+
+Style: crisp hard-edged pixel art, no anti-aliasing, no gradients outside the pixel grid, no blur.
+Background: real transparent PNG, or a single flat #FF00FF magenta if transparency is impossible.
+Do NOT include: the head, text, labels, borders, ground, shadows, glow outside the shapes.
+```
 
 ## 3. AMARU_RESTORED
 
-**Objetivo jugable:** cabeza de Amaru en estado sereno, mostrada al liberarlo. Sustituye a la mezcla por código actual.
-**Tamaño nativo:** 64×64, 1 frame, misma orientación (mirando a la IZQUIERDA), misma proporción y posición del ojo que `amaru-head-v1-64x64.png` para poder hacer un fundido entre ambas.
+Attach: the approved sheet (see its "RESTAURADA" head frames) and `assets/prepared/amaru-head-v1-64x64.png`.
 
-> Proyecto PachaByte: usa la lámina aprobada ADJUNTA (panel "RESTAURADA") y la cabeza actual de Amaru-01 como referencia. Necesito la cabeza de Amaru-01 en estado RESTAURADO y sereno: misma silueta, cuernos dorados y escamas turquesa, mirando a la izquierda, pero con la boca cerrada o apenas entreabierta, ojo calmado sin brillo violeta y sin ninguna corrupción morada. Debe superponerse exactamente sobre la cabeza actual (mismo encuadre y posición del ojo) para un fundido de corrupto a restaurado. 64×64 píxeles nativos, PNG con fondo realmente transparente. Sin texto, fondo, sombras ni efectos. Si no puedes garantizar el tamaño nativo y la transparencia, dilo y entrega solo una propuesta visual.
+```text
+Original pixel-art game sprite for "PachaByte". The second attached image is the current 64x64 head of Amaru-01, a serpent guardian, which is corrupted during the boss fight. Redraw the SAME head in its RESTORED, serene state, as in the "RESTAURADA" frames of the attached concept sheet.
 
-## 4. KIPU_SHOOT, KIPU_SHIFT (opcional para MVP)
+Keep identical: silhouette, outline, size, framing, horns position, facing LEFT, and the eye position, so the two heads can crossfade pixel-perfectly. Change: mouth closed or only slightly open, calm eye with a soft turquoise/gold glow instead of violet, and absolutely no purple corruption anywhere. Palette: turquoise #35B9AE, dark teal outline, gold #E7BD67, ivory #F1E5C5 teeth if visible.
 
-**Objetivo jugable:** frames de disparo y de activación de PachaShift de Kipu volando.
-**Tamaño nativo:** 32×40 por frame (mismo marco que `assets/prepared/kipu-v4-32x40.png`), mirando a la DERECHA, 4 frames cada uno en tiras horizontales (128×40). Pivote igual al sprite actual; la fila inferior ocupada no debe moverse entre frames.
+Size: 64x64 logical pixels drawn at exactly 8x scale (512x512 px image, every logical pixel a square 8x8 block of one flat color).
+Style: crisp hard-edged pixel art, no anti-aliasing, no blur.
+Background: real transparent PNG, or flat #FF00FF magenta if transparency is impossible.
+Do NOT include: text, body segments, background, shadows, effects.
+```
 
-> Proyecto PachaByte: usa la lámina aprobada ADJUNTA (paneles "DISPARAR" y "PACHASHIFT ACTIVO") y el sprite actual de Kipu como referencia obligatoria. Necesito dos animaciones de Kipu flotando, mirando a la derecha: DISPARAR (4 frames) y PACHASHIFT (4 frames con un anillo turquesa de energía alrededor). Cada frame mide 32×40 píxeles nativos; entrega cada animación como tira horizontal de 128×40 con el mismo encuadre y pivote del sprite actual. Conserva cuerpo redondo turquesa, dos antenas con puntas doradas, ojos grandes, rombo dorado en el pecho y cinta turquesa/dorada. Sin piernas, ropa, armas, texto ni fondo; PNG realmente transparente. Si no puedes garantizar tamaño y transparencia reales, dilo y entrega solo una propuesta visual.
+## 4. BG_AREQUIPA_ROUTE
+
+Attach: the approved sheet (its 320x180 comparison panels) and `assets/prepared/arequipa-arena-v1-320x180.png`.
+
+```text
+Original pixel-art background for "PachaByte", a 320x180 side-scrolling arcade set in a fantasy, tech-touched version of Arequipa, Peru ("Santuario de la Trama"). Use the attached images only as palette and mood reference; create a new composition.
+
+Produce THREE separate parallax layers stacked vertically in one image, each layer 640x180 logical pixels drawn at exactly 2x scale (1280x360 px per layer, total image 1280x1080 px). Every layer must tile seamlessly left-to-right (its left and right edges connect).
+1. FAR layer (opaque): evening sky with warm peach horizon, the snow-capped Misti volcano and two neighboring volcano silhouettes, faint turquoise digital "Trama" threads in the sky.
+2. MID layer (transparent above its skyline): stylized white sillar-stone arches, terraces and church-like domes in muted ivory and lavender, low contrast, a few softly glowing turquoise thread lines connecting them.
+3. NEAR layer (transparent except the bottom 30 px): low stone walls, molle-tree silhouettes and broken digital cables along the bottom edge only.
+
+Keep the central band (y 20 to 150 of each layer) calm and low-contrast so small purple enemies, a turquoise hero and gold collectibles stay readable. Reserve the top 16 px for a HUD: no bright details there.
+Style: crisp pixel art, limited palette, no anti-aliasing, no gradients smoother than pixel dithering, no photographic texture.
+Transparency: real transparent PNG where stated, or flat #FF00FF magenta for transparent areas if impossible.
+Do NOT include: characters, enemies, text, UI, platforms, logos, or any recognizable art from other games.
+```
+
+## 5. KIPU_FLY_ACTIONS (optional for the MVP)
+
+Attach: the approved sheet (panels "DISPARAR" and "PACHASHIFT ACTIVO") and `assets/prepared/kipu-v4-32x40.png`.
+
+```text
+Original pixel-art animation frames for "PachaByte". The second attached image is the current in-game sprite of the hero Kipu (32x40). Keep his exact identity: round turquoise body, two curved antennae with golden tips, large dark eyes with white glints, golden diamond on the chest, flowing turquoise-and-gold patterned ribbon. Kipu FLOATS; he has no legs.
+
+Produce TWO horizontal strips, one above the other, facing RIGHT:
+1. SHOOT: 4 frames — small recoil, a golden energy flash at the front, return to neutral.
+2. PACHASHIFT: 4 frames — a turquoise energy ring forming around him and pulsing.
+Each frame is 32x40 logical pixels drawn at exactly 8x scale (256x320 px per frame). Each strip is 1024x320 px; total image 1024x640 px. Same framing and pivot as the attached sprite in every frame, and the lowest ribbon pixels must stay on the same row in every frame.
+
+Style: crisp hard-edged pixel art, no anti-aliasing, no blur, palette taken from the attached sprite.
+Background: real transparent PNG, or flat #FF00FF magenta if transparency is impossible.
+Do NOT include: legs, clothes, weapons, text, borders, ground, shadows.
+```
