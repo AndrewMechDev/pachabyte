@@ -484,6 +484,8 @@ export class RouteScene extends Phaser.Scene {
       walls: WALLS.map((wall, index) => ({ screenX: wallScreenX(this.clock, wall), gapY: wall.gapY, visible: this.walls[index][0].visible, telegraph: wallTelegraph(this.clock, wall) }))
         .filter(wall => wall.visible || wall.telegraph),
       glitchlings: this.alive(this.glitchlings).map(bug => ({ x: bug.x, y: bug.y, hp: Number(bug.getData('hp')) })),
+      fragmentList: this.alive(this.fragments).map(knot => ({ x: knot.x, y: knot.y })),
+      shots: this.alive(this.shots).map(shot => ({ x: shot.x, y: shot.y, screenX: shot.x - this.cameras.main.scrollX })),
       fx: { active: this.fx.activeCount, capacity: this.fx.items.length },
       audio: sfx.stats(), kipuFrame: this.animator.frame, hud: { score: this.hud.scoreText }, panel: this.panelText.text,
     };

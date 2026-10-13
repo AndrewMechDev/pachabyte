@@ -807,7 +807,7 @@ export class GuardianScene extends Phaser.Scene {
       patternsSeen: [...this.patternsSeen], cue: this.cueShown, message: this.message.text,
       liberation: lib ? { stage: lib.stage, dialogueIndex: lib.dialogueIndex, codexShown: lib.codexShown } : null,
       panel: this.panelText.text, resultText: this.resultText,
-      enemyBolts: this.alive(this.enemies).map(bolt => { const v = (bolt.body as Body).velocity; return { x: bolt.x, y: bolt.y, vx: v.x, vy: v.y, capturable: bolt.getData('capturable') === true, shape: bolt.getData('shape') }; }),
+      enemyBolts: this.alive(this.enemies).map(bolt => { const v = (bolt.body as Body).velocity; return { x: bolt.x, y: bolt.y, vx: v.x, vy: v.y, capturable: bolt.getData('capturable') === true, shape: bolt.getData('shape'), texture: bolt.texture.key }; }),
       alliedShots: [...this.alive(this.shots).map(s => ({ x: s.x, y: s.y, returned: false })), ...this.alive(this.returns).map(s => ({ x: s.x, y: s.y, returned: true }))],
       pools: { shots: this.shots.getLength(), returns: this.returns.getLength(), enemies: this.enemies.getLength(), orbit: this.orbit.length, particles: this.fx.items.length, particlesActive: this.fx.activeCount },
       player: {
@@ -815,8 +815,8 @@ export class GuardianScene extends Phaser.Scene {
         bodyWidth: body.width, bodyHeight: body.height, bodyRelativeX: body.x - this.player.x, bodyRelativeY: body.y - this.player.y,
         texture: this.player.texture.key, displayWidth: this.player.displayWidth, displayHeight: this.player.displayHeight,
       },
-      boss: { x: bossBody.center.x, y: bossBody.center.y, width: bossBody.width, height: bossBody.height, texture: this.boss.texture.key, displayWidth: this.boss.displayWidth, displayHeight: this.boss.displayHeight },
-      assets: { background: this.backdrop.texture.key, dim: this.backdropDim.texture.key, dimAlpha: this.backdropDim.alpha, head: this.boss.texture.key, segment: this.segments[0].texture.key, arenaURL: arenaUrl, headURL: headUrl },
+      boss: { x: bossBody.center.x, y: bossBody.center.y, width: bossBody.width, height: bossBody.height, angle: this.boss.angle, texture: this.boss.texture.key, displayWidth: this.boss.displayWidth, displayHeight: this.boss.displayHeight },
+      assets: { background: this.backdrop.texture.key, dim: this.backdropDim.texture.key, dimAlpha: this.backdropDim.alpha, head: this.boss.texture.key, segment: this.segments[0].texture.key, overlay: this.headOverlay.visible ? this.headOverlay.alpha : 0, arenaURL: arenaUrl, headURL: headUrl },
       hud: { score: this.hud.scoreText, phase: this.bossHud.phaseText, status: this.status.text, signal: this.signal.text },
       audio: sfx.stats(), kipuFrame: this.animator.frame,
     };

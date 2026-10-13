@@ -248,3 +248,47 @@ Added: reduce-motion option (OS `prefers-reduced-motion` initialises it; page bu
 Observed: typecheck exit 0; 71/71 unit tests (5 new motion tests, RED observed on the missing module first); build exit 0; browser smoke passed in WebGL and Canvas, including a new reduced-motion group and a victory-stats assertion; the relative Vite base was also verified by serving the build under a `/pachabyte/` subpath and running the full smoke against it.
 
 Retained failures: during this pass four serial smoke runs failed intermittently (WebGL: "airborne repress must not reset jump velocity" at the `w` jump binding; Canvas: waitForFunction timeouts at three different stages). They coincided with about 49% machine CPU load and an idle game tab still running in the in-app browser; a 12-iteration jump loop reproduced 0 misses in each renderer, and after the tab was released and load fell to about 13%, Canvas passed twice and WebGL passed twice. Cause is plausible (wall-clock timing between Playwright round trips under CPU load) but not proven; the assertions were not weakened. Same class as the earlier single-hit flake.
+
+
+## Ruta 01 flight MVP — F3 independent verification, October 13, 2026
+
+Scope: independent check of F1 (route, commit 91dec77) and F2 (Amaru-01 and REVERSE, commit cc4c43d), with a rewritten browser smoke. Only results observed in this checkout are listed.
+
+### Commands
+
+| Command | Observed result |
+|---|---|
+| `npm.cmd run typecheck` | exit 0 |
+| `npm.cmd test` | 151/151 tests, 16 files |
+| `npm.cmd run build` | exit 0; known large-chunk and npm `minimum-release-age` warnings |
+| `test:browser` WebGL run 1 (owned preview 4177) | passed, 12 groups; fight won on attempt 1 |
+| `test:browser` Canvas run 1 | passed, 12 groups; fight lost once (boss HP 7, phase 3), won on attempt 2 |
+| `test:browser` WebGL run 2 | passed, 12 groups; fight lost once (boss HP 35, phase 2), won on attempt 2 |
+| `test:browser` Canvas run 2 | passed, 12 groups; fight lost once (boss HP 51, phase 2), won on attempt 2 |
+
+Runs were serial against `vite preview --port 4177`, Edge 155.0.4283.45, renderer asserted from the live canvas context. Every run reported zero page or console errors. The Pillow `getdata` deprecation warning remains.
+
+### What the smoke now covers
+
+Real keyboard and pointer input only; `pachaDebug` is read, never written. Timing checks use in-page `requestAnimationFrame` samplers.
+
+1. Map: `lang="es"`, Spanish copy, corrupted node on a fresh session, six DOM buttons with native Enter/Space activation returning focus to the game.
+2. Route: no gravity, 8 directions at 110 px/s with normalized diagonals, top/bottom/left/right clamps, Esc and focus-loss freeze of clock/anim/camera, Glitchling wounded then destroyed (+10 meter per hit, +75), fragment (+100, +20), Firewall contact damage and blocked shots, Marea advance and contact damage, silent threshold line, transition carrying hp/score/fragments/meter (observed hp 2, score 2700, fragments 12, meter 100 in all four runs).
+3. REVERSE: READY only at meter 100, Shift/K/X rejected while charging, SLOW at 800–806 ms of real clock with world scale exactly 0.2, captures within reach and never harmful, at most 6, shield drops only with returned bolts, rhombus capturable and orb not.
+4. Exact four-green frame: the first SLOW frame frozen through the blur handler; PIL found only the four Nokia colors in every run.
+5. Phases 1→2→3 by HP, core-awakening message, victory, liberation order (recede, restore, two dialogue lines, codex, result), score breakdown adds up, Enter to a restored map node; defeat shows "KIPU SE DESCONECTA" and R resets the fight.
+6. Reduced motion (OS preference and toggle): no particles, sway, tilt or Kipu frames while telegraphs remain.
+7. Sound toggle mutes and unmutes and returns focus. 8. 16:9 canvas without overflow at 1000, 600 and 470 px. 9. Debug only with `?debug=1`.
+
+Read-only snapshot fields were added for the test (route shot and fragment positions, boss angle, bolt texture, head overlay alpha). No gameplay code changed.
+
+### Review findings (not fixed)
+
+- Canvas renderer ignores BitmapText tint: map labels, route caption and HUD text render white in Canvas (observed in the Canvas `docs/ruta01-map.png`). Visual only.
+- Clicking the page background moves focus to `body` but the game keeps running and still reads the keyboard (probe: `focused: true`, clock advancing, `velocityY 110`). Only Tab/button focus and window blur pause it.
+- `RouteScene` uses an uncapped frame delta while `GuardianScene` caps it at 100 ms; a long stall can let a Firewall pass Kipu without a contact frame.
+- Direct entry to Amaru counts route time as 0, so its time bonus is larger than a full run's (score formula is provisional).
+
+### Limits
+
+The scripted pilot lost its first fight in three of four runs before winning; this proves the fight is winnable by keyboard, not that its balance is right. Screenshots `docs/ruta01-*.png` were last written by Canvas run 2. No human playtest, clean install, other browsers or devices, or remote deployment was performed. User preview 4173 untouched; owned 4177 preview stopped.
