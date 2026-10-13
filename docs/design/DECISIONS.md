@@ -29,3 +29,11 @@ Antes se sugirió que Amaru daba REVERSE o LOOP. Convención de trabajo coherent
 
 ## Preguntas abiertas prioritarias
 ¿Qué causó El Desfase: protección fallida o actor consciente? ¿Cuál es la verdad del nacimiento de Kipu y el “último fragmento”? ¿Cuál es el final? ¿Orden real de ciudades y asignaciones de guardianes? ¿Daño/corrupción/checkpoints y ranking final? ¿Reglas oficiales del hackathon sobre IA, trabajo previo, derechos y entrega?
+
+
+## Decisiones del 13-10-2026 (primer playtest del usuario)
+- **Balance de Amaru fase 2:** los valores tentativos de PachaShift se ajustan por playtest (radio de captura 40 px, cámara lenta 1,2 s, reembolso de medidor si no hay capturas, ventana de vulnerabilidad 6,5 s) y se añaden pistas contextuales y checkpoints por fase.
+- **Aprobado por el usuario (mecánicas nuevas, no estaban en el canon):** *Ráfaga de la Trama* (objeto temporal de disparo triple y rápido), *Escudo* (absorbe un golpe) y *Corazón* (+1 de vida), raros en la ruta.
+- **Bugs del MVP ampliados:** se implementan **Corruptor** (dispara de lejos, lento) y **Sombra de Error** (al morir se divide en dos menores), ya listados en CHARACTERS.md. Cada contacto o disparo quita un solo corazón con invulnerabilidad.
+- **Racha (combo):** aciertos seguidos sin recibir daño multiplican la puntuación ×1 a ×4; recibir daño la reinicia. Encaja con "puntuación por eficiencia"; la fórmula sigue siendo provisional.
+- **Guardianes inspirados en lenguajes:** se mantiene la regla de CHARACTERS.md: guardianes originales andinos con rasgos tecnológicos, sin reproducir mascotas ni logos oficiales. Estado corrupto → restaurado aplica a cada guardián.

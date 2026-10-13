@@ -11,6 +11,8 @@ Status flow: `requested → review → approved → integrated → verified`. Un
 | 3 | `AMARU_RESTORED` | 64×64 | Head after liberation | requested |
 | 4 | `BG_AREQUIPA_ROUTE` | 3 layers, 640×180 each | Route parallax background | requested |
 | 5 | `KIPU_FLY_ACTIONS` | 2 × 4 frames × 32×40 | Kipu shooting and PachaShift | requested (optional) |
+| 6 | `BUG_CORRUPTOR` | 4 frames × 24×24 | Ranged route enemy | requested |
+| 7 | `BUG_SOMBRA_DE_ERROR` | 4 × 20×20 + 2 × 12×12 | Splitting route enemy | requested |
 
 ---
 
@@ -101,4 +103,43 @@ Each frame is 32x40 logical pixels drawn at exactly 8x scale (256x320 px per fra
 Style: crisp hard-edged pixel art, no anti-aliasing, no blur, palette taken from the attached sprite.
 Background: real transparent PNG, or flat #FF00FF magenta if transparency is impossible.
 Do NOT include: legs, clothes, weapons, text, borders, ground, shadows.
+```
+
+## 6. BUG_CORRUPTOR
+
+Attach: the approved sheet. Native: 4 frames × 24×24 (strip 768×192 at 8x).
+
+```text
+Original pixel-art game sprite for "PachaByte", a 320x180 side-scrolling arcade. Use the attached concept sheet ONLY as a style and palette reference; do not copy its characters.
+
+Subject: a "Corruptor", a medium software-corruption enemy that hovers at a distance and spits slow corrupted orbs. It looks like a heavy, armored cluster of broken data blocks fused with a dark purple organic core: a squat rounded-square body, two short tendril-like cables hanging below, a single round "mouth" vent on its LEFT side that glows when it fires, and a few cracked stone-like tiles (inspired by white sillar stone, partly infected) stuck to its back. Colors: dark purple #4A2E63 body, muted purple #8759AD plates, light violet #C985EF glowing vent and cracks, a little ivory #F1E5C5 on the stone tiles, dark outline. It must read clearly by SHAPE alone (also in monochrome green), and look clearly different from the small angular Glitchling and from the round turquoise hero Kipu.
+
+Facing: LEFT.
+
+Layout: one horizontal strip of 4 frames: frames 1-2 idle hover (tendrils sway), frame 3 vent charging (vent brighter, body slightly compressed), frame 4 firing (vent open, small recoil to the right). Each frame is 24x24 logical pixels drawn at exactly 8x scale (every logical pixel a square 8x8 block of one flat color): 192x192 px cells, full strip 768x192 px. Same center pivot in every frame.
+
+Style: crisp hard-edged pixel art, max 8 colors, no anti-aliasing, no gradients, no blur, no glow outside the pixel grid.
+Background: real transparent PNG, or a single flat #FF00FF magenta background if transparency is impossible.
+Do NOT include: projectiles, text, labels, grid lines, borders, ground, shadows, logos, programming-language mascots, or characters from existing games.
+```
+
+## 7. BUG_SOMBRA_DE_ERROR
+
+Attach: the approved sheet. Native: large 4 frames × 20×20 and small 2 frames × 12×12 (one image).
+
+```text
+Original pixel-art game sprites for "PachaByte", a 320x180 side-scrolling arcade. Use the attached concept sheet ONLY as a style and palette reference; do not copy its characters.
+
+Subject: a "Sombra de Error" (Error Shadow), an evasive anomaly that flickers and, when destroyed, splits into two smaller copies. It is a hooded, ghost-like silhouette made of dark corrupted pixels with two small glowing eyes, a ragged lower edge that dissolves into a few loose pixels, and a faint "duplicate" offset outline (a 1-pixel echo of its silhouette shifted to the right, drawn as solid pixels, not transparency). Colors: near-black purple #241631 body, deep purple #4A2E63 shading, violet #C985EF eyes and echo outline, dark outline. It must read by SHAPE alone (also in monochrome green) and look clearly different from the angular Glitchling, the boxy Corruptor and the round turquoise hero Kipu.
+
+Facing: LEFT.
+
+Produce ONE image with two rows:
+Row 1 - LARGE form: 4 frames of 20x20 logical pixels (drift loop; frame 3 shows the echo outline jumping to the left side, like a glitch blink).
+Row 2 - SMALL form (what it splits into): 2 frames of 12x12 logical pixels, same design simplified.
+Draw everything at exactly 8x scale (every logical pixel a square 8x8 block of one flat color). Row 1 cells are 160x160 px (strip 640x160). Row 2 cells are 96x96 px, left-aligned under row 1. Total image 640x256 px. Same center pivot within each form.
+
+Style: crisp hard-edged pixel art, max 6 colors, binary alpha only (no semi-transparent pixels), no anti-aliasing, no blur.
+Background: real transparent PNG, or flat #FF00FF magenta if transparency is impossible.
+Do NOT include: text, labels, borders, ground, shadows, weapons, logos, programming-language mascots, or characters from existing games.
 ```
