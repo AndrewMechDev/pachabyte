@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME, flight, canShoot, type Facing } from './rules';
+import { GAME, flight, canShoot, frameDelta, type Facing } from './rules';
 import { boltExpired, type Outcome } from './combatRules';
 import {
   REVERSE, activateReverse, advanceClocks, awakenCore, captureBolt, chargeReverse, initialReverse, isSlow, resolveReturn, shiftCue,
@@ -13,8 +13,8 @@ import {
 import { advanceLiberation, resultLines, stageProgress, startLiberation, tickLiberation, variantKey, type Liberation } from './liberationRules';
 import { ARENA, ARENA_DIM, BODY_TEXTURES, BOLT_TEXTURES, HEAD, HEAD_FLASH, createAmaruTextures, derive } from './amaruTextures';
 import { NOKIA, convertPixels } from './nokiaPalette';
-import { createTextures, createRetroFont } from './textures';
-import { RETRO_FONT, CELL_WIDTH } from './retroFont';
+import { createTextures, createRetroFonts } from './textures';
+import { CELL_HEIGHT, CELL_WIDTH, MARK_ROWS, fontKey } from './retroFont';
 import { KIPU_FRAMES, ParticlePool, bossAngle, burst, chargeLevel, drawParticles, flightTilt, kipuTextureKey, type AttackPhase } from './animation';
 import { KipuAnimator } from './kipuAnimator';
 import { ensureKipuFrames } from './kipuTextures';
@@ -39,13 +39,18 @@ const ARENA_FLOOR = 164;
 // Kipu stays left of Amaru's head, so the head's forgiving body is never a contact hazard.
 const KIPU_RIGHT = 230;
 const POOL = Object.freeze({ shots: GAME.bulletCapacity, returns: REVERSE.maxCaptures, enemies: 40, particles: 96 });
-const TIMING = Object.freeze({ boltTtl: 7000, returnTtl: 1800, returnSpeed: 240, flashMs: 80, noCaptureMs: 900, maxDelta: 100 });
+const TIMING = Object.freeze({ boltTtl: 7000, returnTtl: 1800, returnSpeed: 240, flashMs: 80, noCaptureMs: 900 });
 const SHIELD_RADIUS = 30;
-// Extra pixels between lines of multi-line canvas text (cells are 8 px tall with one clear row).
-const LINE_GAP = 3;
+// Extra pixels between stacked lines (12 px pitch): accent marks rise MARK_ROWS above the 8 px line cell and still keep
+// two clear rows to the letters above, so a mark never reads as belonging to the previous line.
+const LINE_GAP = MARK_ROWS + 1;
+// Status and attack signal stacked in the dark band under the HUD bar.
+const BAND = Object.freeze({ status: 18, signal: 18 + CELL_HEIGHT + LINE_GAP, height: 23 });
+// Message banner: top border row, then the accent rows, then the 8 px line.
+const MESSAGE = Object.freeze({ top: 41, textY: 41 + 2 + MARK_ROWS });
 const COLORS = Object.freeze({
   normal: { dark: 0x16343c, floor: 0x70563e, mid: 0x59d3c4, light: 0xfff1c3, gold: 0xedc76c, violet: 0xc985ef, wave: 0x8759ad, text: 0xfff1c3 },
-  nokia: { dark: NOKIA[0], floor: NOKIA[1], mid: NOKIA[2], light: NOKIA[3], gold: NOKIA[3], violet: NOKIA[1], wave: NOKIA[1], text: 0xffffff },
+  nokia: { dark: NOKIA[0], floor: NOKIA[1], mid: NOKIA[2], light: NOKIA[3], gold: NOKIA[3], violet: NOKIA[1], wave: NOKIA[1], text: NOKIA[3] },
 });
 const SIGNAL: Readonly<Record<AttackKind, string>> = Object.freeze({
   triplePulse: TEXT.attackPulse, loopDown: TEXT.attackLoop, loopUp: TEXT.attackLoop, burst: TEXT.attackBurst, wave: TEXT.attackWave, window: TEXT.attackWindow,
@@ -154,8 +159,7 @@ export class GuardianScene extends Phaser.Scene {
     this.time.paused = false;
     sfx.setDucked(false);
 
-    createTextures(this); createRetroFont(this); ensureKipuFrames(this);
-    createRetroFont(this, RETRO_FONT + '-nokia', NOKIA[3]);
+    createTextures(this); createRetroFonts(this); ensureKipuFrames(this);
     for (const key of [...KIPU_FRAMES.map(frame => kipuTextureKey(frame, false)), 'bullet']) derive(this, key, `${key}-nokia`, pixels => convertPixels(pixels));
     createAmaruTextures(this, 0xfff1c3, NOKIA[3]);
 
@@ -210,11 +214,11 @@ export class GuardianScene extends Phaser.Scene {
 
     this.hud = new Hud(this);
     this.bossHud = new BossHud(this);
-    this.status = this.text(4, 18, '').setDepth(10);
-    this.signal = this.text(4, 27, '').setDepth(10);
+    this.status = this.text(4, BAND.status, '').setDepth(10);
+    this.signal = this.text(4, BAND.signal, '').setDepth(10);
     this.cue = this.text(0, 0, '').setDepth(9);
     this.messageBox = this.add.graphics().setDepth(30);
-    this.message = this.text(0, 44, '').setDepth(31).setCenterAlign().setLineSpacing(LINE_GAP);
+    this.message = this.text(0, MESSAGE.textY, '').setDepth(31).setCenterAlign().setLineSpacing(LINE_GAP);
     this.panel = this.add.graphics().setDepth(50);
     this.panelText = this.text(0, 0, '').setDepth(51).setLineSpacing(LINE_GAP);
     this.panelHelp = this.text(0, 0, '').setDepth(51);
@@ -248,7 +252,7 @@ export class GuardianScene extends Phaser.Scene {
     if (this.mapRequested) { this.input.keyboard?.resetKeys(); this.scene.start('MapScene'); return; }
     if (this.retry) { this.input.keyboard?.resetKeys(); this.scene.restart(); return; }
     if (this.paused) return;
-    const delta = Math.min(rawDelta, TIMING.maxDelta);
+    const delta = frameDelta(rawDelta);
     if (this.ending === 'playing') this.play(delta);
     else {
       // The world stops at the end; the real clock keeps the liberation and result screens moving.
@@ -630,7 +634,7 @@ export class GuardianScene extends Phaser.Scene {
     const c = this.palette ? COLORS.nokia : COLORS.normal, g = this.graphics.clear(), now = this.clocks.real;
     const f = this.floor.clear();
     f.fillStyle(c.floor).fillRect(0, ARENA_FLOOR, 320, 180 - ARENA_FLOOR).fillStyle(c.light).fillRect(0, ARENA_FLOOR, 320, 2);
-    f.fillStyle(c.dark).fillRect(0, GAME.hudHeight, 320, 20);
+    f.fillStyle(c.dark).fillRect(0, GAME.hudHeight, 320, BAND.height);
     const display = meterDisplay(this.reverse.state, this.reverse.meter, (this.reverse.until - now) / REVERSE.slowMs);
     this.hud.draw({ hp: this.health.hp, maxHp: ROUTE.maxHp, meter: this.reverse.meter, score: this.score(), now, meterStyle: display.style, meterLevel: display.fill, reduced: motion.reduced });
     const b = this.bossState, world = this.clocks.world;
@@ -668,8 +672,8 @@ export class GuardianScene extends Phaser.Scene {
     if (!text) return;
     const lines = text.split('\n'), width = Math.max(...lines.map(l => l.length)) * CELL_WIDTH, x = Math.round((GAME.width - width) / 2);
     this.message.setX(x);
-    const height = lines.length * (8 + LINE_GAP) - LINE_GAP + 5;
-    box.fillStyle(c.dark).fillRect(x - 4, 41, width + 8, height).fillStyle(c.gold).fillRect(x - 4, 41, width + 8, 1).fillRect(x - 4, 41 + height - 1, width + 8, 1);
+    const height = MESSAGE.textY - MESSAGE.top + lines.length * (CELL_HEIGHT + LINE_GAP) - LINE_GAP + 2;
+    box.fillStyle(c.dark).fillRect(x - 4, MESSAGE.top, width + 8, height).fillStyle(c.gold).fillRect(x - 4, MESSAGE.top, width + 8, 1).fillRect(x - 4, MESSAGE.top + height - 1, width + 8, 1);
   }
 
   private drawAura(g: Phaser.GameObjects.Graphics, center: Phaser.Math.Vector2, c: typeof COLORS.normal): void {
@@ -723,7 +727,7 @@ export class GuardianScene extends Phaser.Scene {
     // Static cue (no flashing): "¡SHIFT!" when READY with rhombi close, "SIN CAPTURAS" after an empty SLOW.
     const text = this.cueShown ? TEXT.shiftCue : now < this.noCaptureUntil ? TEXT.noCaptures : '';
     if (this.cue.text !== text) this.cue.setText(text);
-    if (text) this.cue.setPosition(Phaser.Math.Clamp(Math.round(this.player.x - text.length * CELL_WIDTH / 2), 2, 318 - text.length * CELL_WIDTH), Math.max(37, Math.round(this.player.y) - 26));
+    if (text) this.cue.setPosition(Phaser.Math.Clamp(Math.round(this.player.x - text.length * CELL_WIDTH / 2), 2, 318 - text.length * CELL_WIDTH), Math.max(GAME.hudHeight + BAND.height + 1, Math.round(this.player.y) - 26));
   }
 
   // ------------------------------------------------------------------ plumbing
@@ -745,7 +749,7 @@ export class GuardianScene extends Phaser.Scene {
     shot.setVelocity(vx, vy);
   }
 
-  private text(x: number, y: number, text: string): Phaser.GameObjects.BitmapText { return this.add.bitmapText(x, y, RETRO_FONT, text, CELL_WIDTH).setTint(COLORS.normal.text); }
+  private text(x: number, y: number, text: string): Phaser.GameObjects.BitmapText { return this.add.bitmapText(x, y, fontKey(COLORS.normal.text), text, CELL_WIDTH); }
 
   private togglePalette(active: boolean): void {
     if (this.palette === active) return;
@@ -755,9 +759,9 @@ export class GuardianScene extends Phaser.Scene {
       const sprite = child as Sprite, base = sprite.getData('base') as string | undefined;
       if (base) sprite.setTexture(variantKey(base, false, active));
     }
-    // Canvas BitmapText ignores tint, so switch to a native green atlas.
+    // Canvas BitmapText ignores tint, so switch to the pre-colored green atlas.
     for (const label of [this.status, this.signal, this.cue, this.message, this.panelText, this.panelHelp]) {
-      label.setFont(RETRO_FONT + (active ? '-nokia' : ''), CELL_WIDTH).setTint(active ? 0xffffff : COLORS.normal.text);
+      label.setFont(fontKey((active ? COLORS.nokia : COLORS.normal).text), CELL_WIDTH);
     }
     this.hud.setPalette(active); this.bossHud.setPalette(active); this.pause.setPalette(active);
     this.animate(0);

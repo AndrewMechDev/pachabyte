@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import { GAME } from './rules';
-import { RETRO_FONT, CELL_WIDTH } from './retroFont';
+import { CELL_WIDTH, fontKey } from './retroFont';
 import { HEART, formatScore, heartStates, meterFill, type MeterStyle } from './hudRules';
 import { NOKIA } from './nokiaPalette';
 import { TEXT } from './text';
 
-const NORMAL = { bar: 0x16343c, line: 0x3a6770, heart: 0xe86a5a, empty: 0x3a6770, meter: 0x59d3c4, full: 0xfff1c3, text: 0xfff1c3 };
-const GREEN = { bar: NOKIA[0], line: NOKIA[1], heart: NOKIA[3], empty: NOKIA[1], meter: NOKIA[2], full: NOKIA[3], text: 0xffffff };
+const NORMAL = { bar: 0x16343c, line: 0x3a6770, heart: 0xe86a5a, empty: 0x3a6770, meter: 0x59d3c4, full: 0xfff1c3, text: 0xfff1c3, title: 0xedc76c };
+const GREEN = { bar: NOKIA[0], line: NOKIA[1], heart: NOKIA[3], empty: NOKIA[1], meter: NOKIA[2], full: NOKIA[3], text: NOKIA[3] };
 const METER = { x: 92, y: 5, width: 40, height: 6 };
 
 // meterStyle/meterLevel come from meterDisplay() in the guardian; the route derives them from the meter alone.
@@ -21,16 +21,16 @@ export class Hud {
 
   constructor(scene: Phaser.Scene) {
     this.g = scene.add.graphics().setScrollFactor(0).setDepth(40);
-    this.energy = scene.add.bitmapText(46, 4, RETRO_FONT, TEXT.energy, CELL_WIDTH).setScrollFactor(0).setDepth(41).setTint(NORMAL.text);
-    this.score = scene.add.bitmapText(GAME.width - 4 - 6 * CELL_WIDTH, 4, RETRO_FONT, formatScore(0), CELL_WIDTH).setScrollFactor(0).setDepth(41).setTint(NORMAL.text);
+    this.energy = scene.add.bitmapText(46, 4, fontKey(NORMAL.text), TEXT.energy, CELL_WIDTH).setScrollFactor(0).setDepth(41);
+    this.score = scene.add.bitmapText(GAME.width - 4 - 6 * CELL_WIDTH, 4, fontKey(NORMAL.text), formatScore(0), CELL_WIDTH).setScrollFactor(0).setDepth(41);
   }
 
   get scoreText(): string { return this.score.text; }
 
-  // Canvas BitmapText ignores tint, so the four-green mode switches to a native green atlas.
+  // Canvas BitmapText ignores tint, so colors come from pre-colored atlases; four-green mode uses the Nokia one.
   setPalette(nokia: boolean): void {
     this.nokia = nokia;
-    for (const label of [this.energy, this.score]) label.setFont(RETRO_FONT + (nokia ? '-nokia' : ''), CELL_WIDTH).setTint(nokia ? 0xffffff : NORMAL.text);
+    for (const label of [this.energy, this.score]) label.setFont(fontKey((nokia ? GREEN : NORMAL).text), CELL_WIDTH);
   }
 
   draw(values: HudValues): void {
@@ -80,15 +80,15 @@ export class BossHud {
 
   constructor(scene: Phaser.Scene) {
     this.g = scene.add.graphics().setScrollFactor(0).setDepth(40);
-    this.name = scene.add.bitmapText(236, 18, RETRO_FONT, TEXT.guardianName, CELL_WIDTH).setScrollFactor(0).setDepth(41).setTint(NORMAL.text);
-    this.phase = scene.add.bitmapText(236, 27, RETRO_FONT, '', CELL_WIDTH).setScrollFactor(0).setDepth(41).setTint(NORMAL.text);
+    this.name = scene.add.bitmapText(236, 18, fontKey(NORMAL.text), TEXT.guardianName, CELL_WIDTH).setScrollFactor(0).setDepth(41);
+    this.phase = scene.add.bitmapText(236, 27, fontKey(NORMAL.text), '', CELL_WIDTH).setScrollFactor(0).setDepth(41);
   }
 
   get phaseText(): string { return this.phase.text; }
 
   setPalette(nokia: boolean): void {
     this.nokia = nokia;
-    for (const label of [this.name, this.phase]) label.setFont(RETRO_FONT + (nokia ? '-nokia' : ''), CELL_WIDTH).setTint(nokia ? 0xffffff : NORMAL.text);
+    for (const label of [this.name, this.phase]) label.setFont(fontKey((nokia ? GREEN : NORMAL).text), CELL_WIDTH);
   }
 
   setVisible(visible: boolean): void { for (const item of [this.g, this.name, this.phase]) item.setVisible(visible); }
@@ -121,7 +121,7 @@ export class PauseOverlay {
   constructor(scene: Phaser.Scene) {
     const cx = GAME.width / 2, cy = GAME.height / 2;
     this.panel = scene.add.graphics().setScrollFactor(0).setDepth(60).setVisible(false);
-    this.labels = [TEXT.pause, TEXT.pauseHelp].map((text, row) => scene.add.bitmapText(Math.round(cx - text.length * CELL_WIDTH / 2), cy - 10 + row * 12, RETRO_FONT, text, CELL_WIDTH)
+    this.labels = [TEXT.pause, TEXT.pauseHelp].map((text, row) => scene.add.bitmapText(Math.round(cx - text.length * CELL_WIDTH / 2), cy - 10 + row * 12, fontKey(NORMAL.text), text, CELL_WIDTH)
       .setScrollFactor(0).setDepth(61).setVisible(false));
     this.setPalette(false);
   }
@@ -131,6 +131,6 @@ export class PauseOverlay {
   setPalette(nokia: boolean): void {
     const c = nokia ? GREEN : NORMAL, x = GAME.width / 2 - 64, y = GAME.height / 2 - 18;
     this.panel.clear().fillStyle(c.line).fillRect(x, y, 128, 36).fillStyle(c.bar).fillRect(x + 1, y + 1, 126, 34);
-    this.labels.forEach((label, row) => label.setFont(RETRO_FONT + (nokia ? '-nokia' : ''), CELL_WIDTH).setTint(nokia ? 0xffffff : row ? NORMAL.text : 0xedc76c));
+    this.labels.forEach((label, row) => label.setFont(fontKey(nokia ? GREEN.text : row ? NORMAL.text : NORMAL.title), CELL_WIDTH));
   }
 }

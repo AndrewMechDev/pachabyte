@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { RETRO_FONT, CELL_WIDTH, CELL_HEIGHT, FONT_CHARACTERS, GLYPHS } from './retroFont';
+import { ATLAS_HEIGHT, CELL_WIDTH, CELL_HEIGHT, FONT_CHARACTERS, FONT_COLORS, GLYPHS, LETTER_ROWS, fontKey, glyphCell } from './retroFont';
 
 // Original procedural placeholders. These are not animation spritesheets.
 export function createTextures(scene: Phaser.Scene): void {
@@ -90,31 +90,42 @@ export function createRouteTextures(scene: Phaser.Scene): void {
   }
 }
 
-// Register once in the shared cache; restarting the scene reuses the native atlas.
-export function createRetroFont(scene: Phaser.Scene, font = RETRO_FONT, color = 0xffffff): void {
+// One pre-colored atlas per text color; registered once in the shared cache and reused on restart.
+// The atlas is ATLAS_HEIGHT tall: letters on the bottom 8 px line, accent marks in the rows above.
+export function createRetroFont(scene: Phaser.Scene, color = 0xffffff): void {
+  const font = fontKey(color);
   if (scene.cache.bitmapFont.exists(font)) return;
+  const width = FONT_CHARACTERS.length * CELL_WIDTH;
   const g = scene.add.graphics().fillStyle(color);
+  // Phaser reads xAdvance at runtime although its typedef omits it.
+  const chars: Record<number, Phaser.Types.GameObjects.BitmapText.BitmapFontCharacterData & { xAdvance: number }> = {};
   [...FONT_CHARACTERS].forEach((char, index) => {
-    GLYPHS[char].forEach((row, y) => {
-      [...row].forEach((pixel, x) => {
-        if (pixel === '1') g.fillRect(index * CELL_WIDTH + x, y, 1, 1);
-      });
-    });
+    const rows = GLYPHS[char], top = ATLAS_HEIGHT - CELL_HEIGHT - (rows.length - LETTER_ROWS);
+    rows.forEach((row, y) => [...row].forEach((pixel, x) => {
+      if (pixel === '1') g.fillRect(index * CELL_WIDTH + x, top + y, 1, 1);
+    }));
+    const cell = glyphCell(char, index);
+    chars[char.charCodeAt(0)] = {
+      x: cell.x, y: cell.y, width: cell.width, height: cell.height, centerX: Math.floor(cell.width / 2), centerY: Math.floor(cell.height / 2),
+      xOffset: 0, yOffset: cell.yOffset, xAdvance: CELL_WIDTH, data: {}, kerning: {},
+      u0: cell.x / width, v0: cell.y / ATLAS_HEIGHT, u1: (cell.x + cell.width) / width, v1: (cell.y + cell.height) / ATLAS_HEIGHT,
+    };
   });
-  g.generateTexture(font, FONT_CHARACTERS.length * CELL_WIDTH, CELL_HEIGHT);
+  g.generateTexture(font, width, ATLAS_HEIGHT);
   g.destroy();
-  scene.cache.bitmapFont.add(font, Phaser.GameObjects.RetroFont.Parse(scene, {
-    image: font, width: CELL_WIDTH, height: CELL_HEIGHT,
-    chars: FONT_CHARACTERS, charsPerRow: FONT_CHARACTERS.length,
-    'offset.x': 0, 'offset.y': 0, 'spacing.x': 0, 'spacing.y': 0, lineSpacing: 0,
-  }));
+  // Line height stays the 8 px cell, so multi-line spacing and every unaccented layout are unchanged.
+  scene.cache.bitmapFont.add(font, { data: { font, size: CELL_WIDTH, lineHeight: CELL_HEIGHT, retroFont: true, chars }, frame: null, texture: font });
+}
+
+export function createRetroFonts(scene: Phaser.Scene): void {
+  for (const color of FONT_COLORS) createRetroFont(scene, color);
 }
 
 // Provisional original native art; alpha lowers contrast so gameplay sprites stay the readable layer.
 export function drawScenery(scene: Phaser.Scene, width: number, alpha = 1): void {
   const sky = scene.add.graphics().setScrollFactor(0.25).setDepth(-10).setAlpha(alpha);
   sky.fillStyle(0x243d4a).fillRect(0, 0, width, 180);
-  sky.fillStyle(0x958e69).fillRect(235, 29, 12, 12);
+  // No flat square sun: the route's arena backdrop already carries the sky, and a 12x12 block read as a gray artifact.
   sky.fillStyle(0x294552).fillRect(0, 112, width, 68);
   for (let x = -60; x < width; x += 240) {
     sky.fillStyle(0x314b5a).fillTriangle(x, 140, x + 100, 47, x + 215, 140);

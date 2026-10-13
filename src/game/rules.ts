@@ -45,3 +45,10 @@ export function shotVelocity(facing: Facing, carry = 0): number {
 export function projectileExpired(now: number, expiresAt: number, x: number, minX: number, maxX: number): boolean {
   return now >= expiresAt || x < minX || x > maxX;
 }
+
+// Owned clocks advance by at most one capped frame, so a long stall (tab switch, GC, debugger) can never
+// teleport a Firewall or a bolt through Kipu between two collision checks.
+export const MAX_FRAME_MS = 100;
+export function frameDelta(raw: number): number {
+  return clamp(raw, 0, MAX_FRAME_MS);
+}

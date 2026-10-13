@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
-import { GAME, canShoot, flight, playBounds, projectileExpired, shotVelocity } from './rules';
+import { GAME, canShoot, flight, frameDelta, playBounds, projectileExpired, shotVelocity } from './rules';
 import {
   ROUTE, RUN_KEY, WALLS, addMeter, cameraScroll, captionAt, glitchlingVelocity, mareaFront, mareaTouches, overlaps, pickupFragment,
   runningScore, segmentAt, spawnsDue, takeHit, wallRects, wallScreenX, wallTelegraph, type Health, type Rect, type RunState, type Spawn, type Tally,
 } from './routeRules';
 import { completeRoute, initialProgress, type Progress } from './challengeRules';
-import { createTextures, createRetroFont, createRouteTextures, drawScenery } from './textures';
-import { RETRO_FONT, CELL_WIDTH } from './retroFont';
+import { createTextures, createRetroFonts, createRouteTextures, drawScenery } from './textures';
+import { CELL_HEIGHT, CELL_WIDTH, MARK_ROWS, fontKey } from './retroFont';
 import { ParticlePool, burst, drawParticles, flightTilt } from './animation';
 import { KipuAnimator } from './kipuAnimator';
 import { ensureKipuFrames } from './kipuTextures';
@@ -28,6 +28,8 @@ type Ending = 'playing' | 'defeat' | 'transition';
 const POOL = { shots: GAME.bulletCapacity, glitchlings: 12, fragments: 10, particles: 96 } as const;
 const BACKDROP = { alpha: 0.45, scrollFactor: 0.15 } as const;
 const LIGHT = 0xfff1c3, GOLD = 0xedc76c, TEAL = 0x59d3c4, DIM = 0x3a6770, BAR = 0x16343c;
+// Caption strip under the HUD: one clear row, the accent rows, the 8 px line cell and one more clear row.
+const CAPTION = Object.freeze({ top: GAME.hudHeight + 2, textY: GAME.hudHeight + 3 + MARK_ROWS, height: 1 + MARK_ROWS + CELL_HEIGHT + 1 });
 
 // Ruta 01: free-flight, auto-scrolling route that ends at Amaru. Two owned clocks: `clock` drives every
 // gameplay decision; `anim` drives visuals only. Focus loss and Esc pause freeze both, plus physics.
@@ -81,7 +83,7 @@ export class RouteScene extends Phaser.Scene {
     this.health = { hp: ROUTE.maxHp, invulnerableUntil: 0 }; this.meter = 0; this.tally = { fragments: 0, bugs: 0, returns: 0 };
     this.nextShotAt = 0; this.spawnCursor = 0; this.thresholdStarted = false; this.retryRequested = false; this.mapRequested = false; this.nextGlintAt = 0;
     this.time.paused = false;
-    createTextures(this); createRouteTextures(this); createRetroFont(this); ensureKipuFrames(this);
+    createTextures(this); createRouteTextures(this); createRetroFonts(this); ensureKipuFrames(this);
 
     this.cameras.main.setBackgroundColor(BAR).setBounds(0, 0, ROUTE.worldWidth, GAME.height).setScroll(0, 0);
     // Low-contrast parallax: the existing arena art repeated without stretching, under the provisional scenery.
@@ -129,10 +131,10 @@ export class RouteScene extends Phaser.Scene {
       burst(this.fx, knot.x, knot.y, 8, 45, 320, 'gold', this.anim, 2);
     });
 
-    this.captionBox = this.add.rectangle(0, 21, 0, 10, BAR).setOrigin(0).setScrollFactor(0).setDepth(29).setVisible(false);
-    this.caption = this.add.bitmapText(0, 22, RETRO_FONT, '', CELL_WIDTH).setTint(LIGHT).setScrollFactor(0).setDepth(30);
+    this.captionBox = this.add.rectangle(0, CAPTION.top, 0, CAPTION.height, BAR).setOrigin(0).setScrollFactor(0).setDepth(29).setVisible(false);
+    this.caption = this.add.bitmapText(0, CAPTION.textY, fontKey(LIGHT), '', CELL_WIDTH).setScrollFactor(0).setDepth(30);
     this.panel = this.add.rectangle(GAME.width / 2, 90, 200, 40, BAR).setScrollFactor(0).setDepth(50).setVisible(false);
-    this.panelText = this.add.bitmapText(0, 78, RETRO_FONT, '', CELL_WIDTH).setCenterAlign().setTint(LIGHT).setScrollFactor(0).setDepth(51);
+    this.panelText = this.add.bitmapText(0, 78, fontKey(LIGHT), '', CELL_WIDTH).setCenterAlign().setLineSpacing(MARK_ROWS + 1).setScrollFactor(0).setDepth(51);
     this.hud = new Hud(this);
     this.pause = new PauseOverlay(this);
     this.drawHud();
@@ -158,11 +160,13 @@ export class RouteScene extends Phaser.Scene {
     exposeDebug(() => this.snapshot());
   }
 
-  update(_time: number, delta: number): void {
+  update(_time: number, rawDelta: number): void {
     if (!this.focused) return;
     if (this.mapRequested) { this.input.keyboard?.resetKeys(); this.scene.start('MapScene'); return; }
     if (this.retryRequested) { this.input.keyboard?.resetKeys(); this.scene.restart(); return; }
     if (this.paused) return;
+    // Same 100 ms cap as the guardian: a stall never lets a Firewall jump through Kipu.
+    const delta = frameDelta(rawDelta);
     this.anim += delta;
     if (this.ending !== 'playing') { this.animate(delta, 0); return; }
     const now = this.clock += delta;
@@ -363,7 +367,7 @@ export class RouteScene extends Phaser.Scene {
     if (this.caption.text === text) return;
     const width = text.length * CELL_WIDTH, x = Math.round((GAME.width - width) / 2);
     this.caption.setText(text).setX(x);
-    this.captionBox.setVisible(text.length > 0).setPosition(x - 3, 21).setSize(width + 6, 10);
+    this.captionBox.setVisible(text.length > 0).setPosition(x - 3, CAPTION.top).setSize(width + 6, CAPTION.height);
   }
 
   // Reads physics state only; writes textures, rotation, alpha and particles, never bodies or counters.

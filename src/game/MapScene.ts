@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { createRetroFont } from './textures';
-import { RETRO_FONT, CELL_WIDTH } from './retroFont';
+import { createRetroFonts } from './textures';
+import { CELL_WIDTH, fontKey } from './retroFont';
 import { initialProgress, nodeState, type Progress } from './challengeRules';
 import { RUN_KEY } from './routeRules';
 import { CORRUPTED, convertPixels } from './nokiaPalette';
@@ -32,7 +32,7 @@ export class MapScene extends Phaser.Scene {
   }
   create(): void {
     if (!this.registry.has('progress')) this.registry.set('progress', initialProgress());
-    createRetroFont(this);
+    createRetroFonts(this);
     this.cameras.main.setBackgroundColor(0x122e36);
     // The title types in once per session; every later visit is instant (keyboard-initiated returns never animate).
     this.title = this.centered(8, TEXT.mapTitle, GOLD);
@@ -88,7 +88,7 @@ export class MapScene extends Phaser.Scene {
     for (let column = 0; column < 4; column++) this.cursor.fillRect(66 + nudge + column, 138 + column, 1, 7 - 2 * column);
   }
   private get progress(): Progress { return this.registry.get('progress'); }
-  private text(x: number, y: number, text: string, color = LIGHT): Phaser.GameObjects.BitmapText { return this.add.bitmapText(x, y, RETRO_FONT, text, CELL_WIDTH).setTint(color); }
+  private text(x: number, y: number, text: string, color = LIGHT): Phaser.GameObjects.BitmapText { return this.add.bitmapText(x, y, fontKey(color), text, CELL_WIDTH); }
   private centered(y: number, text: string, color = LIGHT): Phaser.GameObjects.BitmapText { return this.text(Math.round((320 - text.length * CELL_WIDTH) / 2), y, text, color); }
   // Derived purple texture (Canvas ignores tint): same pixels and alpha, luminance mapped to the corruption ramp.
   private prepareCorrupted(): void {

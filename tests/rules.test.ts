@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GAME, canShoot, clamp, clampToBounds, flight, playBounds, projectileExpired, shotVelocity } from '../src/game/rules';
+import { GAME, MAX_FRAME_MS, canShoot, clamp, clampToBounds, flight, frameDelta, playBounds, projectileExpired, shotVelocity } from '../src/game/rules';
 
 const none = { left: false, right: false, up: false, down: false };
 
@@ -70,5 +70,17 @@ describe('projectile cleanup', () => {
   it('keeps projectiles at the exact edges until they leave', () => {
     expect(projectileExpired(0, 1000, 0, 0, 320)).toBe(false);
     expect(projectileExpired(0, 1000, 320, 0, 320)).toBe(false);
+  });
+});
+
+describe('frame-time cap', () => {
+  it('passes normal frames through and caps a long stall at 100 ms so owned clocks never jump', () => {
+    expect(MAX_FRAME_MS).toBe(100);
+    expect(frameDelta(16.7)).toBe(16.7);
+    expect(frameDelta(100)).toBe(100);
+    expect(frameDelta(2500)).toBe(100);
+  });
+  it('never runs a clock backwards', () => {
+    expect(frameDelta(-5)).toBe(0);
   });
 });
