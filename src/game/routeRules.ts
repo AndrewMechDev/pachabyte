@@ -106,7 +106,8 @@ export function glitchlingVelocity(y: number, targetY: number): { vx: number; vy
 
 // bugPoints is the sum of each defeated bug's own value (75 Glitchling, 150 Corruptor, 100 Sombra, 40 small shadow);
 // comboBonus is what the racha multiplier added on top. Both default for older call sites that only count bugs.
-export interface Tally { fragments: number; bugs: number; returns: number; bugPoints?: number; comboBonus?: number }
+// pickups counts the rare pickups collected (B3) and pickupBonus the +100 of each Corazón taken at full hearts.
+export interface Tally { fragments: number; bugs: number; returns: number; bugPoints?: number; comboBonus?: number; pickups?: number; pickupBonus?: number }
 const bugPointsOf = (t: Tally): number => t.bugPoints ?? ROUTE.glitchling.score * t.bugs;
 
 export const addMeter = (meter: number, amount: number): number => clamp(meter + amount, 0, ROUTE.meterMax);
@@ -122,15 +123,16 @@ export function defeatBug(t: Tally, base: number, comboHits: number): { tally: T
 }
 
 // PROVISIONAL score formula (illustrative in docs/design/GDD.md, not approved):
-// 100 x fragments + bug points (75 per Glitchling) + 200 x returns + 10 x max(0, 300 - seconds), plus the racha bonus.
+// 100 x fragments + bug points (75 per Glitchling) + 200 x returns + 10 x max(0, 300 - seconds), plus the racha bonus
+// and the full-heart Corazón bonus.
 export function runningScore(t: Tally): number {
-  return ROUTE.fragment.score * t.fragments + bugPointsOf(t) + ROUTE.returnScore * t.returns + (t.comboBonus ?? 0);
+  return ROUTE.fragment.score * t.fragments + bugPointsOf(t) + ROUTE.returnScore * t.returns + (t.comboBonus ?? 0) + (t.pickupBonus ?? 0);
 }
-export interface ScoreBreakdown { fragments: number; bugs: number; returns: number; combo: number; time: number; total: number }
+export interface ScoreBreakdown { fragments: number; bugs: number; returns: number; combo: number; pickups: number; time: number; total: number }
 export function scoreBreakdown(t: Tally, seconds: number): ScoreBreakdown {
   const fragments = ROUTE.fragment.score * t.fragments, bugs = bugPointsOf(t), returns = ROUTE.returnScore * t.returns, combo = t.comboBonus ?? 0;
-  const time = 10 * Math.max(0, Math.floor(300 - seconds));
-  return { fragments, bugs, returns, combo, time, total: fragments + bugs + returns + combo + time };
+  const pickups = t.pickupBonus ?? 0, time = 10 * Math.max(0, Math.floor(300 - seconds));
+  return { fragments, bugs, returns, combo, pickups, time, total: fragments + bugs + returns + combo + pickups + time };
 }
 export function finalScore(t: Tally, seconds: number): number {
   return scoreBreakdown(t, seconds).total;
@@ -185,13 +187,14 @@ export function takeHit(h: Health, now: number, amount = 1): Health {
   return { hp: Math.max(0, h.hp - Math.max(0, amount)), invulnerableUntil: now + ROUTE.invulnerabilityMs };
 }
 
-// Carried from the route into the guardian through the Phaser registry ('run'). The racha (comboHits) carries too.
+// Carried from the route into the guardian through the Phaser registry ('run'). The racha (comboHits) carries too, and
+// so do the pickup count and bonus for the result screen. Active power-ups (Ráfaga, Escudo) stay in their scene.
 export interface RunState {
   hp: number; score: number; fragments: number; bugs: number; meter: number; routeSeconds: number;
-  bugPoints: number; comboBonus: number; comboHits: number;
+  bugPoints: number; comboBonus: number; comboHits: number; pickups: number; pickupBonus: number;
 }
 export const RUN_KEY = 'run';
-export const directEntry = (): RunState => ({ hp: ROUTE.maxHp, score: 0, fragments: 0, bugs: 0, meter: 0, routeSeconds: 0, bugPoints: 0, comboBonus: 0, comboHits: 0 });
+export const directEntry = (): RunState => ({ hp: ROUTE.maxHp, score: 0, fragments: 0, bugs: 0, meter: 0, routeSeconds: 0, bugPoints: 0, comboBonus: 0, comboHits: 0, pickups: 0, pickupBonus: 0 });
 
 export function readRunState(value: unknown): RunState {
   const fields = ['hp', 'score', 'fragments', 'bugs', 'meter', 'routeSeconds'] as const;
@@ -215,5 +218,7 @@ export function readRunState(value: unknown): RunState {
     bugPoints: count('bugPoints', ROUTE.glitchling.score * bugs),
     comboBonus: count('comboBonus', 0),
     comboHits: count('comboHits', 0),
+    pickups: count('pickups', 0),
+    pickupBonus: count('pickupBonus', 0),
   };
 }

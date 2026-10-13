@@ -49,10 +49,17 @@ describe('result screen', () => {
     const combo = resultLines(breakdown, tally, 300).find(line => line.startsWith(TEXT.resultCombo))!;
     expect(combo.trim().endsWith('450')).toBe(true);
   });
+  it('shows the pickups collected and the full-heart bonus on their own line', () => {
+    const tally = { fragments: 0, bugs: 0, returns: 0, pickups: 5, pickupBonus: 200 };
+    const breakdown = scoreBreakdown(tally, 300);
+    expect(breakdown.total).toBe(200);
+    const line = resultLines(breakdown, tally, 300).find(row => row.startsWith(TEXT.resultPickups))!;
+    expect(line.slice(16).trim().split(/\s+/)).toEqual(['5', '200']);
+  });
   it('lists the provisional score breakdown with a total and the retry/map help', () => {
     const tally = { fragments: 3, bugs: 4, returns: 5 };
     const breakdown = scoreBreakdown(tally, 150.6);
-    expect(breakdown).toEqual({ fragments: 300, bugs: 300, returns: 1000, combo: 0, time: 1490, total: 3090 });
+    expect(breakdown).toEqual({ fragments: 300, bugs: 300, returns: 1000, combo: 0, pickups: 0, time: 1490, total: 3090 });
     const lines = resultLines(breakdown, tally, 150.6);
     expect(lines[0]).toBe(TEXT.resultTitle);
     expect(lines.join('\n')).toContain('3090');

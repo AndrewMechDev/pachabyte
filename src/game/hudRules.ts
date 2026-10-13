@@ -50,6 +50,9 @@ export function wrapLines(text: string, max: number): string[] {
   return lines;
 }
 
+// RÁFAGA label and its draining bar in the top bar, between the racha label (x 142, up to 8 cells) and the score.
+export const RAFAGA_BAR = Object.freeze({ labelX: 194, x: 232, y: 5, width: 40, height: 6 });
+
 // "RACHA ×N" in the top bar once the racha multiplies the score; hidden at ×1 so the bar stays quiet.
 export function comboLabel(multiplier: number): string {
   return multiplier >= 2 ? `${TEXT.combo} ×${Math.floor(multiplier)}` : '';

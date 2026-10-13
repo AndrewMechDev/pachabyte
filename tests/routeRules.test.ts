@@ -138,7 +138,12 @@ describe('fragments, meter and score', () => {
     expect(step.points).toBe(450);
     expect(step.tally).toEqual({ fragments: 0, bugs: 2, returns: 0, bugPoints: 225, comboBonus: 300 });
     expect(runningScore(step.tally)).toBe(525);
-    expect(scoreBreakdown(step.tally, 300)).toEqual({ fragments: 0, bugs: 225, returns: 0, combo: 300, time: 0, total: 525 });
+    expect(scoreBreakdown(step.tally, 300)).toEqual({ fragments: 0, bugs: 225, returns: 0, combo: 300, pickups: 0, time: 0, total: 525 });
+  });
+  it('adds the full-heart Corazón bonus as its own score part (B3 pickups)', () => {
+    const tally: Tally = { fragments: 1, bugs: 0, returns: 0, pickups: 3, pickupBonus: 100 };
+    expect(runningScore(tally)).toBe(200);
+    expect(scoreBreakdown(tally, 300)).toMatchObject({ fragments: 100, pickups: 100, total: 200 });
   });
 });
 
@@ -207,18 +212,22 @@ describe('Kipu health', () => {
 
 describe('run state carried into the guardian', () => {
   it('defaults to a fresh direct entry with 4 HP and an empty meter', () => {
-    expect(directEntry()).toEqual({ hp: 4, score: 0, fragments: 0, bugs: 0, meter: 0, routeSeconds: 0, bugPoints: 0, comboBonus: 0, comboHits: 0 });
+    expect(directEntry()).toEqual({ hp: 4, score: 0, fragments: 0, bugs: 0, meter: 0, routeSeconds: 0, bugPoints: 0, comboBonus: 0, comboHits: 0, pickups: 0, pickupBonus: 0 });
     expect(readRunState(undefined)).toEqual(directEntry());
     expect(readRunState({ hp: 'x' })).toEqual(directEntry());
   });
   it('accepts a carried state and clamps out-of-range values', () => {
     expect(readRunState({ hp: 2, score: 900, fragments: 5, bugs: 4, meter: 140, routeSeconds: 70 }))
-      .toEqual({ hp: 2, score: 900, fragments: 5, bugs: 4, meter: 100, routeSeconds: 70, bugPoints: 300, comboBonus: 0, comboHits: 0 });
+      .toEqual({ hp: 2, score: 900, fragments: 5, bugs: 4, meter: 100, routeSeconds: 70, bugPoints: 300, comboBonus: 0, comboHits: 0, pickups: 0, pickupBonus: 0 });
     expect(readRunState({ hp: 9, score: -1, fragments: 0, bugs: 0, meter: 0, routeSeconds: 0 }).hp).toBe(4);
   });
   it('carries the racha, the bug points and the racha bonus', () => {
     const carried = readRunState({ hp: 3, score: 1600, fragments: 4, bugs: 5, meter: 60, routeSeconds: 70, bugPoints: 640, comboBonus: 560, comboHits: 14.6 });
     expect(carried).toMatchObject({ bugPoints: 640, comboBonus: 560, comboHits: 14 });
     expect(readRunState({ hp: 3, score: 0, fragments: 0, bugs: 0, meter: 0, routeSeconds: 0, comboHits: -5, comboBonus: 'x' })).toMatchObject({ comboHits: 0, comboBonus: 0 });
+  });
+  it('carries the pickups collected and the full-heart bonus', () => {
+    expect(readRunState({ hp: 3, score: 100, fragments: 0, bugs: 0, meter: 0, routeSeconds: 70, pickups: 4, pickupBonus: 100 })).toMatchObject({ pickups: 4, pickupBonus: 100 });
+    expect(readRunState({ hp: 3, score: 0, fragments: 0, bugs: 0, meter: 0, routeSeconds: 0, pickups: 'x', pickupBonus: -3 })).toMatchObject({ pickups: 0, pickupBonus: 0 });
   });
 });

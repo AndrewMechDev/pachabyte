@@ -27,6 +27,8 @@ const comboMultiplier = hits => 1 + [5, 12, 20].filter(t => hits >= t).length;
 // REVERSE tuning from the first human playtest (2026-10-13); mirrors src/game/reverseRules.ts.
 const SLOW_MS = 1200, CAPTURE_RADIUS = 40;
 const phaseFor = hp => (hp > 66 ? 1 : hp > 33 ? 2 : 3);
+// Rare pickups (B3, 2026-10-13); mirror src/game/pickupRules.ts.
+const RAFAGA_MS = 6000, RAFAGA_COOLDOWN = 120, SHOT_COOLDOWN = 180, SHOT_POOL = 36, MAX_HP = 4;
 
 const passed = [];
 const errors = [];
@@ -154,13 +156,16 @@ try {
       ct: s.enemyList.filter(e => e.type === 'corruptor').length, chg: s.enemyList.some(e => e.type === 'corruptor' && e.charging), oc: s.orbs.length,
       lg: s.enemyList.filter(e => e.type === 'sombra').length, sm: smalls.length, smhp: Math.max(0, ...smalls.map(e => e.hp)),
       dodge: s.enemyList.some(e => e.type === 'sombra' && e.dodge !== 'none'), dr: s.fragmentsDropped, dk: s.fragmentList.filter(k => k.dropped).length, fl: s.floaters.active,
+      pw: s.power.rafaga.active, prm: s.power.rafaga.remainingMs, shd: s.power.shield, inv: s.player.invulnerableUntil, pk: s.pickups.map(p => p.type).join(','),
+      pcr: s.pickupsCollected.rafaga, pce: s.pickupsCollected.escudo, pcc: s.pickupsCollected.corazon, pb: s.pickupBonus,
+      vc: s.fire.count, vs: s.fire.lastSize, va: s.fire.lastAt, hr: s.hud.rafaga, hsh: s.hud.shield,
     };
   });
   assert.equal(await page.locator('#view-title').innerText(), 'Ruta 01 — Santuario de la Trama (Arequipa)');
   await wait(text => window.pachaDebug().caption === text, TEXT.intro);
   {
     const s = await snap();
-    assert.equal(s.capacity.shots, 12); assert.equal(s.capacity.enemies, 12); assert.equal(s.capacity.fragments, 10);
+    assert.equal(s.capacity.shots, SHOT_POOL); assert.equal(s.capacity.enemies, 12); assert.equal(s.capacity.fragments, 10); assert.equal(s.capacity.pickups, 4);
     assert.deepEqual([s.capacity.corruptors, s.capacity.shadows, s.capacity.orbs, s.capacity.floaters], [2, 3, 6, 8], 'bounded pools for the new bugs, orbs and floating numbers');
     assert.equal(s.player.bodyWidth, 12); assert.equal(s.player.bodyHeight, 18);
     assert.equal(s.player.displayWidth, 32); assert.equal(s.player.displayHeight, 40);
@@ -214,7 +219,7 @@ try {
 
   // ------------------------------------------------------------------ route bot
   stage = '2 route: scripted keyboard pilot through Ruta 01';
-  const route = { mareaTouched: false, rightDone: false, screenshot: false, bugShot: false, deliberateWall: true };
+  const route = { mareaTouched: false, rightDone: false, screenshot: false, bugShot: false, deliberateWall: true, rafagaPause: null, pickupShot: false };
   // Forecast 0.6 s of the nine flight directions against round orbs and Corruptor bodies (screen space).
   const avoid = (s, px, py, tx, ty) => {
     const rate = s.worldRate ?? 1;
@@ -243,9 +248,12 @@ try {
     const bugs = s.enemyList.filter(bug => bug.x > s.player.x + 2).sort((a, b) => a.x - b.x);
     const knots = s.fragmentList.filter(knot => knot.x > s.player.x - 4 && knot.x - s.cameraX > s.marea.front + 14).sort((a, b) => a.x - b.x);
     if (bugs.length) ty = bugs[0].y + 1; else if (knots.length) ty = knots[0].y;
+    // Rare pickups: fly out to meet the nearest one ahead (it rides the scroll toward Kipu).
+    const item = s.pickups.filter(p => p.screenX > px - 4 && p.screenX < 312 && p.screenX > s.marea.front + 14).sort((a, b) => a.screenX - b.screenX)[0];
+    if (item) { ty = item.y; tx = Math.max(56, Math.min(item.screenX - 4, 230)); }
     // Firewalls: aim for the gap; the first wall (gap 60) is touched on purpose at y 130 to prove its damage.
     const wall = s.walls.filter(w => w.screenX + 8 > px - 10 && w.screenX < px + 190).sort((a, b) => a.screenX - b.screenX)[0];
-    if (wall) ty = wall.gapY === 60 && route.deliberateWall ? 130 : wall.gapY - 1;
+    if (wall) { ty = wall.gapY === 60 && route.deliberateWall ? 130 : wall.gapY - 1; tx = 56; }
     // Marea: wait at the left edge until its contact drains one heart, then flee right.
     if (t > 46500 && t < 62000) tx = route.mareaTouched ? 210 : 30;
     if (t >= 62000) { tx = route.rightDone ? 200 : 400; ty = 97; keys.delete('j'); }
@@ -276,6 +284,23 @@ try {
         route.bugShot = true;
         await canvas.screenshot({ path: 'docs/ruta01-bugs.png' });
       }
+      // Esc pause during a Ráfaga freezes its real-clock timer.
+      if (!route.rafagaPause && s.power.rafaga.active && s.power.rafaga.remainingMs < 5000) {
+        await releaseAll();
+        await page.keyboard.press('Escape');
+        await wait(() => window.pachaDebug().paused === true);
+        const before = await snap();
+        await frames(20);
+        const after = await snap();
+        route.rafagaPause = { before: before.power.rafaga.remainingMs, after: after.power.rafaga.remainingMs, real: [before.realClock, after.realClock] };
+        await page.keyboard.press('Escape');
+        await wait(clock => !window.pachaDebug().paused && window.pachaDebug().realClock > clock, before.realClock);
+        continue;
+      }
+      if (!route.pickupShot && s.pickups.length && s.pickups.some(p => p.screenX > 20 && p.screenX < 300) && (s.power.shield || s.power.rafaga.active)) {
+        route.pickupShot = true;
+        await canvas.screenshot({ path: 'docs/ruta01-pickups.png' });
+      }
       await setKeys(routeKeys(s));
       previous = s;
     }
@@ -291,7 +316,7 @@ try {
     const run = (await snap()).sceneRun;
     await page.keyboard.press('r');
     await wait(previous => window.pachaDebug?.().scene === 'route' && window.pachaDebug().sceneRun > previous && window.pachaDebug().clock > 0, run);
-    Object.assign(route, { mareaTouched: false, rightDone: false });
+    Object.assign(route, { mareaTouched: false, rightDone: false, rafagaPause: null });
     routeAttempts += 1;
     routeResult = await flyRoute();
   }
@@ -305,9 +330,9 @@ try {
 
   stage = '2 route: shots, Glitchling, fragment, Firewall, Marea, threshold and carried state (sampled frames)';
   const pairs = R.slice(1).map((s, i) => [R[i], s]);
-  assert.ok(R.some(s => s.shots > 0) && R.every(s => s.shots <= 12), 'shots fire and stay within the 12-shot pool');
+  assert.ok(R.some(s => s.shots > 0) && R.every(s => s.shots <= SHOT_POOL), `shots fire and stay within the ${SHOT_POOL}-shot pool`);
   for (const [a, b] of pairs) {
-    assert.equal(b.sc - a.sc, 100 * (b.fr - a.fr) + (b.bp - a.bp) + (b.cb - a.cb), `score delta at ${b.c} ms`);
+    assert.equal(b.sc - a.sc, 100 * (b.fr - a.fr) + (b.bp - a.bp) + (b.cb - a.cb) + (b.pb - a.pb), `score delta at ${b.c} ms`);
     if (b.m < 100) assert.equal((b.m - a.m) % 10, 0, `meter moves in steps of 10 at ${b.c} ms`);
     if (b.bg === a.bg + 1) {
       assert.ok(BUG_SCORES.has(b.bp - a.bp), `a debugged bug scores its own value (${b.bp - a.bp}) at ${b.c} ms`);
@@ -349,6 +374,7 @@ try {
   assert.equal(arrival.heroHP, final.hp);
   assert.equal(arrival.reverse.meter, final.m);
   assert.equal(arrival.score, final.sc);
+  assert.equal(arrival.run.pickupBonus, final.pb, 'the full-heart bonus carries into the guardian');
   stage = '2 route B2: Corruptor, Sombra de Error, racha, hit-stop, debug-drop (sampled frames)';
   const firstOrb = pairs.find(([a, b]) => b.oc > a.oc);
   assert.ok(firstOrb, 'a Corruptor must fire an orb');
@@ -379,7 +405,55 @@ try {
   assert.ok(R.some(s => s.dk > 0), 'a dropped fragment appears');
   assert.ok(R.some(s => s.fl > 0) && R.every(s => s.fl <= 8), 'floating numbers show and stay within their pool');
   passed.push(`2 route B2: Corruptor orbs telegraphed by a 600 ms charge, caps (2 Corruptors / 3 shadows) held, quiet Firewall, Sombra dodge and split into two 1 HP shadows, racha up to x${Math.max(...R.map(s => s.cm))} and reset on damage, ${final.hsc} hit-stops (${final.hst} ms) on the world clock only, ${final.dr} debug-drop fragment(s) for ${final.bg} bugs`);
-  passed.push(`2 route: shots fire (pool <= 12), Glitchling wounded then destroyed (+10 meter per hit, +75 score at x1), fragment +100/+20, Firewall contact costs a heart and stops shots, Marea advances and drains a heart, silent threshold with "${TEXT.threshold}", right clamp, transition carries hp ${final.hp} / score ${final.sc} / fragments ${final.fr} / meter ${final.m}`);
+  stage = '2 route B3: Ráfaga de la Trama, Escudo and Corazón (sampled frames)';
+  assert.ok(R.every(s => s.hp <= MAX_HP), 'hearts never exceed 4');
+  const rafagaStarts = pairs.filter(([a, b]) => b.pcr > a.pcr);
+  assert.ok(rafagaStarts.length >= 1, 'a Ráfaga de la Trama must be collected');
+  const rafagaWindows = [];
+  for (const [, start] of rafagaStarts) {
+    // Arcade overlaps run before the scene update advances the owned real clock, so the first sample is up to a frame in.
+    assert.ok(start.pw && start.prm > RAFAGA_MS - 100 && start.prm <= RAFAGA_MS, `a collected Ráfaga starts with ${RAFAGA_MS} ms (${start.prm})`);
+    assert.equal(start.hr, 'RÁFAGA', 'the HUD shows the RÁFAGA bar while it runs');
+    const end = R.find(s => s.rc > start.rc && !s.pw);
+    if (!end || R.some(s => s.rc > start.rc && s.rc < end.rc && s.pcr > start.pcr)) continue;
+    rafagaWindows.push({ start, end, real: end.rc - (start.rc - (RAFAGA_MS - start.prm)) });
+  }
+  assert.ok(rafagaWindows.length >= 1, 'a Ráfaga must run out');
+  for (const w of rafagaWindows) assert.ok(w.real >= RAFAGA_MS && w.real <= RAFAGA_MS + 100, `the Ráfaga lasts ${RAFAGA_MS} ms of real time (${w.real})`);
+  const inside = s => rafagaWindows.some(w => s.rc > w.start.rc && s.rc < w.end.rc);
+  const volleyTimes = (filter) => [...new Set(R.filter(filter).map(s => s.va))].sort((a, b) => a - b);
+  const gaps = times => times.slice(1).map((t, i) => t - times[i]);
+  const triple = pairs.filter(([a, b]) => b.vc > a.vc && inside(a) && inside(b));
+  assert.ok(triple.length >= 10 && triple.every(([, b]) => b.vs === 3), `every volley during a Ráfaga is a triple spread (${triple.length} volleys)`);
+  const fastGaps = gaps(volleyTimes(s => inside(s) && s.vs === 3)).filter(g => g < 400);
+  assert.ok(fastGaps.length >= 8 && fastGaps.every(g => g >= RAFAGA_COOLDOWN - 0.01), `Ráfaga cooldown >= ${RAFAGA_COOLDOWN} ms (${Math.min(...fastGaps)})`);
+  assert.ok(fastGaps.filter(g => g < SHOT_COOLDOWN - 1).length > fastGaps.length / 2, 'the Ráfaga fires faster than the normal cooldown');
+  assert.ok(Math.max(...R.filter(inside).map(s => s.shots)) > 12, 'a Ráfaga keeps more shots on screen than the old 12-shot pool');
+  const after = rafagaWindows[0].end;
+  const single = pairs.filter(([a, b]) => b.vc > a.vc && a.rc >= after.rc && !a.pw && !b.pw && b.c < 62000);
+  assert.ok(single.length >= 5 && single.every(([, b]) => b.vs === 1), 'after the Ráfaga Kipu fires single shots again');
+  const slowGaps = gaps(volleyTimes(s => s.rc >= after.rc && !s.pw && s.vs === 1 && s.c < 62000)).filter(g => g < 400);
+  assert.ok(slowGaps.length >= 3 && slowGaps.every(g => g >= SHOT_COOLDOWN - 0.01), `normal cooldown ${SHOT_COOLDOWN} ms returns (${Math.min(...slowGaps)})`);
+  assert.ok(R.filter(s => !s.pw).every(s => s.hr === ''), 'the RÁFAGA bar hides when it runs out');
+  assert.ok(route.rafagaPause, 'the pilot paused during a Ráfaga');
+  assert.equal(route.rafagaPause.after, route.rafagaPause.before, 'Esc pause freezes the Ráfaga timer');
+  assert.equal(route.rafagaPause.real[1], route.rafagaPause.real[0], 'Esc pause freezes the real clock');
+  const shieldPick = pairs.find(([a, b]) => b.pce > a.pce);
+  assert.ok(shieldPick, 'an Escudo must be collected');
+  assert.ok(shieldPick[1].shd && shieldPick[1].hsh, 'a collected Escudo shows on Kipu and next to the hearts');
+  const absorbed = pairs.find(([a, b]) => a.shd && !b.shd);
+  assert.ok(absorbed, 'the Escudo must absorb a hit');
+  assert.equal(absorbed[1].hp, absorbed[0].hp, 'the absorbed hit costs no heart');
+  assert.ok(absorbed[1].inv > absorbed[0].inv && absorbed[1].inv > absorbed[1].rc, 'the normal invulnerability still triggers on an absorbed hit');
+  const heartPicks = pairs.filter(([a, b]) => b.pcc > a.pcc);
+  assert.ok(heartPicks.length >= 1, 'a Corazón must be collected');
+  for (const [a, b] of heartPicks) {
+    if (a.hp < MAX_HP) assert.ok(b.hp === a.hp + 1 && b.pb === a.pb, `a Corazón heals one heart (${a.hp} -> ${b.hp})`);
+    else assert.ok(b.hp === MAX_HP && b.pb === a.pb + 100, 'a Corazón at full hearts scores +100 instead');
+  }
+  notes.push(`route pickups: ${rafagaStarts.length} Ráfaga (${rafagaWindows.map(w => Math.round(w.real)).join('/')} ms real, ${triple.length} triple volleys), Escudo absorbed at ${Math.round(absorbed[1].c)} ms, Corazón ${heartPicks.map(([a, b]) => `${a.hp}->${b.hp}${b.pb > a.pb ? ' +100' : ''}`).join(', ')}`);
+  passed.push(`2 route B3: Ráfaga triples every volley for ${rafagaWindows.map(w => Math.round(w.real)).join('/')} ms of real time at >= ${RAFAGA_COOLDOWN} ms then reverts to single shots at ${SHOT_COOLDOWN} ms, Esc pause freezes its timer, RÁFAGA bar shows and hides; Escudo shows on Kipu and the HUD and absorbs a hit with no heart lost and invulnerability; Corazón heals (cap ${MAX_HP})`);
+  passed.push(`2 route: shots fire (pool <= ${SHOT_POOL}), Glitchling wounded then destroyed (+10 meter per hit, +75 score at x1), fragment +100/+20, Firewall contact costs a heart and stops shots, Marea advances and drains a heart, silent threshold with "${TEXT.threshold}", right clamp, transition carries hp ${final.hp} / score ${final.sc} / fragments ${final.fr} / meter ${final.m}`);
 
   // ================================================================== 3-5. guardian fight
   stage = '3-5 guardian: keyboard fight with REVERSE';
@@ -394,11 +468,17 @@ try {
       out: s.outcome, lib: s.liberation ? `${s.liberation.stage}${s.liberation.dialogueIndex}` : '', p: s.paused, f: s.focused, nokia: s.nokia,
       msg: s.message, panel: s.panel, wave: s.wave ? (s.wave.active ? 'A' : 'T') : '', head: s.assets.head, dim: s.assets.dimAlpha, ov: s.assets.overlay,
       hs: s.hitStop.active, hsc: s.hitStop.count, ch: s.combo.hits, cm: s.combo.multiplier, fb: s.fightBonus, sc: s.score, fl: s.floaters.active,
+      pk: s.pickups.map(p => p.type).join(','), pkt: s.pickups.map(p => p.texture).join(','), pdc: s.pickupsDropped.corazon, pde: s.pickupsDropped.escudo,
+      pcc: s.pickupsCollected.corazon, pce: s.pickupsCollected.escudo, shd: s.power.shield, inv: s.invulnerableUntil, fpb: s.fightPickups.bonus,
     };
   });
-  const fight = { nokiaDone: false, pauseDone: false, shiftKey: 0, attempts: 0 };
+  const fight = { nokiaDone: false, pauseDone: false, shiftKey: 0, attempts: 0, waveSeen: false };
   const guardianKeys = s => {
     const p = s.player, slow = s.reverse.state === 'SLOW', keys = new Set(['j']);
+    // Phase 3 can start inside an open shield window, and normal fire alone can then end the fight before its wave.
+    // The pilot holds normal fire in phase 3 until the wave has run once, so every run exercises the wave.
+    if (s.wave?.active) fight.waveSeen = true;
+    if (s.phase === 3 && !fight.waveSeen) keys.delete('j');
     // Aim where Amaru's body will be when the shot arrives (head path from amaruRules, world clock).
     const travel = Math.max(0, 240 - p.x - 12) / 230 * 1000 * s.worldScale;
     let tx = 80, ty = 94 + 34 * Math.sin(2 * Math.PI * (s.worldClock + travel) / 7000) + 10 + 1;
@@ -457,7 +537,7 @@ try {
     const colors = JSON.parse(execFileSync('python', ['-c',
       "import json,sys;from PIL import Image;im=Image.open('docs/ruta01-nokia.png').convert('RGB');print(json.dumps(sorted({(r<<16)|(g<<8)|b for r,g,b in im.getdata()})))",
     ], { encoding: 'utf8' }));
-    assert.ok(colors.length > 0 && colors.every(c => NOKIA.includes(c)), `unexpected REVERSE colors: ${colors.slice(0, 12).map(c => c.toString(16)).join(',')} (${colors.length} colors)`);
+    assert.ok(colors.length > 0 && colors.length <= 4 && colors.every(c => NOKIA.includes(c)), `unexpected REVERSE colors: ${colors.slice(0, 12).map(c => c.toString(16)).join(',')} (${colors.length} colors)`);
     const after = await snap();
     assert.equal(after.realClock, frozen.realClock, 'blur freezes the real clock'); assert.equal(after.worldClock, frozen.worldClock, 'blur freezes the world clock');
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
@@ -581,6 +661,22 @@ try {
   assert.ok(gStopped.length > 0 && G.some(s => s.hsc > 0), 'a heavy hit on Amaru stops the world clock while the real clock runs');
   assert.ok(G.some(s => s.fl > 0), 'damage numbers float over Amaru');
   for (const [a, b] of gPairs) if (b.hero < a.hero) assert.ok(b.ch === 0 || b.ch < a.ch, 'damage resets the racha in the fight');
+  stage = '3 B3 guardian drops (sampled frames)';
+  assert.ok(G.every(s => s.hero <= MAX_HP), 'hearts never exceed 4 in the fight');
+  const toPhase = n => gPairs.filter(([a, b]) => a.ph === n - 1 && b.ph === n);
+  assert.ok(toPhase(2).length >= 1 && toPhase(3).length >= 1, 'phase 2 and phase 3 starts were sampled');
+  for (const [a, b] of toPhase(2)) assert.ok(b.pdc === a.pdc + 1 && b.pk.split(',').includes('corazon'), `Amaru drops a Corazón when phase 2 starts (${b.pk})`);
+  for (const [a, b] of toPhase(3)) assert.ok(b.pde === a.pde + 1 && b.pk.split(',').includes('escudo'), `Amaru drops an Escudo when phase 3 starts (${b.pk})`);
+  assert.ok(G.every(s => s.pdc <= 1 && s.pde <= 1), 'one drop per phase start');
+  for (const s of G.filter(s => s.nokia && s.pkt)) assert.ok(s.pkt.split(',').every(t => t.endsWith('-nokia')), `drops use their four-green twins during REVERSE (${s.pkt})`);
+  const drift = G.filter(s => s.pk && !s.p && s.f && s.ws === 1);
+  for (const [a, b] of gPairs.filter(([a, b]) => b.pcc > a.pcc)) {
+    if (a.hero < MAX_HP) assert.ok(b.hero === a.hero + 1, 'a dropped Corazón heals one heart');
+    else assert.equal(b.fpb, a.fpb + 100, 'a dropped Corazón at full hearts scores +100');
+  }
+  for (const [a, b] of gPairs.filter(([a, b]) => a.shd && !b.shd && b.out === 'playing')) assert.ok(b.hero === a.hero && b.inv > a.inv, 'the Escudo absorbs a hit in the fight');
+  notes.push(`fight pickups: drops corazón ${Math.max(...G.map(s => s.pdc))} / escudo ${Math.max(...G.map(s => s.pde))} per run, collected corazón ${Math.max(...G.map(s => s.pcc))} / escudo ${Math.max(...G.map(s => s.pce))}, ${drift.length} frames with a drop on screen`);
+  passed.push(`3 B3: Amaru drops a Corazón at every phase 2 start and an Escudo at every phase 3 start, drops use four-green twins in REVERSE, hearts capped at ${MAX_HP}`);
   passed.push(`3 hit-stop and racha in the fight: ${gStopped.length} sampled frames with the world clock stopped while the real clock ran, damage numbers float, damage resets the racha`);
   passed.push(`3 REVERSE: READY only at 100, ${closed.length} SLOW windows of ${closed.map(r => Math.round(r.end.rc - r.start.rc)).join('/')} ms real at worldScale 0.2, ${captures.length} captures all within reach and never harmful, <= 6 per activation, shield drops only with returned bolts, rhombus/orb silhouettes, wave seen, Esc and focus pause froze real and world clocks`);
 
@@ -608,7 +704,9 @@ try {
   assert.equal(result[0], TEXT.result);
   const points = label => Number(result.find(line => line.startsWith(label)).trim().split(/\s+/).at(-1));
   const count = label => Number(result.find(line => line.startsWith(label)).slice(16).trim().split(/\s+/)[0]);
-  assert.equal(points('TOTAL'), points('FRAGMENTOS') + points('BUGS') + points('DEVOLUCIONES') + points('RACHA') + points('BONO DE TIEMPO'), 'score breakdown adds up');
+  assert.equal(points('TOTAL'), points('FRAGMENTOS') + points('BUGS') + points('DEVOLUCIONES') + points('RACHA') + points('OBJETOS') + points('BONO DE TIEMPO'), 'score breakdown adds up');
+  assert.equal(points('OBJETOS'), won.run.pickupBonus + won.fightPickups.bonus, 'the OBJETOS line adds the full-heart bonuses');
+  assert.equal(count('OBJETOS'), won.run.pickups + won.fightPickups.count, 'the OBJETOS line counts every pickup collected');
   assert.equal(points('RACHA'), won.run.comboBonus + won.fightBonus, 'the racha line adds the route and fight bonuses');
   assert.equal(points('BUGS'), won.run.bugPoints);
   assert.equal(count('DEVOLUCIONES'), won.reverse.returnsTotal);
@@ -618,7 +716,7 @@ try {
   assert.equal(map.node, 'restored'); assert.equal(map.progress.guardian, true);
   assert.match(await page.locator('#view-result').innerText(), /nodo restaurado/);
   assert.match(await page.locator('#achievements').innerText(), /Amaru liberado/);
-  passed.push(`5 phases 1-2-3 by HP thresholds, corrupted head while fighting, victory, liberation: corruption overlay recedes > color wave restores the arena > two dialogue lines > codex > result (total ${points('TOTAL')} = fragments + bugs + returns + racha + time), Enter to map with restored node and progress.guardian true`);
+  passed.push(`5 phases 1-2-3 by HP thresholds, corrupted head while fighting, victory, liberation: corruption overlay recedes > color wave restores the arena > two dialogue lines > codex > result (total ${points('TOTAL')} = fragments + bugs + returns + racha + pickups + time), Enter to map with restored node and progress.guardian true`);
 
   stage = '5 defeat path, READY gate and full retry reset';
   await page.keyboard.press('2');

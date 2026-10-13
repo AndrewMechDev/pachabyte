@@ -1,19 +1,21 @@
 import Phaser from 'phaser';
 import { GAME } from './rules';
 import { CELL_WIDTH, fontKey } from './retroFont';
-import { HEART, comboLabel, formatScore, heartStates, meterFill, type MeterStyle } from './hudRules';
+import { HEART, RAFAGA_BAR, comboLabel, formatScore, heartStates, meterFill, type MeterStyle } from './hudRules';
+import { SHIELD_ICON } from './pickupArt';
 import { NOKIA } from './nokiaPalette';
 import { TEXT } from './text';
 
-const NORMAL = { bar: 0x16343c, line: 0x3a6770, heart: 0xe86a5a, empty: 0x3a6770, meter: 0x59d3c4, full: 0xfff1c3, text: 0xfff1c3, title: 0xedc76c };
-const GREEN = { bar: NOKIA[0], line: NOKIA[1], heart: NOKIA[3], empty: NOKIA[1], meter: NOKIA[2], full: NOKIA[3], text: NOKIA[3] };
+const NORMAL = { bar: 0x16343c, line: 0x3a6770, heart: 0xe86a5a, empty: 0x3a6770, meter: 0x59d3c4, full: 0xfff1c3, text: 0xfff1c3, title: 0xedc76c, shield: 0x7fb8ff, rafaga: 0xf2a65a };
+const GREEN = { bar: NOKIA[0], line: NOKIA[1], heart: NOKIA[3], empty: NOKIA[1], meter: NOKIA[2], full: NOKIA[3], text: NOKIA[3], shield: NOKIA[2], rafaga: NOKIA[3] };
 const METER = { x: 92, y: 5, width: 40, height: 6 };
 
 // meterStyle/meterLevel come from meterDisplay() in the guardian; the route derives them from the meter alone.
 // combo is the racha multiplier (x1 hides the label); comboHot briefly colors it gold after a tier-up.
+// shield shows the Escudo icon after the hearts; rafaga is the 0..1 Ráfaga time left (0 hides its bar).
 export interface HudValues {
   hp: number; maxHp: number; meter: number; score: number; now: number; meterStyle?: MeterStyle; meterLevel?: number; reduced?: boolean;
-  combo?: number; comboHot?: boolean;
+  combo?: number; comboHot?: boolean; shield?: boolean; rafaga?: number;
 }
 
 // Top bar (16 px): pixel hearts for HP, the ENERGÍA meter and a six-digit score. Fixed to the screen.
@@ -22,6 +24,8 @@ export class Hud {
   private readonly energy: Phaser.GameObjects.BitmapText;
   private readonly score: Phaser.GameObjects.BitmapText;
   private readonly combo: Phaser.GameObjects.BitmapText;
+  private readonly rafaga: Phaser.GameObjects.BitmapText;
+  private shieldShown = false;
   private comboFont = '';
   private nokia = false;
 
@@ -31,15 +35,19 @@ export class Hud {
     this.score = scene.add.bitmapText(GAME.width - 4 - 6 * CELL_WIDTH, 4, fontKey(NORMAL.text), formatScore(0), CELL_WIDTH).setScrollFactor(0).setDepth(41);
     // "RACHA ×N" between the meter and the score.
     this.combo = scene.add.bitmapText(142, 4, fontKey(NORMAL.text), '', CELL_WIDTH).setScrollFactor(0).setDepth(41);
+    // "RÁFAGA" and its draining bar between the racha and the score, only while the power-up runs.
+    this.rafaga = scene.add.bitmapText(RAFAGA_BAR.labelX, 4, fontKey(NORMAL.text), TEXT.rafaga, CELL_WIDTH).setScrollFactor(0).setDepth(41).setVisible(false);
   }
 
   get scoreText(): string { return this.score.text; }
   get comboText(): string { return this.combo.text; }
+  get rafagaText(): string { return this.rafaga.visible ? this.rafaga.text : ''; }
+  get shieldIcon(): boolean { return this.shieldShown; }
 
   // Canvas BitmapText ignores tint, so colors come from pre-colored atlases; four-green mode uses the Nokia one.
   setPalette(nokia: boolean): void {
     this.nokia = nokia;
-    for (const label of [this.energy, this.score]) label.setFont(fontKey((nokia ? GREEN : NORMAL).text), CELL_WIDTH);
+    for (const label of [this.energy, this.score, this.rafaga]) label.setFont(fontKey((nokia ? GREEN : NORMAL).text), CELL_WIDTH);
     this.comboFont = '';
   }
 
@@ -56,6 +64,20 @@ export class Hud {
         if (pixel === '1' && (full || edge)) g.fillRect(4 + index * 9 + x, 5 + y, 1, 1);
       }));
     });
+    // Escudo icon right after the hearts (a small closed outline, steady, never flashing).
+    this.shieldShown = values.shield === true;
+    if (this.shieldShown) {
+      const left = 4 + values.maxHp * 9 - 1;
+      g.fillStyle(c.shield);
+      SHIELD_ICON.forEach((row, y) => [...row].forEach((pixel, x) => { if (pixel === '1') g.fillRect(left + x, 5 + y, 1, 1); }));
+    }
+    const level = Math.min(1, Math.max(0, values.rafaga ?? 0));
+    this.rafaga.setVisible(level > 0);
+    if (level > 0) {
+      const b = RAFAGA_BAR;
+      g.fillStyle(c.line).fillRect(b.x, b.y, b.width, b.height).fillStyle(c.bar).fillRect(b.x + 1, b.y + 1, b.width - 2, b.height - 2);
+      g.fillStyle(c.rafaga).fillRect(b.x + 1, b.y + 1, Math.ceil(level * (b.width - 2)), b.height - 2);
+    }
     const style: MeterStyle = values.meterStyle ?? (values.meter >= 100 ? 'ready' : 'charging');
     const inner = METER.width - 2, top = METER.y + 1, height = METER.height - 2;
     const fill = values.meterLevel === undefined ? meterFill(values.meter, inner) : Math.round(Math.min(1, Math.max(0, values.meterLevel)) * inner);

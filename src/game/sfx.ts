@@ -4,7 +4,8 @@
 export type SfxName = 'shot' | 'bossHit' | 'reflectHit' | 'heroHit' | 'capture' | 'shiftOn' | 'release' | 'charge'
   | 'bossFire' | 'victory' | 'defeat' | 'select' | 'fragment' | 'enemyHit' | 'enemyDown' | 'firewall' | 'pause'
   | 'deflect' | 'shieldHit' | 'shieldBreak' | 'wave' | 'restore' | 'blip'
-  | 'corruptorCharge' | 'corruptorShot' | 'sombraDodge' | 'sombraSplit' | 'comboUp';
+  | 'corruptorCharge' | 'corruptorShot' | 'sombraDodge' | 'sombraSplit' | 'comboUp'
+  | 'pickupRafaga' | 'pickupEscudo' | 'pickupCorazon' | 'shieldAbsorb';
 
 export interface Voice { wave: 'square' | 'triangle' | 'sawtooth' | 'sine' | 'noise'; from: number; to: number; at: number; dur: number; gain: number }
 // For 'noise', from/to are the low-pass cutoff sweep in Hz instead of a pitch.
@@ -44,6 +45,12 @@ export const RECIPES: Readonly<Record<SfxName, readonly Voice[]>> = Object.freez
   sombraDodge: [v('triangle', 700, 1400, 0, 0.06, 0.22), v('triangle', 1400, 700, 0.05, 0.06, 0.18)],
   sombraSplit: [v('square', 500, 160, 0, 0.16, 0.32), v('square', 750, 240, 0.03, 0.16, 0.28), v('noise', 3000, 600, 0, 0.12, 0.22)],
   comboUp: [v('square', 660, 660, 0, 0.06, 0.28), v('square', 990, 990, 0.06, 0.1, 0.3)],
+  // Rare pickups (2026-10-13): a fast three-step climb for the Ráfaga, a glassy shimmer for the Escudo, a warm
+  // two-note rise for the Corazón, and a dull crack when the Escudo takes a hit in Kipu's place.
+  pickupRafaga: [v('square', 520, 520, 0, 0.05, 0.28), v('square', 700, 700, 0.05, 0.05, 0.28), v('square', 940, 1400, 0.1, 0.1, 0.3)],
+  pickupEscudo: [v('triangle', 600, 1200, 0, 0.18, 0.35), v('sine', 1200, 1800, 0.04, 0.2, 0.22)],
+  pickupCorazon: [v('triangle', 523, 523, 0, 0.1, 0.4), v('triangle', 784, 784, 0.09, 0.18, 0.4)],
+  shieldAbsorb: [v('noise', 5000, 800, 0, 0.18, 0.4), v('triangle', 1100, 300, 0, 0.2, 0.35)],
 });
 export const SFX_NAMES = Object.keys(RECIPES) as SfxName[];
 

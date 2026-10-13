@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HEART, comboLabel, formatScore, heartStates, meterDisplay, meterFill, wrapLines } from '../src/game/hudRules';
+import { HEART, RAFAGA_BAR, comboLabel, formatScore, heartStates, meterDisplay, meterFill, wrapLines } from '../src/game/hudRules';
 import { TEXT } from '../src/game/text';
 import { missingGlyphs } from '../src/game/retroFont';
 
@@ -10,6 +10,13 @@ describe('HUD helpers', () => {
     expect(comboLabel(4)).toBe('RACHA ×4');
     expect(missingGlyphs(comboLabel(3))).toEqual([]);
     expect(comboLabel(4).length * 6).toBeLessThanOrEqual(130);
+  });
+  it('labels the Ráfaga bar in Spanish and keeps it between the racha and the score', () => {
+    expect(TEXT.rafaga).toBe('RÁFAGA');
+    expect(missingGlyphs(TEXT.rafaga)).toEqual([]);
+    expect(RAFAGA_BAR.labelX).toBeGreaterThanOrEqual(142 + comboLabel(4).length * 6);
+    expect(RAFAGA_BAR.x).toBeGreaterThanOrEqual(RAFAGA_BAR.labelX + TEXT.rafaga.length * 6);
+    expect(RAFAGA_BAR.x + RAFAGA_BAR.width).toBeLessThan(320 - 4 - 6 * 6);
   });
   it('formats scores as six zero-padded digits and clamps the range', () => {
     expect(formatScore(0)).toBe('000000');

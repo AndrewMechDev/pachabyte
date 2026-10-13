@@ -16,7 +16,12 @@ import { FloaterPool, floaterView, hitStopActive, initialHitStop, stoppedPart, t
 import { advanceLiberation, resultLines, stageProgress, startLiberation, tickLiberation, variantKey, type Liberation } from './liberationRules';
 import { ARENA, ARENA_DIM, BODY_TEXTURES, BOLT_TEXTURES, HEAD, HEAD_FLASH, createAmaruTextures, derive } from './amaruTextures';
 import { NOKIA, convertPixels } from './nokiaPalette';
-import { createTextures, createRetroFonts } from './textures';
+import { PICKUP_TEXTURES, createPickupTextures, createTextures, createRetroFonts } from './textures';
+import {
+  PICKUPS, absorbHit, bobOffset, collectPickup, countCollected, dropGone, dropPosition, guardianDrop, initialPower, noPickups, rafagaActive,
+  rafagaLevel, rafagaRemaining, shotCooldown, volleyAngles, type PickupCounts, type PickupKind, type Power,
+} from './pickupRules';
+import { drawKipuShield, drawShieldBreak } from './pickupView';
 import { CELL_HEIGHT, CELL_WIDTH, MARK_ROWS, fontKey } from './retroFont';
 import { KIPU_FRAMES, ParticlePool, bossAngle, burst, chargeLevel, drawParticles, flightTilt, kipuTextureKey, type AttackPhase } from './animation';
 import { KipuAnimator } from './kipuAnimator';
@@ -24,7 +29,7 @@ import { ensureKipuFrames } from './kipuTextures';
 import { sfx } from './sfx';
 import { motion } from './motion';
 import { freeGuardian, initialProgress } from './challengeRules';
-import { ROUTE, RUN_KEY, readRunState, scoreBreakdown, takeHit, type Health, type RunState } from './routeRules';
+import { ROUTE, RUN_KEY, readRunState, scoreBreakdown, type Health, type RunState } from './routeRules';
 import { meterDisplay, wrapLines } from './hudRules';
 import { BossHud, Hud, PauseOverlay } from './hud';
 import { TEXT } from './text';
@@ -41,12 +46,13 @@ type Keys = Record<'a'|'d'|'w'|'s'|'left'|'right'|'up'|'down'|'space'|'j'|'z'|'s
 const ARENA_FLOOR = 164;
 // Kipu stays left of Amaru's head, so the head's forgiving body is never a contact hazard.
 const KIPU_RIGHT = 230;
-const POOL = Object.freeze({ shots: GAME.bulletCapacity, returns: REVERSE.maxCaptures, enemies: 40, particles: 96, floaters: 8 });
+const POOL = Object.freeze({ shots: PICKUPS.shotPool, returns: REVERSE.maxCaptures, enemies: 40, particles: 96, floaters: 8, pickups: 2 });
 const TIMING = Object.freeze({ boltTtl: 7000, returnTtl: 1800, returnSpeed: 240, flashMs: 80, noCaptureMs: 900 });
 const SHIELD_RADIUS = 30;
 // Soft ring pulse when the shield breaks: two hard-pixel rings grow outward in the arena palette (no screen flash).
 const PULSE = Object.freeze({ ms: 360, from: SHIELD_RADIUS, to: SHIELD_RADIUS + 18 });
 const COMBO_HOT_MS = 450;
+const SHIELD_COLOR = 0x7fb8ff;
 // Extra pixels between stacked lines (12 px pitch): accent marks rise MARK_ROWS above the 8 px line cell and still keep
 // two clear rows to the letters above, so a mark never reads as belonging to the previous line.
 const LINE_GAP = MARK_ROWS + 1;
@@ -84,6 +90,7 @@ export class GuardianScene extends Phaser.Scene {
   private shots!: Phaser.Physics.Arcade.Group;
   private returns!: Phaser.Physics.Arcade.Group;
   private enemies!: Phaser.Physics.Arcade.Group;
+  private pickups!: Phaser.Physics.Arcade.Group;
   private keys!: Keys;
   private floor!: Phaser.GameObjects.Graphics;
   private graphics!: Phaser.GameObjects.Graphics;
@@ -153,6 +160,15 @@ export class GuardianScene extends Phaser.Scene {
   private hitStop: HitStop = initialHitStop();
   private worldRate = 1;
   private pulseAt = -Infinity;
+  // Rare pickups (B3): Amaru drops a Corazón at phase 2 and an Escudo at phase 3. Power-ups run on the REAL clock;
+  // drops fly on the WORLD clock. The fight's pickup bonus carries through a checkpoint resume like the racha bonus.
+  private power: Power = initialPower();
+  private collected: PickupCounts = noPickups();
+  private drops: PickupCounts = noPickups();
+  private fightPickups = { count: 0, bonus: 0 };
+  private resumePickups = { count: 0, bonus: 0 };
+  private shieldBreakAt = -Infinity;
+  private volley = { count: 0, shots: 0, lastSize: 0, lastAt: 0 };
 
   constructor() { super('GuardianScene'); }
 
@@ -189,11 +205,15 @@ export class GuardianScene extends Phaser.Scene {
     // A checkpoint resume follows a defeat, which already broke the racha; it keeps the racha bonus already scored.
     this.combo = initialCombo(resume ? 0 : this.entry.comboHits); this.comboHotUntil = 0; this.fightBonus = resume?.comboBonus ?? 0;
     this.hitStop = initialHitStop(); this.worldRate = 1; this.pulseAt = -Infinity;
+    this.power = initialPower(); this.collected = noPickups(); this.drops = noPickups(); this.shieldBreakAt = -Infinity;
+    this.fightPickups = resume ? { ...this.resumePickups } : { count: 0, bonus: 0 }; this.resumePickups = { count: 0, bonus: 0 };
+    this.volley = { count: 0, shots: 0, lastSize: 0, lastAt: 0 };
     this.time.paused = false;
     sfx.setDucked(false);
 
-    createTextures(this); createRetroFonts(this); ensureKipuFrames(this);
-    for (const key of [...KIPU_FRAMES.map(frame => kipuTextureKey(frame, false)), 'bullet']) derive(this, key, `${key}-nokia`, pixels => convertPixels(pixels));
+    createTextures(this); createPickupTextures(this); createRetroFonts(this); ensureKipuFrames(this);
+    // Four-green twins for everything REVERSE can show, the pickup drops included (Canvas ignores tint).
+    for (const key of [...KIPU_FRAMES.map(frame => kipuTextureKey(frame, false)), 'bullet', ...Object.values(PICKUP_TEXTURES)]) derive(this, key, `${key}-nokia`, pixels => convertPixels(pixels));
     createAmaruTextures(this, 0xfff1c3, NOKIA[3]);
 
     this.backdrop = this.add.image(160, 90, ARENA).setDepth(-10);
@@ -223,6 +243,13 @@ export class GuardianScene extends Phaser.Scene {
     this.shots = this.pool(POOL.shots, 'bullet', 7);
     this.returns = this.pool(POOL.returns, BOLT_TEXTURES.returned, 7);
     this.enemies = this.pool(POOL.enemies, BOLT_TEXTURES.orb, 6);
+    this.pickups = this.pool(POOL.pickups, PICKUP_TEXTURES.corazon, 6.5);
+    this.physics.add.overlap(this.pickups, this.player, (first, second) => {
+      const item = (this.pickups.contains(first as Sprite) ? first : second) as Sprite;
+      if (!item.active || this.ending !== 'playing' || this.bossDown) return;
+      item.disableBody(true, true);
+      this.collect(item.getData('kind') as PickupKind, item.x, item.y);
+    });
     this.physics.add.overlap(this.shots, this.boss, (first, second) => {
       // Arcade swaps group/sprite callback order; identify the pool member explicitly.
       const shot = (this.shots.contains(first as Sprite) ? first : second) as Sprite;
@@ -291,6 +318,7 @@ export class GuardianScene extends Phaser.Scene {
     if (this.retry || this.fromStart) {
       // R after a phase 2/3 defeat resumes at that phase; R anywhere else, or Enter after such a defeat, starts over.
       this.resume = this.retry && !this.fromStart && this.ending === 'defeat' ? this.checkpoint : null;
+      this.resumePickups = this.resume ? { ...this.fightPickups } : { count: 0, bonus: 0 };
       this.input.keyboard?.resetKeys(); this.scene.restart(); return;
     }
     if (this.paused) return;
@@ -331,11 +359,7 @@ export class GuardianScene extends Phaser.Scene {
     this.togglePalette(isSlow(this.reverse));
     sfx.setDucked(isSlow(this.reverse));
 
-    if ((k.space.isDown || k.j.isDown || k.z.isDown) && canShoot(now, this.nextShot, this.shots.countActive(false))) {
-      this.spawnShot(this.shots, this.player.x + this.facing * 12, this.player.y - 1, this.facing * GAME.bulletSpeed, 0, 'bullet', now + GAME.bulletLifetimeMs);
-      sfx.play('shot');
-      this.nextShot = now + GAME.shotCooldownMs;
-    }
+    if ((k.space.isDown || k.j.isDown || k.z.isDown) && canShoot(now, this.nextShot, this.shots.countActive(false))) this.fire(now);
 
     this.bossState = tickBoss(this.bossState, world);
     const head = headPosition(world);
@@ -343,11 +367,63 @@ export class GuardianScene extends Phaser.Scene {
     this.placeBody();
     this.attack(world);
     this.stepEnemies(world);
+    this.stepPickups(world, now);
     this.stepAllied(now);
     this.checkWave();
     this.player.setVisible(now >= this.health.invulnerableUntil || Math.floor(now / 90) % 2 === 0);
     if (this.bossDown && victoryReady(this.bossState, this.reverse)) this.victory();
     this.stepMessages(now);
+  }
+
+  // A Ráfaga fires a triple spread around the facing direction at the shorter cooldown. Every shot is a normal shot
+  // (same damage, same shield deflection, same meter charge on contact).
+  private fire(now: number): void {
+    let size = 0;
+    for (const angle of volleyAngles(this.power, now)) {
+      if (this.shots.countActive(false) === 0) break;
+      this.spawnShot(this.shots, this.player.x + this.facing * 12, this.player.y - 1, this.facing * GAME.bulletSpeed * Math.cos(angle), GAME.bulletSpeed * Math.sin(angle), 'bullet', now + GAME.bulletLifetimeMs);
+      size++;
+    }
+    if (size === 0) return;
+    this.volley = { count: this.volley.count + 1, shots: this.volley.shots + size, lastSize: size, lastAt: now };
+    sfx.play('shot');
+    this.nextShot = now + shotCooldown(this.power, now);
+  }
+
+  // ------------------------------------------------------------------ pickups
+  private spawnDrop(kind: PickupKind): void {
+    const item = this.pickups.getFirstDead(false) as Sprite | null;
+    if (!item) return; // bounded pool
+    const world = this.clocks.world, mouth = mouthOf(headPosition(world)), d = PICKUPS.drop;
+    const origin = { x: d.x, y: Phaser.Math.Clamp(Math.round(mouth.y), d.minY, d.maxY) };
+    const base = PICKUP_TEXTURES[kind];
+    item.enableBody(true, origin.x, origin.y, true, true);
+    item.setVelocity(0, 0).setAlpha(1).setTexture(variantKey(base, false, this.palette)).setData({ kind, base, ox: origin.x, oy: origin.y, born: world });
+    (item.body as Body).setSize(PICKUPS.body, PICKUPS.body, true);
+    this.drops = countCollected(this.drops, kind);
+    burst(this.fx, origin.x, origin.y, 6, 30, 260, 'gold', this.clocks.real);
+  }
+
+  // Drops fly slowly left on the world clock (slower in REVERSE, still in a hit-stop) with a gentle real-clock bob.
+  private stepPickups(world: number, now: number): void {
+    const bob = bobOffset(now, motion.reduced);
+    for (const item of this.alive(this.pickups)) {
+      const p = dropPosition({ x: Number(item.getData('ox')), y: Number(item.getData('oy')) }, world - Number(item.getData('born')));
+      if (dropGone(p.x)) { item.disableBody(true, true); continue; }
+      (item.body as Body).reset(p.x, p.y + bob);
+    }
+  }
+
+  private collect(kind: PickupKind, x: number, y: number): void {
+    const now = this.clocks.real, step = collectPickup(kind, this.power, this.health.hp, now);
+    this.power = step.power;
+    this.health = { ...this.health, hp: step.hp };
+    this.fightPickups = { count: this.fightPickups.count + 1, bonus: this.fightPickups.bonus + step.bonus };
+    this.collected = countCollected(this.collected, kind);
+    sfx.play(kind === 'rafaga' ? 'pickupRafaga' : kind === 'escudo' ? 'pickupEscudo' : 'pickupCorazon');
+    burst(this.fx, x, y, 8, 40, 300, kind === 'rafaga' ? 'gold' : kind === 'escudo' ? 'teal' : 'light', now, 2);
+    const label = kind === 'rafaga' ? TEXT.pickupRafaga : kind === 'escudo' ? TEXT.pickupEscudo : step.result === 'heal' ? TEXT.pickupHeal : `+${step.bonus}`;
+    this.floater(label, x, y - 10, step.bonus > 0 ? 'points' : 'damage');
   }
 
   // ------------------------------------------------------------------ REVERSE
@@ -424,6 +500,8 @@ export class GuardianScene extends Phaser.Scene {
     this.cycle = 0; this.resetCycle();
     this.attackStart = this.clocks.world + AMARU.phaseIntroMs;
     this.messages = [{ text: PHASE_NAME[phase], ms: 1400 }]; this.messageUntil = 0;
+    const drop = guardianDrop(phase);
+    if (drop) this.spawnDrop(drop);
     if (phase === 2) {
       this.messages.push({ text: TEXT.amaruLoop, ms: 2200 });
       if (!this.coreAwakened) {
@@ -519,8 +597,18 @@ export class GuardianScene extends Phaser.Scene {
 
   private hurt(): void {
     if (this.bossDown) return;
-    const next = takeHit(this.health, this.clocks.real);
-    if (next === this.health) return;
+    const step = absorbHit(this.health, this.power, this.clocks.real);
+    if (step.result === 'ignored') return;
+    this.health = step.health; this.power = step.power;
+    if (step.result === 'absorbed') {
+      // The Escudo takes the hit: no heart lost, the racha survives, the normal invulnerability still runs.
+      this.shieldBreakAt = this.clocks.real;
+      sfx.play('shieldAbsorb');
+      burst(this.fx, this.player.x, this.player.y, 10, 50, 280, 'teal', this.clocks.real);
+      this.floater(TEXT.shieldAbsorb, this.player.x, this.player.y - 22, 'damage');
+      return;
+    }
+    const next = step.health;
     // Damage never costs or refills REVERSE; it breaks the racha.
     this.health = next;
     this.combo = breakCombo(this.combo);
@@ -557,7 +645,7 @@ export class GuardianScene extends Phaser.Scene {
 
   // Attacks stop, every bolt clears, the palette and the sound return to normal.
   private stopWorld(): void {
-    for (const group of [this.shots, this.returns, this.enemies]) for (const child of group.getChildren()) (child as Sprite).disableBody(true, true);
+    for (const group of [this.shots, this.returns, this.enemies, this.pickups]) for (const child of group.getChildren()) (child as Sprite).disableBody(true, true);
     for (const image of this.orbit) image.setVisible(false);
     this.player.setVelocity(0, 0).setVisible(true);
     this.physics.world.pause();
@@ -585,6 +673,7 @@ export class GuardianScene extends Phaser.Scene {
         const tally = {
           fragments: this.entry.fragments, bugs: this.entry.bugs, returns: this.reverse.returnsTotal,
           bugPoints: this.entry.bugPoints, comboBonus: this.entry.comboBonus + this.fightBonus,
+          pickups: this.entry.pickups + this.fightPickups.count, pickupBonus: this.entry.pickupBonus + this.fightPickups.bonus,
         };
         const seconds = this.entry.routeSeconds + this.fightMs / 1000;
         const lines = resultLines(scoreBreakdown(tally, seconds), tally, seconds);
@@ -601,7 +690,7 @@ export class GuardianScene extends Phaser.Scene {
     // Help may span lines (the checkpoint keys); the centered panel grows to fit them.
     const helpLines = help.split('\n'), helpWidth = Math.max(...helpLines.map(line => line.length)) * CELL_WIDTH;
     const extra = (helpLines.length - 1) * (CELL_HEIGHT + LINE_GAP), centerW = Math.max(200, helpWidth + 16);
-    const box = kind === 'dialogue' ? { x: 8, y: 124, w: 304, h: 44 } : kind === 'codex' ? { x: 24, y: 40, w: 272, h: 100 } : kind === 'result' ? { x: 44, y: 40, w: 232, h: 118 }
+    const box = kind === 'dialogue' ? { x: 8, y: 124, w: 304, h: 44 } : kind === 'codex' ? { x: 24, y: 40, w: 272, h: 100 } : kind === 'result' ? { x: 44, y: 40, w: 232, h: 130 }
       : { x: Math.round((GAME.width - centerW) / 2), y: 70 - Math.round(extra / 2), w: centerW, h: 40 + extra };
     g.fillStyle(c.gold).fillRect(box.x, box.y, box.w, box.h).fillStyle(c.dark).fillRect(box.x + 1, box.y + 1, box.w - 2, box.h - 2);
     const lines = body.split('\n'), widest = Math.max(...lines.map(line => line.length)) * CELL_WIDTH;
@@ -684,6 +773,9 @@ export class GuardianScene extends Phaser.Scene {
     });
     this.fx.step(now, delta / 1000, 0);
     this.fxGraphics.clear(); drawParticles(this.fxGraphics, this.fx, nokia);
+    const ring = nokia ? COLORS.nokia.mid : SHIELD_COLOR;
+    if (this.ending === 'playing' && this.power.shield) drawKipuShield(this.fxGraphics, this.player.x, this.player.y, ring);
+    drawShieldBreak(this.fxGraphics, this.player.x, this.player.y, ring, now - this.shieldBreakAt, motion.reduced);
     this.floaters.step(now);
     this.floaters.items.forEach((f, i) => {
       const label = this.floaterTexts[i];
@@ -729,6 +821,7 @@ export class GuardianScene extends Phaser.Scene {
     this.hud.draw({
       hp: this.health.hp, maxHp: ROUTE.maxHp, meter: this.reverse.meter, score: this.score(), now, meterStyle: display.style, meterLevel: display.fill, reduced: motion.reduced,
       combo: comboMultiplier(this.combo.hits), comboHot: now < this.comboHotUntil,
+      shield: this.ending === 'playing' && this.power.shield, rafaga: this.ending === 'playing' ? rafagaLevel(this.power, now) : 0,
     });
     const b = this.bossState, world = this.clocks.world;
     this.bossHud.draw({ hp: b.hp, maxHp: AMARU.maxHP, phase: b.phase, shield: b.shield, shieldMax: AMARU.shieldMax, shieldUp: b.phase >= 2 && b.shield > 0 && !isVulnerable(b, world), vulnerable: isVulnerable(b, world), now });
@@ -860,7 +953,7 @@ export class GuardianScene extends Phaser.Scene {
     if (this.palette === active) return;
     this.palette = active;
     // Bodies, head, backdrop and orbit follow `palette` in animate(); pooled bolts and labels swap here.
-    for (const group of [this.shots, this.returns, this.enemies]) for (const child of group.getChildren()) {
+    for (const group of [this.shots, this.returns, this.enemies, this.pickups]) for (const child of group.getChildren()) {
       const sprite = child as Sprite, base = sprite.getData('base') as string | undefined;
       if (base) sprite.setTexture(variantKey(base, false, active));
     }
@@ -873,8 +966,8 @@ export class GuardianScene extends Phaser.Scene {
     this.animate(0);
   }
 
-  // Route score + 200 per returned bolt (the provisional formula) + the racha bonus scored in this fight.
-  private score(): number { return this.entry.score + ROUTE.returnScore * this.reverse.returnsTotal + this.fightBonus; }
+  // Route score + 200 per returned bolt (the provisional formula) + the racha bonus and the full-heart bonus of this fight.
+  private score(): number { return this.entry.score + ROUTE.returnScore * this.reverse.returnsTotal + this.fightBonus + this.fightPickups.bonus; }
 
   private togglePause(): void {
     if (this.ending !== 'playing') return;
@@ -928,7 +1021,11 @@ export class GuardianScene extends Phaser.Scene {
       floaters: { active: this.floaters.activeCount, capacity: this.floaters.items.length, texts: this.floaters.items.filter(f => f.active).map(f => f.text) },
       enemyBolts: this.alive(this.enemies).map(bolt => { const v = (bolt.body as Body).velocity; return { x: bolt.x, y: bolt.y, vx: v.x, vy: v.y, capturable: bolt.getData('capturable') === true, shape: bolt.getData('shape'), texture: bolt.texture.key }; }),
       alliedShots: [...this.alive(this.shots).map(s => ({ x: s.x, y: s.y, returned: false })), ...this.alive(this.returns).map(s => ({ x: s.x, y: s.y, returned: true }))],
-      pools: { shots: this.shots.getLength(), returns: this.returns.getLength(), enemies: this.enemies.getLength(), orbit: this.orbit.length, particles: this.fx.items.length, particlesActive: this.fx.activeCount },
+      pools: { shots: this.shots.getLength(), returns: this.returns.getLength(), enemies: this.enemies.getLength(), orbit: this.orbit.length, particles: this.fx.items.length, particlesActive: this.fx.activeCount, pickups: this.pickups.getLength() },
+      power: { rafaga: { active: rafagaActive(this.power, this.clocks.real), remainingMs: rafagaRemaining(this.power, this.clocks.real), until: this.power.rafagaUntil }, shield: this.power.shield, shieldBreakAt: this.shieldBreakAt },
+      pickups: this.alive(this.pickups).map(p => ({ type: p.getData('kind') as PickupKind, x: p.x, y: p.y, texture: p.texture.key })),
+      pickupsCollected: { ...this.collected }, pickupsDropped: { ...this.drops }, fightPickups: { ...this.fightPickups },
+      fire: { ...this.volley, cooldownMs: shotCooldown(this.power, this.clocks.real) },
       player: {
         x: this.player.x, y: this.player.y, velocityX: body.velocity.x, velocityY: body.velocity.y, angle: this.player.angle,
         bodyWidth: body.width, bodyHeight: body.height, bodyRelativeX: body.x - this.player.x, bodyRelativeY: body.y - this.player.y,
@@ -936,7 +1033,7 @@ export class GuardianScene extends Phaser.Scene {
       },
       boss: { x: bossBody.center.x, y: bossBody.center.y, width: bossBody.width, height: bossBody.height, angle: this.boss.angle, texture: this.boss.texture.key, displayWidth: this.boss.displayWidth, displayHeight: this.boss.displayHeight },
       assets: { background: this.backdrop.texture.key, dim: this.backdropDim.texture.key, dimAlpha: this.backdropDim.alpha, head: this.boss.texture.key, segment: this.segments[0].texture.key, overlay: this.headOverlay.visible ? this.headOverlay.alpha : 0, arenaURL: arenaUrl, headURL: headUrl },
-      hud: { score: this.hud.scoreText, combo: this.hud.comboText, phase: this.bossHud.phaseText, status: this.status.text, signal: this.signal.text },
+      hud: { score: this.hud.scoreText, combo: this.hud.comboText, rafaga: this.hud.rafagaText, shield: this.hud.shieldIcon, phase: this.bossHud.phaseText, status: this.status.text, signal: this.signal.text },
       audio: sfx.stats(), kipuFrame: this.animator.frame,
     };
   }

@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { ATLAS_HEIGHT, CELL_WIDTH, CELL_HEIGHT, FONT_CHARACTERS, FONT_COLORS, GLYPHS, LETTER_ROWS, fontKey, glyphCell } from './retroFont';
+import { CORAZON, ESCUDO, PICKUP_COLORS, RAFAGA } from './pickupArt';
+import type { PickupKind } from './pickupRules';
 import { CORRUPTOR_COLORS, CORRUPTOR_FRAMES, FRAGMENT_SMALL, ORB, ORB_COLORS, SHADOW_FRAMES, SOMBRA_COLORS, SOMBRA_FRAMES, silhouette } from './bugArt';
 
 // Original procedural placeholders. These are not animation spritesheets.
@@ -113,6 +115,15 @@ export function createBugTextures(scene: Phaser.Scene): void {
   paint(scene, t.shadowHit, silhouette(SHADOW_FRAMES.drift), flash);
   paint(scene, t.orb, ORB, ORB_COLORS);
   paint(scene, t.fragmentSmall, FRAGMENT_SMALL, { g: 0xedc76c, l: 0xfff1c3, o: 0xa27c52 });
+}
+
+// PLACEHOLDER textures pending the asset requests PICKUP_RAFAGA, PICKUP_ESCUDO and PICKUP_CORAZON (see pickupArt.ts).
+// The guardian derives their four-green twins for REVERSE (Canvas ignores tint).
+export const PICKUP_TEXTURES: Readonly<Record<PickupKind, string>> = Object.freeze({ rafaga: 'pickup-rafaga', escudo: 'pickup-escudo', corazon: 'pickup-corazon' });
+export function createPickupTextures(scene: Phaser.Scene): void {
+  paint(scene, PICKUP_TEXTURES.rafaga, RAFAGA, PICKUP_COLORS);
+  paint(scene, PICKUP_TEXTURES.escudo, ESCUDO, PICKUP_COLORS);
+  paint(scene, PICKUP_TEXTURES.corazon, CORAZON, PICKUP_COLORS);
 }
 
 // One pre-colored atlas per text color; registered once in the shared cache and reused on restart.

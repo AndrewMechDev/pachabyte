@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { GAME, canShoot, flight, frameDelta, oncePerEvent, playBounds, projectileExpired, shotVelocity } from './rules';
 import {
   ROUTE, RUN_KEY, WALLS, addMeter, cameraScroll, captionAt, defeatBug, glitchlingVelocity, mareaFront, mareaTouches, overlaps, pickupFragment, quietSegment,
-  runningScore, segmentAt, spawnsDue, takeHit, wallRects, wallScreenX, wallTelegraph, type Health, type Rect, type RunState, type Spawn, type Tally,
+  runningScore, segmentAt, spawnsDue, wallRects, wallScreenX, wallTelegraph, type Health, type Rect, type RunState, type Spawn, type Tally,
 } from './routeRules';
 import {
   BUGS, BUG_STATS, corruptorCharge, corruptorScreen, corruptorShotsDue, dodgeStage, dropsFragment, linedUpShot, orbExpired, orbVelocity, shadowPosition,
@@ -11,7 +11,12 @@ import {
 import { breakCombo, comboMultiplier, initialCombo, registerHit, type Combo } from './comboRules';
 import { FloaterPool, floaterView, hitStopActive, initialHitStop, triggerHitStop, worldStep, type FloaterSlot, type HitStop } from './effectsRules';
 import { completeRoute, initialProgress, type Progress } from './challengeRules';
-import { BUG_TEXTURES, createBugTextures, createTextures, createRetroFonts, createRouteTextures, drawScenery } from './textures';
+import { BUG_TEXTURES, PICKUP_TEXTURES, createBugTextures, createPickupTextures, createTextures, createRetroFonts, createRouteTextures, drawScenery } from './textures';
+import {
+  PICKUPS, ROUTE_ENTRY_X, absorbHit, bobOffset, collectPickup, countCollected, initialPower, noPickups, pickupsDue, rafagaActive, rafagaLevel,
+  rafagaRemaining, shotCooldown, volleyAngles, type PickupCounts, type PickupKind, type Power,
+} from './pickupRules';
+import { drawKipuShield, drawShieldBreak } from './pickupView';
 import { CELL_HEIGHT, CELL_WIDTH, MARK_ROWS, fontKey } from './retroFont';
 import { ParticlePool, burst, dissolve, drawParticles, flightTilt } from './animation';
 import { KipuAnimator } from './kipuAnimator';
@@ -32,11 +37,11 @@ type Keys = Record<KeyName, Phaser.Input.Keyboard.Key>;
 type Ending = 'playing' | 'defeat' | 'transition';
 
 const POOL = {
-  shots: GAME.bulletCapacity, glitchlings: 12, fragments: 10, particles: 128, floaters: 8,
+  shots: PICKUPS.shotPool, glitchlings: 12, fragments: 10, particles: 128, floaters: 8, pickups: 4,
   corruptors: BUGS.caps.corruptors, shadows: BUGS.caps.shadows, orbs: BUGS.caps.orbs,
 } as const;
 const BACKDROP = { alpha: 0.45, scrollFactor: 0.15 } as const;
-const LIGHT = 0xfff1c3, GOLD = 0xedc76c, TEAL = 0x59d3c4, DIM = 0x3a6770, BAR = 0x16343c, VIOLET = 0xc985ef;
+const LIGHT = 0xfff1c3, GOLD = 0xedc76c, TEAL = 0x59d3c4, DIM = 0x3a6770, BAR = 0x16343c, VIOLET = 0xc985ef, SHIELD = 0x7fb8ff;
 // Caption strip under the HUD: one clear row, the accent rows, the 8 px line cell and one more clear row.
 const CAPTION = Object.freeze({ top: GAME.hudHeight + 2, textY: GAME.hudHeight + 3 + MARK_ROWS, height: 1 + MARK_ROWS + CELL_HEIGHT + 1 });
 // Forgiving bodies, smaller than the drawn placeholders; the art is never scaled.
@@ -59,6 +64,7 @@ export class RouteScene extends Phaser.Scene {
   private shadows!: Phaser.Physics.Arcade.Group;
   private orbs!: Phaser.Physics.Arcade.Group;
   private fragments!: Phaser.Physics.Arcade.Group;
+  private pickups!: Phaser.Physics.Arcade.Group;
   private walls: Phaser.GameObjects.TileSprite[][] = [];
   private marea!: Phaser.GameObjects.TileSprite;
   private overlay!: Phaser.GameObjects.Graphics;
@@ -92,6 +98,12 @@ export class RouteScene extends Phaser.Scene {
   private fragmentsDropped = 0;
   private nextShotAt = 0;
   private spawnCursor = 0;
+  // Rare pickups (B3): power-ups on the REAL clock, the pickup script cursor, counts and the Escudo break effect.
+  private power: Power = initialPower();
+  private pickupCursor = 0;
+  private collected: PickupCounts = noPickups();
+  private shieldBreakAt = -Infinity;
+  private volley = { count: 0, shots: 0, lastSize: 0, lastAt: 0 };
   private thresholdStarted = false;
   private firewallPurged = false;
   private retryRequested = false;
@@ -109,12 +121,14 @@ export class RouteScene extends Phaser.Scene {
     if (!this.registry.has('progress')) this.registry.set('progress', initialProgress());
     this.sceneRun += 1;
     this.clock = 0; this.real = 0; this.anim = 0; this.worldRate = 1; this.focused = true; this.paused = false; this.ending = 'playing';
-    this.health = { hp: ROUTE.maxHp, invulnerableUntil: 0 }; this.meter = 0; this.tally = { fragments: 0, bugs: 0, returns: 0, bugPoints: 0, comboBonus: 0 };
+    this.health = { hp: ROUTE.maxHp, invulnerableUntil: 0 }; this.meter = 0; this.tally = { fragments: 0, bugs: 0, returns: 0, bugPoints: 0, comboBonus: 0, pickups: 0, pickupBonus: 0 };
     this.combo = initialCombo(); this.comboHotUntil = 0; this.hitStop = initialHitStop(); this.fragmentsDropped = 0;
     this.nextShotAt = 0; this.spawnCursor = 0; this.thresholdStarted = false; this.firewallPurged = false;
+    this.power = initialPower(); this.pickupCursor = 0; this.collected = noPickups(); this.shieldBreakAt = -Infinity;
+    this.volley = { count: 0, shots: 0, lastSize: 0, lastAt: 0 };
     this.retryRequested = false; this.mapRequested = false; this.nextGlintAt = 0;
     this.time.paused = false;
-    createTextures(this); createRouteTextures(this); createBugTextures(this); createRetroFonts(this); ensureKipuFrames(this);
+    createTextures(this); createRouteTextures(this); createBugTextures(this); createPickupTextures(this); createRetroFonts(this); ensureKipuFrames(this);
 
     this.cameras.main.setBackgroundColor(BAR).setBounds(0, 0, ROUTE.worldWidth, GAME.height).setScroll(0, 0);
     // Low-contrast parallax: the existing arena art repeated without stretching, under the provisional scenery.
@@ -136,6 +150,7 @@ export class RouteScene extends Phaser.Scene {
     this.shadows = this.pool(BUG_TEXTURES.sombra, POOL.shadows, ...BODY.sombra, 4);
     this.orbs = this.pool(BUG_TEXTURES.orb, POOL.orbs, 4, 4, 6);
     this.fragments = this.pool('fragment', POOL.fragments, 7, 7, 3);
+    this.pickups = this.pool(PICKUP_TEXTURES.rafaga, POOL.pickups, PICKUPS.body, PICKUPS.body, 3);
     this.walls = WALLS.map(wall => wallRects(wall, 0).map(rect => this.add.tileSprite(0, rect.y, rect.width, rect.height, 'firewall').setOrigin(0).setScrollFactor(0).setDepth(4).setVisible(false)));
     this.marea = this.add.tileSprite(0, GAME.playTop, ROUTE.marea.maxFront, GAME.playBottom - GAME.playTop, 'marea').setOrigin(0).setScrollFactor(0).setDepth(8).setVisible(false);
     this.overlay = this.add.graphics().setScrollFactor(0).setDepth(9);
@@ -163,6 +178,12 @@ export class RouteScene extends Phaser.Scene {
       this.meter = next.meter; this.tally = next.tally;
       sfx.play('fragment');
       burst(this.fx, knot.x, knot.y, 8, 45, 320, 'gold', this.anim, 2);
+    });
+    this.physics.add.overlap(this.player, this.pickups, (first, second) => {
+      const item = (this.pickups.contains(first as Sprite) ? first : second) as Sprite;
+      if (!item.active || this.ending !== 'playing') return;
+      item.disableBody(true, true);
+      this.collect(item.getData('kind') as PickupKind, item.x, item.y);
     });
 
     this.floaterTexts = this.floaters.items.map(() => this.add.bitmapText(0, 0, fontKey(LIGHT), '', CELL_WIDTH).setDepth(12).setVisible(false));
@@ -228,6 +249,9 @@ export class RouteScene extends Phaser.Scene {
     this.spawnCursor = step.next;
     const segment = segmentAt(now);
     for (const spawn of step.due) this.spawn(spawn, cameraX, now);
+    const pickupStep = pickupsDue(this.pickupCursor, now);
+    this.pickupCursor = pickupStep.next;
+    for (const p of pickupStep.due) this.spawnPickup(p.kind, p.y, cameraX);
     if (!this.thresholdStarted && segment === 'threshold') this.enterThreshold();
     if (!this.firewallPurged && quietSegment(segment) && !this.thresholdStarted) this.purgeRanged();
 
@@ -244,8 +268,9 @@ export class RouteScene extends Phaser.Scene {
       if (knot.x < cameraX - 12) knot.disableBody(true, true);
       else if (mareaTouches(front, knot.x - cameraX)) { knot.disableBody(true, true); burst(this.fx, knot.x, knot.y, 5, 30, 240, 'violet', this.anim); }
     }
+    this.stepPickups(front, cameraX);
     for (const shot of this.alive(this.shots)) {
-      if (projectileExpired(real, Number(shot.getData('expiresAt')), shot.x, cameraX - 8, cameraX + GAME.width + 8)) shot.disableBody(true, true);
+      if (projectileExpired(real, Number(shot.getData('expiresAt')), shot.x, cameraX - 8, cameraX + GAME.width + 8) || shot.y < GAME.playTop || shot.y > GAME.playBottom) shot.disableBody(true, true);
     }
     this.updateWalls(now, cameraX);
     this.updateMarea(front, cameraX);
@@ -298,15 +323,55 @@ export class RouteScene extends Phaser.Scene {
     }
   }
 
+  // Kipu always fires to the right on the route. A Ráfaga fires a triple spread (centre first) at the shorter cooldown;
+  // each shot keeps the normal damage. A nearly full pool fires what it can.
   private fire(now: number, carry: number): void {
-    const shot = this.shots.getFirstDead(false) as Sprite | null;
-    if (!shot) return;
-    // Kipu always fires to the right on the route.
-    shot.enableBody(true, this.player.x + 12, this.player.y - 1, true, true);
-    shot.setVelocity(shotVelocity(1, carry), 0).setData('expiresAt', now + GAME.bulletLifetimeMs);
+    let size = 0;
+    for (const angle of volleyAngles(this.power, now)) {
+      const shot = this.shots.getFirstDead(false) as Sprite | null;
+      if (!shot) break;
+      shot.enableBody(true, this.player.x + 12, this.player.y - 1, true, true);
+      const vx = angle === 0 ? shotVelocity(1, carry) : GAME.bulletSpeed * Math.cos(angle) + carry;
+      shot.setVelocity(vx, GAME.bulletSpeed * Math.sin(angle)).setData('expiresAt', now + GAME.bulletLifetimeMs);
+      size++;
+    }
+    if (size === 0) return;
+    this.volley = { count: this.volley.count + 1, shots: this.volley.shots + size, lastSize: size, lastAt: now };
     sfx.play('shot');
-    burst(this.fx, shot.x - 2, shot.y, 3, 34, 140, 'gold', this.anim);
-    this.nextShotAt = now + GAME.shotCooldownMs;
+    burst(this.fx, this.player.x + 10, this.player.y - 1, 3, 34, 140, 'gold', this.anim);
+    this.nextShotAt = now + shotCooldown(this.power, now);
+  }
+
+  // ------------------------------------------------------------------ pickups
+  private spawnPickup(kind: PickupKind, y: number, cameraX: number): void {
+    const item = this.pickups.getFirstDead(false) as Sprite | null;
+    if (!item) return; // bounded pool
+    const x = cameraX + ROUTE_ENTRY_X;
+    item.enableBody(true, x, y, true, true);
+    item.setVelocity(0, 0).setAlpha(1).setTexture(PICKUP_TEXTURES[kind]).setData({ kind, baseY: y });
+    (item.body as Body).setSize(PICKUPS.body, PICKUPS.body, true);
+  }
+
+  // Pickups stay still in the world (like fragments) with a gentle bob; the Marea swallows them like fragments.
+  private stepPickups(front: number, cameraX: number): void {
+    const bob = bobOffset(this.anim, motion.reduced);
+    for (const item of this.alive(this.pickups)) {
+      if (item.x < cameraX - 12) { item.disableBody(true, true); continue; }
+      if (mareaTouches(front, item.x - cameraX)) { item.disableBody(true, true); burst(this.fx, item.x, item.y, 5, 30, 240, 'violet', this.anim); continue; }
+      (item.body as Body).reset(item.x, Number(item.getData('baseY')) + bob);
+    }
+  }
+
+  private collect(kind: PickupKind, x: number, y: number): void {
+    const step = collectPickup(kind, this.power, this.health.hp, this.real);
+    this.power = step.power;
+    this.health = { ...this.health, hp: step.hp };
+    this.tally = { ...this.tally, pickups: (this.tally.pickups ?? 0) + 1, pickupBonus: (this.tally.pickupBonus ?? 0) + step.bonus };
+    this.collected = countCollected(this.collected, kind);
+    sfx.play(kind === 'rafaga' ? 'pickupRafaga' : kind === 'escudo' ? 'pickupEscudo' : 'pickupCorazon');
+    burst(this.fx, x, y, 8, 40, 300, kind === 'rafaga' ? 'gold' : kind === 'escudo' ? 'teal' : 'light', this.anim, 2);
+    const label = kind === 'rafaga' ? TEXT.pickupRafaga : kind === 'escudo' ? TEXT.pickupEscudo : step.result === 'heal' ? TEXT.pickupHeal : `+${step.bonus}`;
+    this.floater(label, x, y - 10, step.bonus > 0 ? 'points' : 'damage');
   }
 
   // ------------------------------------------------------------------ bugs
@@ -432,9 +497,18 @@ export class RouteScene extends Phaser.Scene {
   }
 
   private hurt(source: 'bug' | 'firewall' | 'marea'): void {
-    const next = takeHit(this.health, this.real);
-    if (next === this.health) return;
-    this.health = next;
+    const step = absorbHit(this.health, this.power, this.real);
+    if (step.result === 'ignored') return;
+    this.health = step.health; this.power = step.power;
+    if (step.result === 'absorbed') {
+      // The Escudo takes the hit: no heart lost and the racha survives; the normal invulnerability still runs.
+      this.shieldBreakAt = this.anim;
+      sfx.play('shieldAbsorb');
+      burst(this.fx, this.player.x, this.player.y, 10, 50, 280, 'teal', this.anim);
+      this.floater(TEXT.shieldAbsorb, this.player.x, this.player.y - 22, 'damage');
+      return;
+    }
+    const next = step.health;
     this.combo = breakCombo(this.combo);
     sfx.play(source === 'firewall' ? 'firewall' : 'heroHit');
     burst(this.fx, this.player.x, this.player.y - 4, 10, 60, 320, 'violet', this.anim, 2);
@@ -593,6 +667,8 @@ export class RouteScene extends Phaser.Scene {
     this.fx.step(this.anim, delta / 1000, 20);
     this.fxGraphics.clear();
     drawParticles(this.fxGraphics, this.fx, false);
+    if (this.ending === 'playing' && this.power.shield) drawKipuShield(this.fxGraphics, this.player.x, this.player.y, SHIELD);
+    drawShieldBreak(this.fxGraphics, this.player.x, this.player.y, SHIELD, this.anim - this.shieldBreakAt, motion.reduced);
     this.floaters.step(this.anim);
     this.floaters.items.forEach((f, i) => {
       const label = this.floaterTexts[i];
@@ -609,6 +685,7 @@ export class RouteScene extends Phaser.Scene {
     this.hud.draw({
       hp: this.health.hp, maxHp: ROUTE.maxHp, meter: this.meter, score: runningScore(this.tally), now: this.anim,
       combo: comboMultiplier(this.combo.hits), comboHot: this.anim < this.comboHotUntil,
+      shield: this.ending === 'playing' && this.power.shield, rafaga: this.ending === 'playing' ? rafagaLevel(this.power, this.real) : 0,
     });
   }
 
@@ -616,6 +693,7 @@ export class RouteScene extends Phaser.Scene {
     return {
       hp: this.health.hp, score: runningScore(this.tally), fragments: this.tally.fragments, bugs: this.tally.bugs, meter: this.meter, routeSeconds: this.clock / 1000,
       bugPoints: this.tally.bugPoints ?? 0, comboBonus: this.tally.comboBonus ?? 0, comboHits: this.combo.hits,
+      pickups: this.tally.pickups ?? 0, pickupBonus: this.tally.pickupBonus ?? 0,
     };
   }
 
@@ -714,11 +792,15 @@ export class RouteScene extends Phaser.Scene {
       hitStop: { active: hitStopActive(this.hitStop, this.real), from: this.hitStop.from, until: this.hitStop.until, count: this.hitStop.count, totalMs: this.hitStop.totalMs },
       floaters: { active: this.floaters.activeCount, capacity: this.floaters.items.length, texts: this.floaters.items.filter(f => f.active).map(f => f.text) },
       fragmentsDropped: this.fragmentsDropped,
+      power: { rafaga: { active: rafagaActive(this.power, this.real), remainingMs: rafagaRemaining(this.power, this.real), until: this.power.rafagaUntil }, shield: this.power.shield, shieldBreakAt: this.shieldBreakAt },
+      pickups: this.alive(this.pickups).map(p => ({ type: p.getData('kind') as PickupKind, x: p.x, y: p.y, screenX: p.x - cameraX, texture: p.texture.key })),
+      pickupsCollected: { ...this.collected }, pickupBonus: this.tally.pickupBonus ?? 0, pickupCount: this.tally.pickups ?? 0,
+      fire: { ...this.volley, cooldownMs: shotCooldown(this.power, this.real) },
       enemies: enemyList.length, enemyList, fragmentCount: this.fragments.countActive(true), shotCount: this.shots.countActive(true),
       orbs: this.alive(this.orbs).map(o => ({ x: o.x, y: o.y, screenX: o.x - cameraX, vx: Number(o.getData('vx')), vy: Number(o.getData('vy')) })),
       capacity: {
         shots: this.shots.getLength(), enemies: this.glitchlings.getLength(), corruptors: this.corruptors.getLength(), shadows: this.shadows.getLength(),
-        orbs: this.orbs.getLength(), fragments: this.fragments.getLength(), particles: this.fx.items.length, floaters: this.floaters.items.length,
+        orbs: this.orbs.getLength(), fragments: this.fragments.getLength(), particles: this.fx.items.length, floaters: this.floaters.items.length, pickups: this.pickups.getLength(),
       },
       marea: { front: mareaFront(this.clock) },
       walls: WALLS.map((wall, index) => ({ screenX: wallScreenX(this.clock, wall), gapY: wall.gapY, visible: this.walls[index][0].visible, telegraph: wallTelegraph(this.clock, wall) }))
@@ -727,7 +809,7 @@ export class RouteScene extends Phaser.Scene {
       fragmentList: this.alive(this.fragments).map(knot => ({ x: knot.x, y: knot.y, dropped: knot.getData('dropped') === true })),
       shots: this.alive(this.shots).map(shot => ({ x: shot.x, y: shot.y, screenX: shot.x - cameraX })),
       fx: { active: this.fx.activeCount, capacity: this.fx.items.length },
-      audio: sfx.stats(), kipuFrame: this.animator.frame, hud: { score: this.hud.scoreText, combo: this.hud.comboText }, panel: this.panelText.text,
+      audio: sfx.stats(), kipuFrame: this.animator.frame, hud: { score: this.hud.scoreText, combo: this.hud.comboText, rafaga: this.hud.rafagaText, shield: this.hud.shieldIcon }, panel: this.panelText.text,
     };
   }
 }
