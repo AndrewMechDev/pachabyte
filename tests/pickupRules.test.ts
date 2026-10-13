@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   GUARDIAN_DROPS, PICKUPS, PICKUP_KINDS, ROUTE_PICKUPS, absorbHit, bobOffset, collectPickup, countCollected, dropGone, dropPosition, guardianDrop,
-  initialPower, pickupsDue, rafagaActive, rafagaLevel, rafagaRemaining, routePickupScreenX, shotCooldown, volleyAngles, type PickupKind,
+  RAFAGA_DROP, guardianRafagaDrop, initialPower, pickupsDue, rafagaActive, rafagaLevel, rafagaRemaining, routePickupScreenX, shotCooldown, volleyAngles,
+  type PickupKind,
 } from '../src/game/pickupRules';
+import { AMARU, hitBoss, initialBoss, phaseFor, type Boss } from '../src/game/amaruRules';
 import { ROUTE, SEGMENTS, WALLS, overlaps, segmentAt, wallRects, wallScreenX } from '../src/game/routeRules';
 import { GAME } from '../src/game/rules';
 
@@ -161,5 +163,33 @@ describe('readability helpers', () => {
     expect(PICKUP_KINDS).toEqual(['rafaga', 'escudo', 'corazon']);
     expect(countCollected(undefined, 'rafaga')).toEqual({ rafaga: 1, escudo: 0, corazon: 0 });
     expect(countCollected({ rafaga: 1, escudo: 0, corazon: 2 }, 'corazon')).toEqual({ rafaga: 1, escudo: 0, corazon: 3 });
+  });
+});
+
+describe('Ráfaga drops in the guardian fight (user request 2026-10-13: defeat Amaru faster)', () => {
+  const boss = (hp: number, extra: Partial<Boss> = {}): Boss => ({ ...initialBoss(), hp, phase: phaseFor(hp), shield: phaseFor(hp) >= 2 ? AMARU.shieldMax : 0, ...extra });
+  it('drops once when phase 1 reaches the half of its HP range', () => {
+    const mid = RAFAGA_DROP.phase1Hp;
+    expect(mid).toBe(83);
+    expect(guardianRafagaDrop(boss(mid + 1), boss(mid), 'damage', false)).toBe(true);
+    expect(guardianRafagaDrop(boss(mid + 2), boss(mid + 1), 'damage', false)).toBe(false);
+    expect(guardianRafagaDrop(boss(mid), boss(mid - 1), 'damage', false)).toBe(false);
+    // A returned bolt (3 damage) that jumps over the mark still drops it.
+    expect(guardianRafagaDrop(boss(mid + 2), boss(mid - 1), 'damage', false)).toBe(true);
+  });
+  it('drops each time the shield breaks in phase 2, never in phase 3', () => {
+    const before = boss(50, { shield: 3 }), after = boss(50, { shield: 0, vulnerableUntil: 9000 });
+    expect(guardianRafagaDrop(before, after, 'shieldBreak', false)).toBe(true);
+    expect(guardianRafagaDrop(before, after, 'shieldHit', false)).toBe(false);
+    expect(guardianRafagaDrop(boss(20, { shield: 3 }), boss(20, { shield: 0 }), 'shieldBreak', false)).toBe(false);
+  });
+  it('never puts a second Ráfaga on screen', () => {
+    expect(guardianRafagaDrop(boss(RAFAGA_DROP.phase1Hp + 1), boss(RAFAGA_DROP.phase1Hp), 'damage', true)).toBe(false);
+    expect(guardianRafagaDrop(boss(50, { shield: 3 }), boss(50, { shield: 0 }), 'shieldBreak', true)).toBe(false);
+  });
+  it('keeps the shield identity: Ráfaga shots are normal shots and are deflected by the shield', () => {
+    const shielded = boss(50);
+    expect(hitBoss(shielded, 'normal', 0).result).toBe('deflect');
+    expect(volleyAngles(collectPickup('rafaga', initialPower(), 4, 0).power, 10)).toHaveLength(3);
   });
 });

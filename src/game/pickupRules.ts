@@ -1,6 +1,6 @@
 import { GAME } from './rules';
 import { ROUTE, takeHit, type Health } from './routeRules';
-import type { Phase } from './amaruRules';
+import { AMARU, type Boss, type HitResult, type Phase } from './amaruRules';
 
 // Rare pickups approved by the user on 2026-10-13 (docs/design/DECISIONS.md), new mechanics outside the canon:
 // Ráfaga de la Trama (6 s of triple, faster fire), Escudo (absorbs the next hit) and Corazón (+1 heart).
@@ -14,8 +14,9 @@ export const PICKUPS = Object.freeze({
   fullHeartScore: 100,
   // Bounded shot pool sized for a full Ráfaga: 3 shots every 120 ms live about 1.1 s on screen.
   shotPool: 36,
-  // Shared drawn box of the three placeholders (the largest, the Ráfaga, is 15x9) and a forgiving square body.
-  drawn: [15, 9] as readonly [number, number],
+  // Shared drawn box of the three sprites (Ráfaga 15x9, Escudo 12x15, Corazón 13x11 in 16x16 cells) and a forgiving
+  // square body, unchanged from the placeholders.
+  drawn: [15, 15] as readonly [number, number],
   body: 9,
   bob: { px: 2, periodMs: 1400 },
   // Guardian drops leave Amaru's mouth inside Kipu's reach and fly left on the WORLD clock.
@@ -90,6 +91,15 @@ export const routePickupScreenX = (p: PickupSpawn, now: number): number => ROUTE
 // Amaru drops one Corazón when phase 2 starts and one Escudo when phase 3 starts (not on a checkpoint resume).
 export const GUARDIAN_DROPS: Readonly<Partial<Record<Phase, PickupKind>>> = Object.freeze({ 2: 'corazon', 3: 'escudo' });
 export const guardianDrop = (phase: Phase): PickupKind | null => GUARDIAN_DROPS[phase] ?? null;
+// Ráfaga drops (user request 2026-10-13, to defeat Amaru faster): one when phase 1 reaches the half of its HP range
+// (100..67, so at 83) and one every time the phase 2 shield breaks. Never a second Ráfaga on screen; collecting one
+// while active refreshes the timer (collectPickup). Ráfaga shots stay normal shots, so the shield still deflects them.
+export const RAFAGA_DROP = Object.freeze({ phase1Hp: Math.round((AMARU.maxHP + AMARU.phase2From) / 2) });
+export function guardianRafagaDrop(before: Boss, after: Boss, result: HitResult, rafagaOnScreen: boolean): boolean {
+  if (rafagaOnScreen) return false;
+  if (before.phase === 1 && before.hp > RAFAGA_DROP.phase1Hp && after.hp <= RAFAGA_DROP.phase1Hp) return true;
+  return result === 'shieldBreak' && before.phase === 2;
+}
 export function dropPosition(origin: { x: number; y: number }, worldAge: number): { x: number; y: number } {
   return { x: origin.x - PICKUPS.drop.speed * Math.max(0, worldAge) / 1000, y: origin.y };
 }

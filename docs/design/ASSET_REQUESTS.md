@@ -11,9 +11,29 @@ Status flow: `requested → review → approved → integrated → verified`. Un
 | 3 | `AMARU_RESTORED` | 64×64 | Head after liberation | requested |
 | 4 | `BG_AREQUIPA_ROUTE` | 3 layers, 640×180 each | Route parallax background | requested |
 | 5 | `KIPU_FLY_ACTIONS` | 2 × 4 frames × 32×40 | Kipu shooting and PachaShift | requested (optional) |
-| 6 | `BUG_CORRUPTOR` | 4 frames × 24×24 | Ranged route enemy | requested |
-| 7 | `BUG_SOMBRA_DE_ERROR` | 4 × 20×20 + 2 × 12×12 | Splitting route enemy | requested |
-| 8 | `PICKUPS` (Ráfaga, Escudo, Corazón) | 3 × 2 frames × 12×12 | Power-ups on the route and boss drops | requested |
+| 6 | `BUG_CORRUPTOR` | 4 frames × 24×24 | Ranged route enemy | integrated (2026-10-13) |
+| 7 | `BUG_SOMBRA_DE_ERROR` | 4 × 20×20 + 2 × 12×12 | Splitting route enemy | integrated (2026-10-13) |
+| 8 | `PICKUPS` (Ráfaga, Escudo, Corazón) | 3 × 2 frames × 12×12 (integrated at 16×16, see below) | Power-ups on the route and boss drops | integrated (2026-10-13) |
+
+## Integrated deliveries (2026-10-13)
+
+The user generated these with an image chat from the prompts below. Sources are preserved untouched in `assets/incoming/`; the game loads only the prepared copies. None of them came on an exact 8x grid or a uniform cell grid, so they were prepared with the auto mode of `tools/prepare_sprite.py` (split by transparent gaps, art-pixel size estimated from colour-run boundaries, binary alpha, shared palette per sprite type, reduction by a coverage vote that keeps the outline and small bright details). Visual size is independent of the physics bodies, which did not change.
+
+| ID | Source (art pixel found, natural size) | Prepared file | Reduction | Notes |
+|---|---|---|---|---|
+| `BUG_CORRUPTOR` | `bug-corruptor-v1.png` 2172×724, 8.05 px, 59×64 | `bug-corruptor-v1-24x24x4.png` | ÷3 to about 20×22, 8 colours | Frames: idle, idle sway, vent charging, firing. Cracks thin out at this size. |
+| `BUG_SOMBRA_DE_ERROR` (large) | `bug-sombra-v1.png` 1983×793 row 1, 12.17 px, 35×36 | `bug-sombra-v1-20x20x4.png` | ÷2 to about 18×18, 6 colours | Frame 3 (echo on the left) is the dodge warning; the echo outline is fainter than in the source. |
+| `BUG_SOMBRA_DE_ERROR` (small) | same file, row 2, 19×18 | `bug-sombra-small-v1-12x12x2.png` | ÷1.6 to 12×11, 6 colours | The two eyes merge into one glint at this size. |
+| `PICKUPS` | `pickups-v1.png` 1024×1536, 18.04 px, 22×22 | `pickups-v1-16x16x6.png` | ÷1.5 to about 15×15, 6 colours per icon | 12×12 merged the three Ráfaga chevrons into one arrow, so the faithful 16×16 cell was kept. The soft dark halo (alpha ≤ 4) is dropped by the alpha threshold. |
+
+Commands (run from the repository root):
+
+```bash
+python -I tools/prepare_sprite.py assets/incoming/bug-corruptor-v1.png assets/prepared/bug-corruptor-v1-24x24x4.png --auto --target 24x24 --colors 8
+python -I tools/prepare_sprite.py assets/incoming/bug-sombra-v1.png assets/prepared/bug-sombra-v1-20x20x4.png --auto --row 0 --target 20x20 --colors 6
+python -I tools/prepare_sprite.py assets/incoming/bug-sombra-v1.png assets/prepared/bug-sombra-small-v1-12x12x2.png --auto --row 1 --target 12x12 --factor 1.6 --colors 6
+python -I tools/prepare_sprite.py assets/incoming/pickups-v1.png assets/prepared/pickups-v1-16x16x6.png --auto --target 16x16 --factor 1.5 --colors 6
+```
 
 ---
 

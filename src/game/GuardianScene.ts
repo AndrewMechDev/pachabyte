@@ -16,9 +16,11 @@ import { FloaterPool, floaterView, hitStopActive, initialHitStop, stoppedPart, t
 import { advanceLiberation, resultLines, stageProgress, startLiberation, tickLiberation, variantKey, type Liberation } from './liberationRules';
 import { ARENA, ARENA_DIM, BODY_TEXTURES, BOLT_TEXTURES, HEAD, HEAD_FLASH, createAmaruTextures, derive } from './amaruTextures';
 import { NOKIA, convertPixels } from './nokiaPalette';
-import { PICKUP_TEXTURES, createPickupTextures, createTextures, createRetroFonts } from './textures';
+import { PICKUP_TEXTURES, createTextures, createRetroFonts } from './textures';
+import { createSheetTextures, loadSpriteSheets } from './sheetTextures';
+import { pickupFrame } from './spriteFrames';
 import {
-  PICKUPS, absorbHit, bobOffset, collectPickup, countCollected, dropGone, dropPosition, guardianDrop, initialPower, noPickups, rafagaActive,
+  PICKUPS, absorbHit, bobOffset, collectPickup, countCollected, dropGone, dropPosition, guardianDrop, guardianRafagaDrop, initialPower, noPickups, rafagaActive,
   rafagaLevel, rafagaRemaining, shotCooldown, volleyAngles, type PickupCounts, type PickupKind, type Power,
 } from './pickupRules';
 import { drawKipuShield, drawShieldBreak } from './pickupView';
@@ -46,7 +48,8 @@ type Keys = Record<'a'|'d'|'w'|'s'|'left'|'right'|'up'|'down'|'space'|'j'|'z'|'s
 const ARENA_FLOOR = 164;
 // Kipu stays left of Amaru's head, so the head's forgiving body is never a contact hazard.
 const KIPU_RIGHT = 230;
-const POOL = Object.freeze({ shots: PICKUPS.shotPool, returns: REVERSE.maxCaptures, enemies: 40, particles: 96, floaters: 8, pickups: 2 });
+// Pickups: a phase Corazón or Escudo plus a Ráfaga can share the screen, with one slot to spare.
+const POOL = Object.freeze({ shots: PICKUPS.shotPool, returns: REVERSE.maxCaptures, enemies: 40, particles: 96, floaters: 8, pickups: 3 });
 const TIMING = Object.freeze({ boltTtl: 7000, returnTtl: 1800, returnSpeed: 240, flashMs: 80, noCaptureMs: 900 });
 const SHIELD_RADIUS = 30;
 // Soft ring pulse when the shield breaks: two hard-pixel rings grow outward in the arena palette (no screen flash).
@@ -160,7 +163,8 @@ export class GuardianScene extends Phaser.Scene {
   private hitStop: HitStop = initialHitStop();
   private worldRate = 1;
   private pulseAt = -Infinity;
-  // Rare pickups (B3): Amaru drops a Corazón at phase 2 and an Escudo at phase 3. Power-ups run on the REAL clock;
+  // Rare pickups (B3): Amaru drops a Corazón at phase 2 and an Escudo at phase 3, plus Ráfagas (mid phase 1 and every
+  // phase 2 shield break). Power-ups run on the REAL clock;
   // drops fly on the WORLD clock. The fight's pickup bonus carries through a checkpoint resume like the racha bonus.
   private power: Power = initialPower();
   private collected: PickupCounts = noPickups();
@@ -176,6 +180,7 @@ export class GuardianScene extends Phaser.Scene {
     if (!this.textures.exists('kipu-evaluation')) this.load.image('kipu-evaluation', kipuUrl);
     if (!this.textures.exists(HEAD)) this.load.image(HEAD, headUrl);
     if (!this.textures.exists(ARENA)) this.load.image(ARENA, arenaUrl);
+    loadSpriteSheets(this, ['pickups']);
   }
 
   create(): void {
@@ -211,9 +216,9 @@ export class GuardianScene extends Phaser.Scene {
     this.time.paused = false;
     sfx.setDucked(false);
 
-    createTextures(this); createPickupTextures(this); createRetroFonts(this); ensureKipuFrames(this);
-    // Four-green twins for everything REVERSE can show, the pickup drops included (Canvas ignores tint).
-    for (const key of [...KIPU_FRAMES.map(frame => kipuTextureKey(frame, false)), 'bullet', ...Object.values(PICKUP_TEXTURES)]) derive(this, key, `${key}-nokia`, pixels => convertPixels(pixels));
+    // Pickup frames (user sprites) with their four-green twins, like everything else REVERSE can show (Canvas ignores tint).
+    createTextures(this); createSheetTextures(this, ['pickups'], true); createRetroFonts(this); ensureKipuFrames(this);
+    for (const key of [...KIPU_FRAMES.map(frame => kipuTextureKey(frame, false)), 'bullet']) derive(this, key, `${key}-nokia`, pixels => convertPixels(pixels));
     createAmaruTextures(this, 0xfff1c3, NOKIA[3]);
 
     this.backdrop = this.add.image(160, 90, ARENA).setDepth(-10);
@@ -459,8 +464,11 @@ export class GuardianScene extends Phaser.Scene {
 
   // ------------------------------------------------------------------ Amaru
   private hitAmaru(kind: HitKind, x: number, y: number): void {
-    const now = this.clocks.real, step = hitBoss(this.bossState, kind, this.clocks.world);
+    const now = this.clocks.real, before = this.bossState, step = hitBoss(before, kind, this.clocks.world);
     this.bossState = step.boss;
+    // Ráfaga drops: at the middle of phase 1 and at every phase 2 shield break, one on screen at most.
+    const rafagaOnScreen = this.alive(this.pickups).some(item => item.getData('kind') === 'rafaga');
+    if (guardianRafagaDrop(before, step.boss, step.result, rafagaOnScreen)) this.spawnDrop('rafaga');
     // Every normal shot that reaches Amaru charges REVERSE, deflected ones included; returns do not.
     if (kind === 'normal') this.reverse = chargeReverse(this.reverse, REVERSE.perHit);
     const center = (this.boss.body as Body).center;
@@ -763,6 +771,11 @@ export class GuardianScene extends Phaser.Scene {
       const center = (this.boss.body as Body).center;
       this.fx.emit({ x: center.x - 14 + (Math.floor(now / 260) * 13) % 28, y: center.y - 20, vx: 0, vy: -14, ttl: 700, slot: 'violet', size: 1 }, now);
       this.nextAuraAt = now + 260;
+    }
+    // Drops shine now and then (both frames have four-green twins).
+    for (const item of this.alive(this.pickups)) {
+      const key = variantKey(pickupFrame(item.getData('kind') as PickupKind, now, motion.reduced), false, nokia);
+      if (item.texture.key !== key) item.setTexture(key);
     }
     // Captured bolts orbit Kipu and are harmless.
     const captured = this.reverse.state === 'SLOW' && this.ending === 'playing' ? this.reverse.captured : 0;

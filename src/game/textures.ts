@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { ATLAS_HEIGHT, CELL_WIDTH, CELL_HEIGHT, FONT_CHARACTERS, FONT_COLORS, GLYPHS, LETTER_ROWS, fontKey, glyphCell } from './retroFont';
-import { CORAZON, ESCUDO, PICKUP_COLORS, RAFAGA } from './pickupArt';
 import type { PickupKind } from './pickupRules';
-import { CORRUPTOR_COLORS, CORRUPTOR_FRAMES, FRAGMENT_SMALL, ORB, ORB_COLORS, SHADOW_FRAMES, SOMBRA_COLORS, SOMBRA_FRAMES, silhouette } from './bugArt';
+import { FRAGMENT_SMALL, ORB, ORB_COLORS } from './bugArt';
+import { pickupTexture } from './spriteFrames';
 
 // Original procedural placeholders. These are not animation spritesheets.
 export function createTextures(scene: Phaser.Scene): void {
@@ -93,38 +93,21 @@ export function createRouteTextures(scene: Phaser.Scene): void {
   }
 }
 
-// PLACEHOLDER textures pending the asset requests BUG_CORRUPTOR and BUG_SOMBRA_DE_ERROR (see bugArt.ts), plus the
-// Corruptor's round orb and the small fragment that every 4th debugged bug drops. Hit flashes are derived silhouettes.
+// Corruptor, Sombra de Error and its small shadows are the user's sprites (spriteFrames.ts, sliced by sheetTextures.ts);
+// these are their texture keys. The Corruptor's round orb and the small fragment that every 4th debugged bug drops
+// stay procedural placeholders.
 export const BUG_TEXTURES = Object.freeze({
-  corruptor: 'corruptor', corruptorSway: 'corruptor-b', corruptorCharge: 'corruptor-charge', corruptorHit: 'corruptor-hit',
-  sombra: 'sombra', sombraB: 'sombra-b', sombraBlink: 'sombra-blink', sombraHit: 'sombra-hit',
+  corruptor: 'corruptor', corruptorSway: 'corruptor-b', corruptorCharge: 'corruptor-charge', corruptorFire: 'corruptor-fire', corruptorHit: 'corruptor-hit',
+  sombra: 'sombra', sombraB: 'sombra-b', sombraC: 'sombra-c', sombraBlink: 'sombra-blink', sombraHit: 'sombra-hit',
   shadow: 'shadow', shadowB: 'shadow-b', shadowHit: 'shadow-hit', orb: 'corrupt-orb', fragmentSmall: 'fragment-small',
 });
 export function createBugTextures(scene: Phaser.Scene): void {
-  const t = BUG_TEXTURES, flash = { h: 0xfff1c3 };
-  paint(scene, t.corruptor, CORRUPTOR_FRAMES.idle, CORRUPTOR_COLORS);
-  paint(scene, t.corruptorSway, CORRUPTOR_FRAMES.sway, CORRUPTOR_COLORS);
-  paint(scene, t.corruptorCharge, CORRUPTOR_FRAMES.charge, CORRUPTOR_COLORS);
-  paint(scene, t.corruptorHit, silhouette(CORRUPTOR_FRAMES.idle), flash);
-  paint(scene, t.sombra, SOMBRA_FRAMES.drift, SOMBRA_COLORS);
-  paint(scene, t.sombraB, SOMBRA_FRAMES.driftB, SOMBRA_COLORS);
-  paint(scene, t.sombraBlink, SOMBRA_FRAMES.blink, SOMBRA_COLORS);
-  paint(scene, t.sombraHit, silhouette(SOMBRA_FRAMES.drift), flash);
-  paint(scene, t.shadow, SHADOW_FRAMES.drift, SOMBRA_COLORS);
-  paint(scene, t.shadowB, SHADOW_FRAMES.driftB, SOMBRA_COLORS);
-  paint(scene, t.shadowHit, silhouette(SHADOW_FRAMES.drift), flash);
-  paint(scene, t.orb, ORB, ORB_COLORS);
-  paint(scene, t.fragmentSmall, FRAGMENT_SMALL, { g: 0xedc76c, l: 0xfff1c3, o: 0xa27c52 });
+  paint(scene, BUG_TEXTURES.orb, ORB, ORB_COLORS);
+  paint(scene, BUG_TEXTURES.fragmentSmall, FRAGMENT_SMALL, { g: 0xedc76c, l: 0xfff1c3, o: 0xa27c52 });
 }
 
-// PLACEHOLDER textures pending the asset requests PICKUP_RAFAGA, PICKUP_ESCUDO and PICKUP_CORAZON (see pickupArt.ts).
-// The guardian derives their four-green twins for REVERSE (Canvas ignores tint).
-export const PICKUP_TEXTURES: Readonly<Record<PickupKind, string>> = Object.freeze({ rafaga: 'pickup-rafaga', escudo: 'pickup-escudo', corazon: 'pickup-corazon' });
-export function createPickupTextures(scene: Phaser.Scene): void {
-  paint(scene, PICKUP_TEXTURES.rafaga, RAFAGA, PICKUP_COLORS);
-  paint(scene, PICKUP_TEXTURES.escudo, ESCUDO, PICKUP_COLORS);
-  paint(scene, PICKUP_TEXTURES.corazon, CORAZON, PICKUP_COLORS);
-}
+// Pickup frame keys (user sprites); the guardian also derives their four-green twins for REVERSE.
+export const PICKUP_TEXTURES: Readonly<Record<PickupKind, string>> = Object.freeze({ rafaga: pickupTexture('rafaga'), escudo: pickupTexture('escudo'), corazon: pickupTexture('corazon') });
 
 // One pre-colored atlas per text color; registered once in the shared cache and reused on restart.
 // The atlas is ATLAS_HEIGHT tall: letters on the bottom 8 px line, accent marks in the rows above.
@@ -155,40 +138,4 @@ export function createRetroFont(scene: Phaser.Scene, color = 0xffffff): void {
 
 export function createRetroFonts(scene: Phaser.Scene): void {
   for (const color of FONT_COLORS) createRetroFont(scene, color);
-}
-
-// Provisional original native art; alpha lowers contrast so gameplay sprites stay the readable layer.
-export function drawScenery(scene: Phaser.Scene, width: number, alpha = 1): void {
-  const sky = scene.add.graphics().setScrollFactor(0.25).setDepth(-10).setAlpha(alpha);
-  sky.fillStyle(0x243d4a).fillRect(0, 0, width, 180);
-  // No flat square sun: the route's arena backdrop already carries the sky, and a 12x12 block read as a gray artifact.
-  sky.fillStyle(0x294552).fillRect(0, 112, width, 68);
-  for (let x = -60; x < width; x += 240) {
-    sky.fillStyle(0x314b5a).fillTriangle(x, 140, x + 100, 47, x + 215, 140);
-    sky.fillStyle(0x3c5662).fillTriangle(x + 100, 47, x + 127, 112, x + 215, 140);
-    sky.fillStyle(0x526771).fillTriangle(x + 86, 61, x + 100, 47, x + 114, 61);
-    sky.fillStyle(0x465e69).fillTriangle(x + 98, 60, x + 103, 69, x + 114, 61);
-    sky.fillStyle(0x304a55).fillTriangle(x - 25, 147, x + 25, 110, x + 110, 147);
-    sky.fillStyle(0x354e59).fillTriangle(x + 100, 153, x + 167, 119, x + 236, 153);
-  }
-  const town = scene.add.graphics().setScrollFactor(0.65).setDepth(-5).setAlpha(alpha);
-  for (let x = 0, index = 0; x < width; x += 84, index += 1) {
-    const height = [29, 46, 34, 41][index % 4];
-    const top = 154 - height;
-    town.fillStyle(index % 2 ? 0x47616a : 0x425d67).fillRect(x, top, 62, height);
-    town.fillStyle(0x506a72).fillRect(x, top, 62, 2);
-    town.fillStyle(0x3c5661).fillRect(x + 54, top + 2, 8, height - 2);
-    for (let row = top + 9; row < 154; row += 9) {
-      town.fillStyle(0x4b656d).fillRect(x + 1, row, 52, 1);
-    }
-    for (const offset of [10, 39]) {
-      town.fillStyle(0x304a55).fillRect(x + offset, top + 9, 8, 10);
-      town.fillStyle(0x304a55).fillRect(x + offset + 2, top + 7, 4, 2);
-    }
-    town.fillStyle(0x304a55).fillRect(x + 25, 141, 10, 13).fillRect(x + 27, 138, 6, 3);
-    if (index % 3 === 1) {
-      town.fillStyle(0x405b65).fillRect(x + 6, top - 5, 20, 5);
-      town.fillStyle(0x4d6770).fillRect(x + 6, top - 5, 20, 1);
-    }
-  }
 }

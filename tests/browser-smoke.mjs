@@ -29,6 +29,10 @@ const SLOW_MS = 1200, CAPTURE_RADIUS = 40;
 const phaseFor = hp => (hp > 66 ? 1 : hp > 33 ? 2 : 3);
 // Rare pickups (B3, 2026-10-13); mirror src/game/pickupRules.ts.
 const RAFAGA_MS = 6000, RAFAGA_COOLDOWN = 120, SHOT_COOLDOWN = 180, SHOT_POOL = 36, MAX_HP = 4;
+// Guardian Ráfaga drops (2026-10-13): middle of phase 1 (HP 83) and every phase 2 shield break; mirror pickupRules.ts.
+const RAFAGA_DROP_HP = 83;
+// Route background (2026-10-13): only the arena backdrop and the ambient layers; mirror RouteScene.ts and routeAmbient.ts.
+const BACKGROUND_LAYERS = new Set(['backdrop', 'ambient-volcano', 'ambient-clouds']);
 
 const passed = [];
 const errors = [];
@@ -159,6 +163,8 @@ try {
       pw: s.power.rafaga.active, prm: s.power.rafaga.remainingMs, shd: s.power.shield, inv: s.player.invulnerableUntil, pk: s.pickups.map(p => p.type).join(','),
       pcr: s.pickupsCollected.rafaga, pce: s.pickupsCollected.escudo, pcc: s.pickupsCollected.corazon, pb: s.pickupBonus,
       vc: s.fire.count, vs: s.fire.lastSize, va: s.fire.lastAt, hr: s.hud.rafaga, hsh: s.hud.shield,
+      bd: s.background.ambient.band, em: s.background.ambient.ember, pf: s.background.ambient.puffs,
+      tex: [...new Set([...s.enemyList.filter(e => e.type !== 'glitchling').map(e => e.texture), ...s.pickups.map(p => p.texture)])].join(','),
     };
   });
   assert.equal(await page.locator('#view-title').innerText(), 'Ruta 01 — Santuario de la Trama (Arequipa)');
@@ -170,6 +176,11 @@ try {
     assert.equal(s.player.bodyWidth, 12); assert.equal(s.player.bodyHeight, 18);
     assert.equal(s.player.displayWidth, 32); assert.equal(s.player.displayHeight, 40);
     assert.equal(s.hud.score, '000000');
+    // Route background: the arena art (Misti) at high opacity plus the ambient layers; no procedural scenery.
+    const names = s.background.layers.map(l => l.name);
+    assert.ok(names.length > 0 && names.every(n => BACKGROUND_LAYERS.has(n)), `only backdrop and ambient layers behind the play area (${names})`);
+    assert.ok(names.filter(n => n === 'backdrop').length === 1 && s.background.backdropAlpha >= 0.8, 'one whole arena backdrop, clearly visible');
+    assert.ok(s.background.ambient.summits.length === 1 && s.background.ambient.cloudLayers === 3, 'the Misti plume sits on its summit; three cloud layers');
   }
   const still = await snap();
   await frames(30);
@@ -354,9 +365,15 @@ try {
   const wallHit = pairs.find(([a, b]) => b.hp < a.hp && (a.touch || b.touch) && b.seg === 'firewall');
   assert.ok(wallHit, 'touching a Firewall column outside its gap must cost a heart');
   assert.equal(R.reduce((n, s) => n + s.beyond, 0), 0, 'no shot may appear beyond a Firewall while Kipu is in front of it');
+  // Ambient (visual only): a smoke plume always, a faint ember glow now and then, mist bands at the marked transitions.
+  assert.ok(R.every(s => s.pf > 0) && R.some(s => s.em > 0) && R.every(s => s.em <= 0.3), 'the Misti smokes and glows faintly');
+  for (const seg of ['firewall', 'marea', 'threshold']) assert.ok(R.some(s => s.bd === seg), `a mist band marks the ${seg} start`);
+  assert.ok(R.every(s => s.bd === null || ['firewall', 'marea', 'threshold'].includes(s.bd)), 'mist bands only at the marked transitions');
+  const textures = new Set(R.flatMap(s => s.tex.split(',').filter(Boolean)));
+  for (const key of ['corruptor', 'corruptor-charge', 'corruptor-fire', 'sombra', 'sombra-blink', 'shadow', 'pickup-rafaga', 'pickup-rafaga-shine']) assert.ok(textures.has(key), `user sprite frame ${key} shown (${[...textures]})`);
   assert.ok(R.some(s => s.near > 0), 'shots must have been fired at a Firewall column');
   const mareaFronts = R.filter(s => s.c > 48000 && s.c < 56000).map(s => s.front);
-  assert.ok(mareaFronts.length > 10 && mareaFronts.every((f, i) => i === 0 || f >= mareaFronts[i - 1]) && Math.max(...mareaFronts) > 100, 'the Marea front advances from the left edge');
+  assert.ok(mareaFronts.length > 10 && mareaFronts.every((f, i) => i === 0 || f >= mareaFronts[i - 1]) && Math.max(...mareaFronts) > 100, `the Marea front advances from the left edge (${mareaFronts.length} samples, max ${Math.max(...mareaFronts)}, first drop at ${mareaFronts.findIndex((f, i) => i > 0 && f < mareaFronts[i - 1])})`);
   const mareaHit = pairs.find(([a, b]) => b.hp < a.hp && b.front > 0 && b.front >= b.left - 1);
   assert.ok(mareaHit, 'contact with the Marea front must cost a heart');
   const threshold = R.filter(s => s.seg === 'threshold');
@@ -470,6 +487,7 @@ try {
       hs: s.hitStop.active, hsc: s.hitStop.count, ch: s.combo.hits, cm: s.combo.multiplier, fb: s.fightBonus, sc: s.score, fl: s.floaters.active,
       pk: s.pickups.map(p => p.type).join(','), pkt: s.pickups.map(p => p.texture).join(','), pdc: s.pickupsDropped.corazon, pde: s.pickupsDropped.escudo,
       pcc: s.pickupsCollected.corazon, pce: s.pickupsCollected.escudo, shd: s.power.shield, inv: s.invulnerableUntil, fpb: s.fightPickups.bonus,
+      pdr: s.pickupsDropped.rafaga, pcr: s.pickupsCollected.rafaga, pw: s.power.rafaga.active,
     };
   });
   const fight = { nokiaDone: false, pauseDone: false, shiftKey: 0, attempts: 0, waveSeen: false };
@@ -668,6 +686,14 @@ try {
   for (const [a, b] of toPhase(2)) assert.ok(b.pdc === a.pdc + 1 && b.pk.split(',').includes('corazon'), `Amaru drops a Corazón when phase 2 starts (${b.pk})`);
   for (const [a, b] of toPhase(3)) assert.ok(b.pde === a.pde + 1 && b.pk.split(',').includes('escudo'), `Amaru drops an Escudo when phase 3 starts (${b.pk})`);
   assert.ok(G.every(s => s.pdc <= 1 && s.pde <= 1), 'one drop per phase start');
+  // Ráfaga drops: at the middle of phase 1 and at each phase 2 shield break, never two on screen.
+  const rafagaOn = s => s.pk.split(',').filter(k => k === 'rafaga').length;
+  assert.ok(G.every(s => rafagaOn(s) <= 1), 'at most one Ráfaga drop on screen');
+  const halfway = gPairs.filter(([a, b]) => a.ph === 1 && a.hp > RAFAGA_DROP_HP && b.hp <= RAFAGA_DROP_HP);
+  const breaks = gPairs.filter(([a, b]) => a.ph === 2 && b.ph === 2 && a.sh > 0 && b.sh === 0);
+  assert.ok(halfway.length >= 1 && breaks.length >= 1, 'the phase 1 halfway mark and a phase 2 shield break were sampled');
+  for (const [a, b] of [...halfway, ...breaks]) assert.ok(b.pdr === a.pdr + (rafagaOn(a) ? 0 : 1), `a Ráfaga drops at ${a.ph === 1 ? 'mid phase 1' : 'a shield break'} (${a.pdr} -> ${b.pdr}, on screen: ${a.pk})`);
+  for (const pair of gPairs.filter(([a, b]) => b.run === a.run && b.pdr > a.pdr)) assert.ok(halfway.includes(pair) || breaks.includes(pair), `Ráfaga drops only at those two moments (${pair[0].ph}:${pair[0].hp}/${pair[0].sh} -> ${pair[1].hp}/${pair[1].sh})`);
   for (const s of G.filter(s => s.nokia && s.pkt)) assert.ok(s.pkt.split(',').every(t => t.endsWith('-nokia')), `drops use their four-green twins during REVERSE (${s.pkt})`);
   const drift = G.filter(s => s.pk && !s.p && s.f && s.ws === 1);
   for (const [a, b] of gPairs.filter(([a, b]) => b.pcc > a.pcc)) {
@@ -677,6 +703,7 @@ try {
   for (const [a, b] of gPairs.filter(([a, b]) => a.shd && !b.shd && b.out === 'playing')) assert.ok(b.hero === a.hero && b.inv > a.inv, 'the Escudo absorbs a hit in the fight');
   notes.push(`fight pickups: drops corazón ${Math.max(...G.map(s => s.pdc))} / escudo ${Math.max(...G.map(s => s.pde))} per run, collected corazón ${Math.max(...G.map(s => s.pcc))} / escudo ${Math.max(...G.map(s => s.pce))}, ${drift.length} frames with a drop on screen`);
   passed.push(`3 B3: Amaru drops a Corazón at every phase 2 start and an Escudo at every phase 3 start, drops use four-green twins in REVERSE, hearts capped at ${MAX_HP}`);
+  passed.push(`3 A1: Ráfaga drops at mid phase 1 and at ${breaks.length} phase 2 shield breaks (${Math.max(...G.map(s => s.pdr))} dropped in the last run, ${Math.max(...G.map(s => s.pcr))} collected), never two on screen`);
   passed.push(`3 hit-stop and racha in the fight: ${gStopped.length} sampled frames with the world clock stopped while the real clock ran, damage numbers float, damage resets the racha`);
   passed.push(`3 REVERSE: READY only at 100, ${closed.length} SLOW windows of ${closed.map(r => Math.round(r.end.rc - r.start.rc)).join('/')} ms real at worldScale 0.2, ${captures.length} captures all within reach and never harmful, <= 6 per activation, shield drops only with returned bolts, rhombus/orb silhouettes, wave seen, Esc and focus pause froze real and world clocks`);
 
@@ -861,8 +888,17 @@ try {
   await moveAndFire(1500);
   const toggled = await stopSampler('toggled');
   assert.ok(toggled.slice(2).every(s => s.ang === 0 && s.frame === 'idle'), 'turning the toggle on calms the fight again');
+  // The route's ambient background is still under reduced motion: frozen plume, no ember, no mist band, static frames.
+  await page.keyboard.press('m');
+  await wait(() => window.pachaDebug?.().scene === 'map');
+  await page.keyboard.press('1');
+  await wait(() => window.pachaDebug?.().scene === 'route' && window.pachaDebug().clock > 300);
+  await startSampler('calmRoute', s => (s.scene === 'route' ? { em: s.background.ambient.ember, bd: s.background.ambient.band, pf: s.background.ambient.puffs, c: s.clock } : {}));
+  await frames(90);
+  const calmRoute = (await stopSampler('calmRoute')).filter(s => s.c !== undefined);
+  assert.ok(calmRoute.length > 30 && calmRoute.every(s => s.em === 0 && s.bd === null && s.pf === calmRoute[0].pf), 'reduced motion: the Misti plume is frozen, no ember glow and no mist band');
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  passed.push('6 reduced motion: OS preference sets the toggle; no particles, no sway or tilt, neutral Kipu frame while telegraphs and signals remain; the toggle switches it off and on and returns focus');
+  passed.push('6 reduced motion: OS preference sets the toggle; no particles, no sway or tilt, neutral Kipu frame while telegraphs and signals remain; the toggle switches it off and on and returns focus; the route ambient background stays still');
 
   // ================================================================== 9. debug opt-in and errors
   stage = '9 debug opt-in only and zero browser errors';

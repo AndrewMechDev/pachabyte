@@ -63,7 +63,7 @@ F1 and F2 touch many non-trivial files: delegated to one writer each, sequential
 - [x] Phase 3 skip fix (parent inline, one rule): RED observed (vulnerableUntil 7500 instead of 0); every phase entry now raises a full shield and closes open windows. Boss signal renamed DESCARGA to avoid clashing with the RÁFAGA pickup. Parent: 236/236, typecheck 0, build 0, browser smoke passed WebGL and Canvas on 4183.
 
 ## A-series (user request 2026-10-13, after integrating user sprites)
-- [ ] A1 (delegated writer, running): integrate user sprites (Corruptor, Sombra, pickups) via an auto-split prep mode; remove obsolete procedural scenery and stray cyan lines; living Misti (smoke, embers) and transitional cloud bands; Ráfaga drops in the Amaru fight.
+- [x] A1 (delegated writer): integrate user sprites (Corruptor, Sombra, pickups) via an auto-split prep mode; remove obsolete procedural scenery and stray cyan lines; living Misti (smoke, embers) and transitional cloud bands; Ráfaga drops in the Amaru fight.
 - [ ] A2 Dynamic Ruta 01 (spec below; starts after A1, single writer).
 
 ### A2 spec: a route that changes, not only walls and the Marea
@@ -82,3 +82,4 @@ Canon source: docs/design/GDD.md obstacle library (Firewall, Packet Loss, Memory
 | 82-90 Bucle (Infinite Loop) | "BUCLE: ROMPE EL NODO" - the scenery visibly repeats until Kipu shoots a loop node (foreshadows Amaru); max 2 repeats, then it breaks on its own |
 | 90-98 Umbral | quiet, then Amaru |
 Each new hazard: pure rule module + unit tests first, bounded pools, reduce-motion safe, Nokia not needed on the route, debug fields for the smoke, placeholders labelled with asset requests if art is needed.
+- A1 result: tool --auto mode + --self-test; user sprites integrated (Corruptor 24, Sombra 20/12, pickups 16 cells; natural sizes were larger, reduced by coverage vote); obsolete drawScenery triangles/rectangles and decorative drawBrokenLinks cyan dashes removed; living Misti plume/glow, 3 cloud layers, mist bands at Firewall/Marea/threshold; Ráfaga drops at phase 1 mid HP and each phase 2 shield break. RED observed. Writer: 251/251, typecheck 0, build 0, smoke WebGL 2/2, Canvas 2/3 (one failure on the existing Marea-advance check, rerun passed; cause unknown). Parent: 251/251, typecheck 0, self-test pass; screenshot shows a clean backdrop; Corruptor reads small and dark at 24 px.

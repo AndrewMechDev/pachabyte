@@ -3,7 +3,7 @@ import {
   BUGS, BUG_STATS, corruptorCharge, corruptorFireTimes, corruptorLifetime, corruptorScreen, corruptorShotsDue, dodgeStage, dropsFragment, linedUpShot,
   orbExpired, orbVelocity, shadowPosition, sombraTravelMs, sombraWorldX, splitCount, startSombra, stepSombra,
 } from '../src/game/bugRules';
-import { CORRUPTOR_FRAMES, FRAGMENT_SMALL, ORB, SHADOW_FRAMES, SOMBRA_FRAMES, mask, silhouette } from '../src/game/bugArt';
+import { FRAGMENT_SMALL, ORB } from '../src/game/bugArt';
 import { ROUTE } from '../src/game/routeRules';
 import { GAME } from '../src/game/rules';
 
@@ -133,28 +133,11 @@ describe('reparar, no exterminar', () => {
   });
 });
 
-describe('placeholder bug art (pending BUG_CORRUPTOR and BUG_SOMBRA_DE_ERROR)', () => {
+describe('placeholder projectile art', () => {
   const size = (rows: readonly string[]) => [rows[0].length, rows.length];
-  it('uses the requested native sizes with rectangular rows', () => {
-    for (const rows of Object.values(CORRUPTOR_FRAMES)) { expect(size(rows)).toEqual([24, 24]); for (const r of rows) expect(r).toHaveLength(24); }
-    for (const rows of Object.values(SOMBRA_FRAMES)) { expect(size(rows)).toEqual([20, 20]); for (const r of rows) expect(r).toHaveLength(20); }
-    for (const rows of Object.values(SHADOW_FRAMES)) { expect(size(rows)).toEqual([12, 12]); for (const r of rows) expect(r).toHaveLength(12); }
+  it('keeps the round orb and the small fragment small and rectangular', () => {
     expect(size(ORB)).toEqual([5, 5]);
+    for (const r of ORB) expect(r).toHaveLength(5);
     expect(size(FRAGMENT_SMALL)[0]).toBeLessThan(9);
-  });
-  it('glows the Corruptor vent on its left side when charging', () => {
-    const bright = (rows: readonly string[]) => rows.reduce((n, r) => n + [...r.slice(0, 6)].filter(c => c === 'w').length, 0);
-    expect(bright(CORRUPTOR_FRAMES.charge)).toBeGreaterThan(bright(CORRUPTOR_FRAMES.idle));
-  });
-  it('draws the Sombra echo outline on the right, jumping left on the dodge blink', () => {
-    const echoColumns = (rows: readonly string[]) => rows.flatMap(r => [...r].map((c, x) => (c === 'e' ? x : -1)).filter(x => x >= 0));
-    const drift = echoColumns(SOMBRA_FRAMES.drift), blink = echoColumns(SOMBRA_FRAMES.blink);
-    expect(drift.length).toBeGreaterThan(5);
-    expect(Math.max(...drift)).toBeGreaterThan(Math.max(...blink));
-    expect(Math.min(...blink)).toBeLessThan(Math.min(...drift));
-  });
-  it('derives hit flashes from the same silhouette', () => {
-    expect(mask(silhouette(CORRUPTOR_FRAMES.idle))).toEqual(mask(CORRUPTOR_FRAMES.idle));
-    expect(new Set(silhouette(SOMBRA_FRAMES.drift).join('').replace(/\./g, ''))).toEqual(new Set(['h']));
   });
 });

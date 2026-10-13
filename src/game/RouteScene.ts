@@ -11,7 +11,11 @@ import {
 import { breakCombo, comboMultiplier, initialCombo, registerHit, type Combo } from './comboRules';
 import { FloaterPool, floaterView, hitStopActive, initialHitStop, triggerHitStop, worldStep, type FloaterSlot, type HitStop } from './effectsRules';
 import { completeRoute, initialProgress, type Progress } from './challengeRules';
-import { BUG_TEXTURES, PICKUP_TEXTURES, createBugTextures, createPickupTextures, createTextures, createRetroFonts, createRouteTextures, drawScenery } from './textures';
+import { BUG_TEXTURES, PICKUP_TEXTURES, createBugTextures, createTextures, createRetroFonts, createRouteTextures } from './textures';
+import { createSheetTextures, loadSpriteSheets } from './sheetTextures';
+import { corruptorFrame, pickupFrame, shadowFrame, sombraFrame } from './spriteFrames';
+import { backdropCopies, summitsX } from './ambientRules';
+import { RouteAmbient } from './routeAmbient';
 import {
   PICKUPS, ROUTE_ENTRY_X, absorbHit, bobOffset, collectPickup, countCollected, initialPower, noPickups, pickupsDue, rafagaActive, rafagaLevel,
   rafagaRemaining, shotCooldown, volleyAngles, type PickupCounts, type PickupKind, type Power,
@@ -40,11 +44,16 @@ const POOL = {
   shots: PICKUPS.shotPool, glitchlings: 12, fragments: 10, particles: 128, floaters: 8, pickups: 4,
   corruptors: BUGS.caps.corruptors, shadows: BUGS.caps.shadows, orbs: BUGS.caps.orbs,
 } as const;
-const BACKDROP = { alpha: 0.45, scrollFactor: 0.15 } as const;
-const LIGHT = 0xfff1c3, GOLD = 0xedc76c, TEAL = 0x59d3c4, DIM = 0x3a6770, BAR = 0x16343c, VIOLET = 0xc985ef, SHIELD = 0x7fb8ff;
+// The arena art (with the Misti) is the whole route backdrop now: the old procedural mountains, town blocks and
+// broken-link lines were removed (user feedback 2026-10-13), so it shows clearly behind the play area. It is the far
+// layer and stays put: one whole Misti, no repeat seam (mirrored copies showed a symmetric seam); the three cloud
+// layers carry the parallax.
+const BACKDROP = { alpha: 0.85, scrollFactor: 0, depth: -12 } as const;
+const ROUTE_SHEETS = ['corruptor', 'sombra', 'shadow', 'pickups'] as const;
+const LIGHT = 0xfff1c3, GOLD = 0xedc76c, DIM = 0x3a6770, BAR = 0x16343c, VIOLET = 0xc985ef, SHIELD = 0x7fb8ff;
 // Caption strip under the HUD: one clear row, the accent rows, the 8 px line cell and one more clear row.
 const CAPTION = Object.freeze({ top: GAME.hudHeight + 2, textY: GAME.hudHeight + 3 + MARK_ROWS, height: 1 + MARK_ROWS + CELL_HEIGHT + 1 });
-// Forgiving bodies, smaller than the drawn placeholders; the art is never scaled.
+// Forgiving bodies, smaller than the drawn sprites; the art is never scaled and the bodies keep their tuned sizes.
 const BODY: Readonly<Record<EnemyType, readonly [number, number]>> = { glitchling: [8, 8], corruptor: [18, 16], sombra: [12, 13], shadow: [8, 8] };
 const DRAWN: Readonly<Record<EnemyType, number>> = { glitchling: 12, corruptor: 24, sombra: 20, shadow: 12 };
 // Small shadows ignore shots for a moment after a split, so both pieces read before they can be hit.
@@ -109,12 +118,14 @@ export class RouteScene extends Phaser.Scene {
   private retryRequested = false;
   private mapRequested = false;
   private nextGlintAt = 0;
+  private ambient!: RouteAmbient;
 
   constructor() { super('RouteScene'); }
 
   preload(): void {
     if (!this.textures.exists('kipu-evaluation')) this.load.image('kipu-evaluation', kipuUrl);
     if (!this.textures.exists('amaru-arena')) this.load.image('amaru-arena', arenaUrl);
+    loadSpriteSheets(this, ROUTE_SHEETS);
   }
 
   create(): void {
@@ -128,14 +139,16 @@ export class RouteScene extends Phaser.Scene {
     this.volley = { count: 0, shots: 0, lastSize: 0, lastAt: 0 };
     this.retryRequested = false; this.mapRequested = false; this.nextGlintAt = 0;
     this.time.paused = false;
-    createTextures(this); createRouteTextures(this); createBugTextures(this); createPickupTextures(this); createRetroFonts(this); ensureKipuFrames(this);
+    createTextures(this); createRouteTextures(this); createBugTextures(this); createSheetTextures(this, ROUTE_SHEETS); createRetroFonts(this); ensureKipuFrames(this);
 
     this.cameras.main.setBackgroundColor(BAR).setBounds(0, 0, ROUTE.worldWidth, GAME.height).setScroll(0, 0);
-    // Low-contrast parallax: the existing arena art repeated without stretching, under the provisional scenery.
-    const backdropWidth = (ROUTE.worldWidth - GAME.width) * BACKDROP.scrollFactor + GAME.width;
-    for (let x = 0; x < backdropWidth; x += GAME.width) this.add.image(x, 0, 'amaru-arena').setOrigin(0).setScrollFactor(BACKDROP.scrollFactor).setAlpha(BACKDROP.alpha).setDepth(-12);
-    drawScenery(this, ROUTE.worldWidth, 0.35);
-    this.drawBrokenLinks();
+    // The arena art at native size; backdropCopies would tile it (mirrored) if the far layer ever scrolls again.
+    const backdropWidth = (ROUTE.worldWidth - GAME.width) * BACKDROP.scrollFactor + GAME.width, copies = backdropCopies(backdropWidth);
+    for (const copy of copies) {
+      this.add.image(copy.x, 0, 'amaru-arena').setOrigin(0).setFlipX(copy.flip).setScrollFactor(BACKDROP.scrollFactor).setAlpha(BACKDROP.alpha).setDepth(BACKDROP.depth).setName('backdrop');
+    }
+    // Living Misti and drifting mist, behind every gameplay sprite.
+    this.ambient = new RouteAmbient(this, summitsX(copies), BACKDROP.scrollFactor, BACKDROP.depth);
 
     this.player = this.physics.add.sprite(56, 97, 'kipu-evaluation').setOrigin(0.5, 0.55).setDepth(5);
     // Approved 12x18 body at (-6, -8) from the sprite position; the 32x40 art is never scaled.
@@ -597,12 +610,13 @@ export class RouteScene extends Phaser.Scene {
         g.fillStyle(0xc985ef).fillRect(Math.round(front), y, reach, 4);
       }
     }
-    // Corruptor telegraph: the vent charge grows through the 600 ms before each orb (kept under reduced motion).
+    // Corruptor telegraph: the charge grows through the 600 ms before each orb, right where the orb will appear, at
+    // the mouth of the sprite's glowing vent (kept under reduced motion).
     for (const c of this.alive(this.corruptors)) {
       const level = corruptorCharge(now - Number(c.getData('born')));
       if (level <= 0) continue;
       const size = 1 + 2 * Math.round(2 * level), half = Math.floor(size / 2);
-      const vx = Math.round(c.x - cameraX + BUGS.corruptor.ventDx - 3), vy = Math.round(c.y + BUGS.corruptor.ventDy);
+      const vx = Math.round(c.x - cameraX + BUGS.corruptor.ventDx), vy = Math.round(c.y + BUGS.corruptor.ventDy);
       g.fillStyle(VIOLET).fillRect(vx - half, vy - half, size, size);
       if (size >= 3) g.fillStyle(LIGHT).fillRect(vx, vy, 1, 1);
     }
@@ -621,14 +635,6 @@ export class RouteScene extends Phaser.Scene {
     }
   }
 
-  private drawBrokenLinks(): void {
-    // Signals of broken links near the arrival: Trama lines with missing spans (static, world space).
-    const g = this.add.graphics().setDepth(-4);
-    for (const [y, offset] of [[44, 0], [150, 37]] as const) {
-      for (let x = offset; x < 900; x += 46) g.fillStyle(x % 3 ? DIM : TEAL).fillRect(x, y, 28, 1);
-    }
-  }
-
   private updateCaption(text: string): void {
     if (this.caption.text === text) return;
     const width = text.length * CELL_WIDTH, x = Math.round((GAME.width - width) / 2);
@@ -643,21 +649,19 @@ export class RouteScene extends Phaser.Scene {
       this.animator.update({ now: this.anim, velocityY: body.velocity.y, nokia: false, reduced: motion.reduced });
       this.player.setAngle(motion.reduced ? 0 : flightTilt(body.velocity.x - carry, body.velocity.y));
     }
-    const wiggle = !motion.reduced && Math.floor(this.anim / 140) % 2 === 1;
-    const sway = !motion.reduced && Math.floor(this.anim / 260) % 2 === 1;
+    const wiggle = !motion.reduced && Math.floor(this.anim / 140) % 2 === 1, reduced = motion.reduced;
     const hit = (bug: Sprite) => this.anim < Number(bug.getData('hitUntil'));
     for (const bug of this.alive(this.glitchlings)) this.setKey(bug, hit(bug) ? 'glitchling-hit' : wiggle ? 'glitchling-b' : 'glitchling');
-    for (const c of this.alive(this.corruptors)) {
-      const t = BUG_TEXTURES, charging = corruptorCharge(this.clock - Number(c.getData('born'))) > 0;
-      this.setKey(c, hit(c) ? t.corruptorHit : charging ? t.corruptorCharge : sway ? t.corruptorSway : t.corruptor);
-    }
+    for (const c of this.alive(this.corruptors)) this.setKey(c, hit(c) ? BUG_TEXTURES.corruptorHit : corruptorFrame(this.clock - Number(c.getData('born')), this.anim, reduced));
     for (const s of this.alive(this.shadows)) {
       const t = BUG_TEXTURES;
       if (s.getData('type') === 'sombra') {
-        const blink = dodgeStage(s.getData('motion') as SombraMotion, this.clock) === 'telegraph';
-        this.setKey(s, hit(s) ? t.sombraHit : blink ? t.sombraBlink : wiggle ? t.sombraB : t.sombra);
-      } else this.setKey(s, hit(s) ? t.shadowHit : wiggle ? t.shadowB : t.shadow);
+        const warning = dodgeStage(s.getData('motion') as SombraMotion, this.clock) === 'telegraph';
+        this.setKey(s, hit(s) ? t.sombraHit : sombraFrame(warning, this.anim, reduced));
+      } else this.setKey(s, hit(s) ? t.shadowHit : shadowFrame(this.anim, reduced));
     }
+    for (const item of this.alive(this.pickups)) this.setKey(item, pickupFrame(item.getData('kind') as PickupKind, this.anim, reduced));
+    this.ambient.update(this.anim, this.clock, this.cameras.main.scrollX, reduced);
     if (this.anim >= this.nextGlintAt) {
       const knots = this.alive(this.fragments);
       const knot = knots[Math.floor(this.anim / 900) % Math.max(1, knots.length)];
@@ -803,6 +807,10 @@ export class RouteScene extends Phaser.Scene {
         orbs: this.orbs.getLength(), fragments: this.fragments.getLength(), particles: this.fx.items.length, floaters: this.floaters.items.length, pickups: this.pickups.getLength(),
       },
       marea: { front: mareaFront(this.clock) },
+      background: {
+        layers: this.children.list.filter(o => (o as unknown as { depth: number }).depth < 0).map(o => ({ name: o.name, type: o.type, depth: (o as unknown as { depth: number }).depth })),
+        backdropAlpha: BACKDROP.alpha, ambient: this.ambient.snapshot(),
+      },
       walls: WALLS.map((wall, index) => ({ screenX: wallScreenX(this.clock, wall), gapY: wall.gapY, visible: this.walls[index][0].visible, telegraph: wallTelegraph(this.clock, wall) }))
         .filter(wall => wall.visible || wall.telegraph),
       glitchlings: this.alive(this.glitchlings).map(bug => ({ x: bug.x, y: bug.y, hp: Number(bug.getData('hp')) })),
