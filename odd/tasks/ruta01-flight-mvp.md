@@ -61,3 +61,24 @@ F1 and F2 touch many non-trivial files: delegated to one writer each, sequential
 - [x] B2 Corruptor, Sombra de Error, racha, debug-to-fragment, effects (delegated writer): RED observed (4 suites missing modules + 8 failing; a hit-stop test caught a real start-time bug). Corruptor 4 HP ranged orbs with 600 ms charge; Sombra 3 HP dodges once/s and splits into 2 small; racha x2/x3/x4 at 5/12/20; every 4th bug drops a fragment; 50 ms world-only hit-stop (off with reduced motion); pooled damage numbers; shield-break pulse. Caps by pool size (2 Corruptors, 3 shadows, 6 orbs); none during Firewall or threshold. Writer: typecheck 0, 206/206, build 0, smoke 15/15 WebGL and Canvas, first-attempt route and fight. Review: hit-stop disabled under reduced motion; normal boss hits raise racha but score 0.
 - [x] B3 Ráfaga de la Trama, Escudo, Corazón (delegated writer): RED observed (2 missing modules + 10 failing). Ráfaga 6 s real triple spread at 120 ms (refresh, no stack; shot pool 12>36); Escudo absorbs next hit; Corazón +1 to 4 or +100. Route: Ráfaga 11.5 s and 37.4 s, Corazón 36.2 s, Escudo 43.5 s; guardian drops Corazón at phase 2 and Escudo at phase 3 start. Writer: typecheck 0, 235/235, build 0, smoke 17/17 WebGL and Canvas. Finding: phase 3 could be skipped when phase 2's shield window was still open (pre-existing at 9923114); pilot adjusted.
 - [x] Phase 3 skip fix (parent inline, one rule): RED observed (vulnerableUntil 7500 instead of 0); every phase entry now raises a full shield and closes open windows. Boss signal renamed DESCARGA to avoid clashing with the RÁFAGA pickup. Parent: 236/236, typecheck 0, build 0, browser smoke passed WebGL and Canvas on 4183.
+
+## A-series (user request 2026-10-13, after integrating user sprites)
+- [ ] A1 (delegated writer, running): integrate user sprites (Corruptor, Sombra, pickups) via an auto-split prep mode; remove obsolete procedural scenery and stray cyan lines; living Misti (smoke, embers) and transitional cloud bands; Ráfaga drops in the Amaru fight.
+- [ ] A2 Dynamic Ruta 01 (spec below; starts after A1, single writer).
+
+### A2 spec: a route that changes, not only walls and the Marea
+Canon source: docs/design/GDD.md obstacle library (Firewall, Packet Loss, Memory Leak, Infinite Loop, Glitch Zone) and LEVEL_DESIGN. Target length about 90 s, scripted and deterministic, fair (every hit costs 1 heart with invulnerability; at most one new hazard type introduced per segment, each with its own Spanish caption the first time).
+| Segment (approx s) | Content |
+|---|---|
+| 0-8 Llegada | hints, intro line |
+| 8-16 Primeros bugs | Glitchlings + first Sombra |
+| 16-26 Fragmentos | fragment lines + a Corruptor |
+| 26-36 Firewall | unchanged |
+| 36-46 Packet Loss | "PACKET LOSS: CRUZA CUANDO SE PIERDAN" - columns of data blocks that blink out and back on a visible beat (telegraph frames before solidifying); solid blocks hurt; Glitchlings between |
+| 46-56 Erupción del Misti | "¡EL MISTI DESPIERTA!" - embers fall from the top with a marked landing shadow 700 ms before impact; ash dims the sky (visual); a Ráfaga pickup |
+| 56-64 Enjambre mixto | waves of Corruptors and Sombras within the existing caps |
+| 64-72 Memory Leak | "MEMORY LEAK: DRENA TU ENERGÍA" - purple zones that drain the meter while Kipu is inside; fragments placed inside as temptation |
+| 72-82 Marea del Desfase | unchanged chase, a few Glitchlings ahead |
+| 82-90 Bucle (Infinite Loop) | "BUCLE: ROMPE EL NODO" - the scenery visibly repeats until Kipu shoots a loop node (foreshadows Amaru); max 2 repeats, then it breaks on its own |
+| 90-98 Umbral | quiet, then Amaru |
+Each new hazard: pure rule module + unit tests first, bounded pools, reduce-motion safe, Nokia not needed on the route, debug fields for the smoke, placeholders labelled with asset requests if art is needed.
