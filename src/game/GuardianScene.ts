@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { GAME, flight, canShoot, frameDelta, oncePerEvent, type Facing } from './rules';
 import { boltExpired, type Outcome } from './combatRules';
 import {
-  REVERSE, activateReverse, advanceClocks, awakenCore, captureBolt, chargeReverse, initialReverse, isSlow, resolveReturn, shiftCue,
+  REVERSE, activateReverse, advanceClocks, awakenCore, bossHitCharge, captureBolt, chargeReverse, initialReverse, isSlow, resolveReturn, shiftCue,
   tickReverse, worldScale, type Clocks, type Reverse,
 } from './reverseRules';
 import {
@@ -12,6 +12,7 @@ import {
 } from './amaruRules';
 import { coach, initialCoach, type Coach, type CoachEvent } from './coachRules';
 import { breakCombo, comboMultiplier, comboPoints, initialCombo, registerHit, type Combo } from './comboRules';
+import { guardianEntry } from './balanceRules';
 import { FloaterPool, floaterView, hitStopActive, initialHitStop, stoppedPart, triggerHitStop, type FloaterSlot, type HitStop } from './effectsRules';
 import { advanceLiberation, resultLines, stageProgress, startLiberation, tickLiberation, variantKey, type Liberation } from './liberationRules';
 import { ARENA, ARENA_DIM, BODY_TEXTURES, BOLT_TEXTURES, HEAD, HEAD_FLASH, createAmaruTextures, derive } from './amaruTextures';
@@ -20,8 +21,8 @@ import { PICKUP_TEXTURES, createTextures, createRetroFonts } from './textures';
 import { createSheetTextures, loadSpriteSheets } from './sheetTextures';
 import { pickupFrame } from './spriteFrames';
 import {
-  PICKUPS, absorbHit, bobOffset, collectPickup, countCollected, dropGone, dropPosition, guardianDrop, guardianRafagaDrop, initialPower, noPickups, rafagaActive,
-  rafagaLevel, rafagaRemaining, shotCooldown, volleyAngles, type PickupCounts, type PickupKind, type Power,
+  PICKUPS, absorbHit, bobOffset, canSpawnPickup, collectPickup, countCollected, dropGone, dropOrigin, dropPosition, guardianDrops, guardianRafagaDrop,
+  initialPower, noPickups, rafagaActive, rafagaLevel, rafagaRemaining, shotCooldown, shotDamage, volleyAngles, type PickupCounts, type PickupKind, type Power,
 } from './pickupRules';
 import { drawKipuShield, drawShieldBreak } from './pickupView';
 import { CELL_HEIGHT, CELL_WIDTH, MARK_ROWS, fontKey } from './retroFont';
@@ -48,8 +49,8 @@ type Keys = Record<'a'|'d'|'w'|'s'|'left'|'right'|'up'|'down'|'space'|'j'|'z'|'s
 const ARENA_FLOOR = 164;
 // Kipu stays left of Amaru's head, so the head's forgiving body is never a contact hazard.
 const KIPU_RIGHT = 230;
-// Pickups: a phase Corazón or Escudo plus a Ráfaga can share the screen, with one slot to spare.
-const POOL = Object.freeze({ shots: PICKUPS.shotPool, returns: REVERSE.maxCaptures, enemies: 40, particles: 96, floaters: 8, pickups: 3 });
+// Pickups: the phase 3 Escudo and Corazón, a leftover phase 2 Corazón and a Ráfaga can share the screen (round 2: 4 slots).
+const POOL = Object.freeze({ shots: PICKUPS.shotPool, returns: REVERSE.maxCaptures, enemies: 40, particles: 96, floaters: 8, pickups: 4 });
 const TIMING = Object.freeze({ boltTtl: 7000, returnTtl: 1800, returnSpeed: 240, flashMs: 80, noCaptureMs: 900 });
 const SHIELD_RADIUS = 30;
 // Soft ring pulse when the shield breaks: two hard-pixel rings grow outward in the arena palette (no screen flash).
@@ -173,6 +174,10 @@ export class GuardianScene extends Phaser.Scene {
   private resumePickups = { count: 0, bonus: 0 };
   private shieldBreakAt = -Infinity;
   private volley = { count: 0, shots: 0, lastSize: 0, lastAt: 0 };
+  // Balance round 2: what the fight began with (hearts after the floor, the entry Escudo), for the debug snapshot.
+  private entryGuard = { routeHp: 0, hp: 0, shield: false, applied: false };
+  // Debug only: the REVERSE charge of the latest normal hit on Amaru and the racha multiplier it was read at.
+  private bossCharge = { hits: 0, high: 0, multiplier: 0, charge: 0 };
 
   constructor() { super('GuardianScene'); }
 
@@ -213,6 +218,12 @@ export class GuardianScene extends Phaser.Scene {
     this.power = initialPower(); this.collected = noPickups(); this.drops = noPickups(); this.shieldBreakAt = -Infinity;
     this.fightPickups = resume ? { ...this.resumePickups } : { count: 0, bonus: 0 }; this.resumePickups = { count: 0, bonus: 0 };
     this.volley = { count: 0, shots: 0, lastSize: 0, lastAt: 0 };
+    // Round 2 (playtest 2026-10-13): a fresh fight starts with at least 3 hearts and one Escudo already up; a checkpoint
+    // resume keeps its own full hearts and does not add one. A held Escudo is never doubled (a power holds one at most).
+    this.bossCharge = { hits: 0, high: 0, multiplier: 0, charge: 0 };
+    const guard = guardianEntry(this.entry.hp);
+    this.entryGuard = { routeHp: this.entry.hp, hp: resume ? this.health.hp : guard.hp, shield: !resume && guard.shield, applied: !resume };
+    if (!resume) { this.health = { hp: guard.hp, invulnerableUntil: 0 }; this.power = { ...this.power, shield: guard.shield }; }
     this.time.paused = false;
     sfx.setDucked(false);
 
@@ -260,7 +271,7 @@ export class GuardianScene extends Phaser.Scene {
       const shot = (this.shots.contains(first as Sprite) ? first : second) as Sprite;
       if (!shot.active || this.ending !== 'playing') return;
       shot.disableBody(true, true);
-      this.hitAmaru('normal', shot.x, shot.y);
+      this.hitAmaru('normal', shot.x, shot.y, Number(shot.getData('damage') ?? PICKUPS.baseDamage));
     });
     this.physics.add.overlap(this.returns, this.boss, (first, second) => {
       const shot = (this.returns.contains(first as Sprite) ? first : second) as Sprite;
@@ -381,12 +392,13 @@ export class GuardianScene extends Phaser.Scene {
   }
 
   // A Ráfaga fires a triple spread around the facing direction at the shorter cooldown. Every shot is a normal shot
-  // (same damage, same shield deflection, same meter charge on contact).
+  // (same shield deflection and meter charge on contact) that deals 2 damage (round 2), fixed when it leaves Kipu.
   private fire(now: number): void {
     let size = 0;
+    const damage = shotDamage(this.power, now);
     for (const angle of volleyAngles(this.power, now)) {
       if (this.shots.countActive(false) === 0) break;
-      this.spawnShot(this.shots, this.player.x + this.facing * 12, this.player.y - 1, this.facing * GAME.bulletSpeed * Math.cos(angle), GAME.bulletSpeed * Math.sin(angle), 'bullet', now + GAME.bulletLifetimeMs);
+      this.spawnShot(this.shots, this.player.x + this.facing * 12, this.player.y - 1, this.facing * GAME.bulletSpeed * Math.cos(angle), GAME.bulletSpeed * Math.sin(angle), 'bullet', now + GAME.bulletLifetimeMs, damage);
       size++;
     }
     if (size === 0) return;
@@ -396,11 +408,13 @@ export class GuardianScene extends Phaser.Scene {
   }
 
   // ------------------------------------------------------------------ pickups
-  private spawnDrop(kind: PickupKind): void {
+  // `index` spreads the drops of one moment apart vertically (phase 3 drops an Escudo and a Corazón together).
+  private spawnDrop(kind: PickupKind, index = 0): void {
     const item = this.pickups.getFirstDead(false) as Sprite | null;
     if (!item) return; // bounded pool
+    if (!canSpawnPickup(kind, this.alive(this.pickups).map(p => p.getData('kind') as PickupKind))) return; // at most 2 Corazón
     const world = this.clocks.world, mouth = mouthOf(headPosition(world)), d = PICKUPS.drop;
-    const origin = { x: d.x, y: Phaser.Math.Clamp(Math.round(mouth.y), d.minY, d.maxY) };
+    const origin = { x: d.x, y: dropOrigin(mouth.y, index) };
     const base = PICKUP_TEXTURES[kind];
     item.enableBody(true, origin.x, origin.y, true, true);
     item.setVelocity(0, 0).setAlpha(1).setTexture(variantKey(base, false, this.palette)).setData({ kind, base, ox: origin.x, oy: origin.y, born: world });
@@ -463,14 +477,19 @@ export class GuardianScene extends Phaser.Scene {
   private orbitAngle(index: number, count: number): number { return this.clocks.real / 160 + index * Math.PI * 2 / Math.max(1, count); }
 
   // ------------------------------------------------------------------ Amaru
-  private hitAmaru(kind: HitKind, x: number, y: number): void {
-    const now = this.clocks.real, before = this.bossState, step = hitBoss(before, kind, this.clocks.world);
+  private hitAmaru(kind: HitKind, x: number, y: number, damage: number = PICKUPS.baseDamage): void {
+    const now = this.clocks.real, before = this.bossState, step = hitBoss(before, kind, this.clocks.world, damage);
     this.bossState = step.boss;
     // Ráfaga drops: at the middle of phase 1 and at every phase 2 shield break, one on screen at most.
     const rafagaOnScreen = this.alive(this.pickups).some(item => item.getData('kind') === 'rafaga');
     if (guardianRafagaDrop(before, step.boss, step.result, rafagaOnScreen)) this.spawnDrop('rafaga');
-    // Every normal shot that reaches Amaru charges REVERSE, deflected ones included; returns do not.
-    if (kind === 'normal') this.reverse = chargeReverse(this.reverse, REVERSE.perHit);
+    // Every normal shot that reaches Amaru charges REVERSE, deflected ones included; returns do not. At racha x3/x4 the
+    // charge is larger (round 2), read before this hit is registered.
+    if (kind === 'normal') {
+      const multiplier = comboMultiplier(this.combo.hits), charge = bossHitCharge(multiplier);
+      this.reverse = chargeReverse(this.reverse, charge);
+      this.bossCharge = { hits: this.bossCharge.hits + 1, high: this.bossCharge.high + (multiplier >= REVERSE.rachaFrom ? 1 : 0), multiplier, charge };
+    }
     const center = (this.boss.body as Body).center;
     // Racha: every hit that lands (not a deflection) counts; a returned bolt's 200 points use the multiplier.
     if (step.result !== 'deflect') {
@@ -508,8 +527,7 @@ export class GuardianScene extends Phaser.Scene {
     this.cycle = 0; this.resetCycle();
     this.attackStart = this.clocks.world + AMARU.phaseIntroMs;
     this.messages = [{ text: PHASE_NAME[phase], ms: 1400 }]; this.messageUntil = 0;
-    const drop = guardianDrop(phase);
-    if (drop) this.spawnDrop(drop);
+    guardianDrops(phase).forEach((drop, index) => this.spawnDrop(drop, index));
     if (phase === 2) {
       this.messages.push({ text: TEXT.amaruLoop, ms: 2200 });
       if (!this.coreAwakened) {
@@ -951,11 +969,11 @@ export class GuardianScene extends Phaser.Scene {
 
   private alive(group: Phaser.Physics.Arcade.Group): Sprite[] { return group.getChildren().filter(child => child.active) as Sprite[]; }
 
-  private spawnShot(group: Phaser.Physics.Arcade.Group, x: number, y: number, vx: number, vy: number, base: string, expires: number): void {
+  private spawnShot(group: Phaser.Physics.Arcade.Group, x: number, y: number, vx: number, vy: number, base: string, expires: number, damage: number = PICKUPS.baseDamage): void {
     const shot = group.getFirstDead(false) as Sprite | null;
     if (!shot) return;
     shot.enableBody(true, x, y, true, true);
-    shot.setTexture(variantKey(base, false, this.palette)).setData({ base, expires });
+    shot.setTexture(variantKey(base, false, this.palette)).setData({ base, expires, damage });
     (shot.body as Body).setSize(base === 'bullet' ? 6 : 7, base === 'bullet' ? 3 : 5, true);
     shot.setVelocity(vx, vy);
   }
@@ -1033,12 +1051,13 @@ export class GuardianScene extends Phaser.Scene {
       hitStop: { active: hitStopActive(this.hitStop, this.clocks.real), from: this.hitStop.from, until: this.hitStop.until, count: this.hitStop.count, totalMs: this.hitStop.totalMs },
       floaters: { active: this.floaters.activeCount, capacity: this.floaters.items.length, texts: this.floaters.items.filter(f => f.active).map(f => f.text) },
       enemyBolts: this.alive(this.enemies).map(bolt => { const v = (bolt.body as Body).velocity; return { x: bolt.x, y: bolt.y, vx: v.x, vy: v.y, capturable: bolt.getData('capturable') === true, shape: bolt.getData('shape'), texture: bolt.texture.key }; }),
-      alliedShots: [...this.alive(this.shots).map(s => ({ x: s.x, y: s.y, returned: false })), ...this.alive(this.returns).map(s => ({ x: s.x, y: s.y, returned: true }))],
+      alliedShots: [...this.alive(this.shots).map(s => ({ x: s.x, y: s.y, returned: false, damage: Number(s.getData('damage') ?? 1) })), ...this.alive(this.returns).map(s => ({ x: s.x, y: s.y, returned: true }))],
       pools: { shots: this.shots.getLength(), returns: this.returns.getLength(), enemies: this.enemies.getLength(), orbit: this.orbit.length, particles: this.fx.items.length, particlesActive: this.fx.activeCount, pickups: this.pickups.getLength() },
       power: { rafaga: { active: rafagaActive(this.power, this.clocks.real), remainingMs: rafagaRemaining(this.power, this.clocks.real), until: this.power.rafagaUntil }, shield: this.power.shield, shieldBreakAt: this.shieldBreakAt },
       pickups: this.alive(this.pickups).map(p => ({ type: p.getData('kind') as PickupKind, x: p.x, y: p.y, texture: p.texture.key })),
       pickupsCollected: { ...this.collected }, pickupsDropped: { ...this.drops }, fightPickups: { ...this.fightPickups },
-      fire: { ...this.volley, cooldownMs: shotCooldown(this.power, this.clocks.real) },
+      fire: { ...this.volley, cooldownMs: shotCooldown(this.power, this.clocks.real), damage: shotDamage(this.power, this.clocks.real) },
+      entry: { ...this.entryGuard }, bossCharge: { ...this.bossCharge },
       player: {
         x: this.player.x, y: this.player.y, velocityX: body.velocity.x, velocityY: body.velocity.y, angle: this.player.angle,
         bodyWidth: body.width, bodyHeight: body.height, bodyRelativeX: body.x - this.player.x, bodyRelativeY: body.y - this.player.y,

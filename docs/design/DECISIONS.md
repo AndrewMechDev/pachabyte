@@ -37,3 +37,11 @@ Antes se sugirió que Amaru daba REVERSE o LOOP. Convención de trabajo coherent
 - **Bugs del MVP ampliados:** se implementan **Corruptor** (dispara de lejos, lento) y **Sombra de Error** (al morir se divide en dos menores), ya listados en CHARACTERS.md. Cada contacto o disparo quita un solo corazón con invulnerabilidad.
 - **Racha (combo):** aciertos seguidos sin recibir daño multiplican la puntuación ×1 a ×4; recibir daño la reinicia. Encaja con "puntuación por eficiencia"; la fórmula sigue siendo provisional.
 - **Guardianes inspirados en lenguajes:** se mantiene la regla de CHARACTERS.md: guardianes originales andinos con rasgos tecnológicos, sin reproducir mascotas ni logos oficiales. Estado corrupto → restaurado aplica a cada guardián.
+
+## Ajustes de balance, ronda 2 (playtest 13-10-2026)
+Veredicto del playtest en vivo: divertido, Amaru vencible pero caro, ruta larga y dura. Valores tentativos, reunidos en `src/game/balanceRules.ts` y a revisar con el siguiente playtest; el objetivo es que un jugador casual llegue sano a Amaru y lo venza en unos 2-3 minutos.
+- **Umbral que restaura:** al empezar el umbral Kipu recupera 1 corazón (máx. 4) y el medidor de REVERSE sube al menos a 60; aviso "EL UMBRAL TE RESTAURA". Ambos valores pasan al combate.
+- **Corazón extra en la ruta:** un segundo Corazón tras la zona de Memory Leak (unos 72 s), fuera de toda huella de peligros; nunca más de 2 Corazones en pantalla.
+- **Ráfaga de la Trama:** dura 9 s (antes 6 s) y cada disparo de la Ráfaga hace 2 de daño a los bugs y a Amaru (antes 1). El escudo de Amaru sigue desviando disparos normales y de Ráfaga sin romperse; la racha sigue contando un acierto por disparo.
+- **Amaru más llano:** 80 PV (antes 100); las fases salen de fracciones de su máximo (fase 2 a 2/3: PV 53; fase 3 a 1/3: PV 26). Kipu entra al combate con al menos 3 corazones y un Escudo ya activo (nunca dos); al empezar la fase 3 cae además un Corazón extra (se suman al Corazón de la fase 2 y al Escudo de la fase 3).
+- **Racha contra Amaru:** con racha ×3 o ×4 cada acierto sobre Amaru carga REVERSE +25 (antes +15), para que REVERSE vuelva antes. Los golpes normales a Amaru siguen sin dar puntaje.

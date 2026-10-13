@@ -1,16 +1,20 @@
 import { GAME } from './rules';
 import { ROUTE, takeHit, type Health } from './routeRules';
 import { AMARU, type Boss, type HitResult, type Phase } from './amaruRules';
+import { BALANCE } from './balanceRules';
 
 // Rare pickups approved by the user on 2026-10-13 (docs/design/DECISIONS.md), new mechanics outside the canon:
-// Ráfaga de la Trama (6 s of triple, faster fire), Escudo (absorbs the next hit) and Corazón (+1 heart).
+// Ráfaga de la Trama (triple, faster fire; round 2: 9 s and 2 damage per shot), Escudo (absorbs the next hit) and
+// Corazón (+1 heart).
 // Power-up timers use the REAL clock (Kipu's clock), so they ignore hit-stops and REVERSE and freeze on pause.
 // Values are tentative until playtested.
 export type PickupKind = 'rafaga' | 'escudo' | 'corazon';
 export const PICKUP_KINDS: readonly PickupKind[] = Object.freeze(['rafaga', 'escudo', 'corazon']);
 
 export const PICKUPS = Object.freeze({
-  rafaga: { ms: 6000, cooldownMs: 120, spread: 0.15 },
+  // playtest 2026-10-13 round 2: ms 6000 -> 9000 and damage 1 -> 2 (the spread still only adds shots).
+  rafaga: { ms: BALANCE.rafaga.ms, damage: BALANCE.rafaga.damage, cooldownMs: 120, spread: 0.15 },
+  baseDamage: 1,
   fullHeartScore: 100,
   // Bounded shot pool sized for a full Ráfaga: 3 shots every 120 ms live about 1.1 s on screen.
   shotPool: 36,
@@ -31,7 +35,9 @@ export const rafagaRemaining = (p: Power, now: number): number => Math.max(0, p.
 // 0..1 fill of the draining HUD bar.
 export const rafagaLevel = (p: Power, now: number): number => Math.min(1, rafagaRemaining(p, now) / PICKUPS.rafaga.ms);
 export const shotCooldown = (p: Power, now: number): number => (rafagaActive(p, now) ? PICKUPS.rafaga.cooldownMs : GAME.shotCooldownMs);
-// Radians from the facing direction, centre first. Each shot keeps the normal damage; the spread only adds shots.
+// Damage of a shot fired now: 2 during a Ráfaga (round 2), else 1. Read once at fire time, so a shot in flight keeps it.
+export const shotDamage = (p: Power, now: number): number => (rafagaActive(p, now) ? PICKUPS.rafaga.damage : PICKUPS.baseDamage);
+// Radians from the facing direction, centre first; the spread only adds shots.
 const TRIPLE: readonly number[] = Object.freeze([0, -PICKUPS.rafaga.spread, PICKUPS.rafaga.spread]);
 const SINGLE: readonly number[] = Object.freeze([0]);
 export const volleyAngles = (p: Power, now: number): readonly number[] => (rafagaActive(p, now) ? TRIPLE : SINGLE);
@@ -76,6 +82,9 @@ export const ROUTE_PICKUPS: readonly PickupSpawn[] = Object.freeze([
   { at: 46600, kind: 'corazon', y: 128 },
   // In the eruption, ready for the mixed swarm that follows.
   { at: 50200, kind: 'rafaga', y: 64 },
+  // Round 2 (playtest 2026-10-13): a second Corazón once the Memory Leak zones have left the screen and just before the
+  // Marea; spawned at the right edge behind every zone, so it is never inside one.
+  { at: 71950, kind: 'corazon', y: 84 },
 ]);
 
 export function pickupsDue(cursor: number, now: number): { due: PickupSpawn[]; next: number } {
@@ -88,9 +97,21 @@ export const ROUTE_ENTRY_X = GAME.width + 10;
 export const routePickupScreenX = (p: PickupSpawn, now: number): number => ROUTE_ENTRY_X - ROUTE.scrollSpeed * (now - p.at) / 1000;
 
 // ---------------------------------------------------------------- guardian drops
-// Amaru drops one Corazón when phase 2 starts and one Escudo when phase 3 starts (not on a checkpoint resume).
-export const GUARDIAN_DROPS: Readonly<Partial<Record<Phase, PickupKind>>> = Object.freeze({ 2: 'corazon', 3: 'escudo' });
-export const guardianDrop = (phase: Phase): PickupKind | null => GUARDIAN_DROPS[phase] ?? null;
+// Amaru drops one Corazón when phase 2 starts, and an Escudo plus an extra Corazón when phase 3 starts (round 2, playtest
+// 2026-10-13); none on a checkpoint resume.
+export const GUARDIAN_DROPS: Readonly<Partial<Record<Phase, readonly PickupKind[]>>> = Object.freeze({ 2: Object.freeze(['corazon'] as const), 3: Object.freeze(['escudo', 'corazon'] as const) });
+export const guardianDrops = (phase: Phase): readonly PickupKind[] => GUARDIAN_DROPS[phase] ?? [];
+// At most BALANCE.corazonOnScreen Corazón on screen; the other kinds are not capped here (the Ráfaga has its own rule).
+export const canSpawnPickup = (kind: PickupKind, onScreen: readonly PickupKind[]): boolean =>
+  kind !== 'corazon' || onScreen.filter(k => k === 'corazon').length < BALANCE.corazonOnScreen;
+// Spawn height of the `index`-th drop of one moment: the first at Amaru's mouth, the next ones spread apart (down, or up
+// near the floor), all inside the drop band.
+export function dropOrigin(mouthY: number, index: number): number {
+  const { minY, maxY } = PICKUPS.drop, y = Math.min(maxY, Math.max(minY, Math.round(mouthY)));
+  if (index === 0) return y;
+  const down = y + BALANCE.dropSpread * index;
+  return down <= maxY ? down : Math.max(minY, y - BALANCE.dropSpread * index);
+}
 // Ráfaga drops (user request 2026-10-13, to defeat Amaru faster): one when phase 1 reaches the half of its HP range
 // (100..67, so at 83) and one every time the phase 2 shield breaks. Never a second Ráfaga on screen; collecting one
 // while active refreshes the timer (collectPickup). Ráfaga shots stay normal shots, so the shield still deflects them.

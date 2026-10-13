@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  REVERSE, activateReverse, advanceClocks, awakenCore, captureBolt, chargeReverse, initialReverse, isSlow,
+  REVERSE, activateReverse, advanceClocks, awakenCore, bossHitCharge, captureBolt, chargeReverse, initialReverse, isSlow,
   resolveReturn, shiftCue, tickReverse, worldScale, type Reverse,
 } from '../src/game/reverseRules';
 
@@ -13,6 +13,23 @@ describe('REVERSE tuning', () => {
       recoveryMs: 1500, emptyRefund: 60, emptyRecoveryMs: 600, returnDamage: 3,
     });
     expect(Object.isFrozen(REVERSE)).toBe(true);
+  });
+  // Balance round 2 (playtest 2026-10-13): while the racha is x3 or x4 each hit on Amaru charges the meter 25 instead of 15.
+  it('charges 25 per boss hit while the racha multiplier is x3 or x4, 15 otherwise', () => {
+    expect(REVERSE).toMatchObject({ perHitRacha: 25, rachaFrom: 3 });
+    expect([1, 2].map(bossHitCharge)).toEqual([15, 15]);
+    expect([3, 4].map(bossHitCharge)).toEqual([25, 25]);
+    expect(bossHitCharge(0)).toBe(15);
+  });
+  it('refills READY faster at a high racha: 4 hits instead of 7', () => {
+    const hitsToReady = (multiplier: number) => {
+      let r = initialReverse(0), hits = 0;
+      while (r.state !== 'READY') { r = chargeReverse(r, bossHitCharge(multiplier)); hits++; }
+      return hits;
+    };
+    expect(hitsToReady(2)).toBe(7);
+    expect(hitsToReady(3)).toBe(4);
+    expect(hitsToReady(4)).toBe(4);
   });
 });
 

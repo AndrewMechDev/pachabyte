@@ -14,6 +14,7 @@ import {
   sombraWorldX, splitCount, startSombra, stepSombra, type EnemyType, type SombraMotion,
 } from './bugRules';
 import { breakCombo, comboMultiplier, initialCombo, registerHit, type Combo } from './comboRules';
+import { umbralRestore } from './balanceRules';
 import { FloaterPool, floaterView, hitStopActive, initialHitStop, triggerHitStop, worldStep, type FloaterSlot, type HitStop } from './effectsRules';
 import { completeRoute, initialProgress, type Progress } from './challengeRules';
 import { BUG_TEXTURES, HAZARD_TEXTURES, PICKUP_TEXTURES, createBugTextures, createHazardTextures, createTextures, createRetroFonts, createRouteTextures } from './textures';
@@ -22,8 +23,8 @@ import { corruptorFrame, pickupFrame, shadowFrame, sombraFrame } from './spriteF
 import { backdropCopies, summitsX } from './ambientRules';
 import { RouteAmbient } from './routeAmbient';
 import {
-  PICKUPS, ROUTE_ENTRY_X, absorbHit, bobOffset, collectPickup, countCollected, initialPower, noPickups, pickupsDue, rafagaActive, rafagaLevel,
-  rafagaRemaining, shotCooldown, volleyAngles, type PickupCounts, type PickupKind, type Power,
+  PICKUPS, ROUTE_ENTRY_X, absorbHit, bobOffset, canSpawnPickup, collectPickup, countCollected, initialPower, noPickups, pickupsDue, rafagaActive, rafagaLevel,
+  rafagaRemaining, shotCooldown, shotDamage, volleyAngles, type PickupCounts, type PickupKind, type Power,
 } from './pickupRules';
 import { drawKipuShield, drawShieldBreak } from './pickupView';
 import { CELL_HEIGHT, CELL_WIDTH, MARK_ROWS, fontKey } from './retroFont';
@@ -127,6 +128,8 @@ export class RouteScene extends Phaser.Scene {
   private shieldBreakAt = -Infinity;
   private volley = { count: 0, shots: 0, lastSize: 0, lastAt: 0 };
   private thresholdStarted = false;
+  // Balance round 2: what the Umbral restored (hearts and meter before and after), for the debug snapshot.
+  private umbral = { applied: false, hpBefore: 0, hpAfter: 0, meterBefore: 0, meterAfter: 0 };
   private retryRequested = false;
   private mapRequested = false;
   private nextGlintAt = 0;
@@ -168,6 +171,7 @@ export class RouteScene extends Phaser.Scene {
     this.health = { hp: ROUTE.maxHp, invulnerableUntil: 0 }; this.meter = 0; this.tally = { fragments: 0, bugs: 0, returns: 0, bugPoints: 0, comboBonus: 0, pickups: 0, pickupBonus: 0 };
     this.combo = initialCombo(); this.comboHotUntil = 0; this.hitStop = initialHitStop(); this.fragmentsDropped = 0;
     this.nextShotAt = 0; this.spawnCursor = 0; this.thresholdStarted = false; this.purgedSegment = null;
+    this.umbral = { applied: false, hpBefore: 0, hpAfter: 0, meterBefore: 0, meterAfter: 0 };
     this.packetView = []; this.embers = Array.from({ length: ERUPTION.pool }, () => ({ active: false, at: 0, x: 0, y: 0, aimed: false, impacted: false }));
     this.emberCursor = 0; this.emberImpacts = 0; this.leakFragmentsSpawned = 0; this.leak = { inside: false, drained: 0, nextSoundAt: 0, nextSparkAt: 0 };
     this.loop = initialLoop(); this.loopResetAt = -Infinity; this.loopHitUntil = 0; this.hurts = RouteScene.noHurts();
@@ -218,7 +222,7 @@ export class RouteScene extends Phaser.Scene {
         const bug = (shot === first ? second : first) as Sprite;
         if (!shot.active || !bug.active || this.ending !== 'playing' || this.clock < Number(bug.getData('graceUntil') ?? 0)) return;
         shot.disableBody(true, true);
-        this.hitEnemy(bug);
+        this.hitEnemy(bug, Number(shot.getData('damage') ?? PICKUPS.baseDamage));
       });
     }
     this.physics.add.overlap(this.player, this.glitchlings, (first, second) => this.touchBug(first, second, this.glitchlings, true));
@@ -385,15 +389,16 @@ export class RouteScene extends Phaser.Scene {
   }
 
   // Kipu always fires to the right on the route. A Ráfaga fires a triple spread (centre first) at the shorter cooldown;
-  // each shot keeps the normal damage. A nearly full pool fires what it can.
+  // each of its shots deals 2 damage (round 2), fixed when it leaves Kipu. A nearly full pool fires what it can.
   private fire(now: number, carry: number): void {
     let size = 0;
+    const damage = shotDamage(this.power, now);
     for (const angle of volleyAngles(this.power, now)) {
       const shot = this.shots.getFirstDead(false) as Sprite | null;
       if (!shot) break;
       shot.enableBody(true, this.player.x + 12, this.player.y - 1, true, true);
       const vx = angle === 0 ? shotVelocity(1, carry) : GAME.bulletSpeed * Math.cos(angle) + carry;
-      shot.setVelocity(vx, GAME.bulletSpeed * Math.sin(angle)).setData('expiresAt', now + GAME.bulletLifetimeMs);
+      shot.setVelocity(vx, GAME.bulletSpeed * Math.sin(angle)).setData({ expiresAt: now + GAME.bulletLifetimeMs, damage });
       size++;
     }
     if (size === 0) return;
@@ -407,6 +412,8 @@ export class RouteScene extends Phaser.Scene {
   private spawnPickup(kind: PickupKind, y: number, cameraX: number): void {
     const item = this.pickups.getFirstDead(false) as Sprite | null;
     if (!item) return; // bounded pool
+    // At most 2 Corazón on screen (round 2); a skipped one is simply not offered.
+    if (!canSpawnPickup(kind, this.alive(this.pickups).map(p => p.getData('kind') as PickupKind))) return;
     const x = cameraX + ROUTE_ENTRY_X;
     item.enableBody(true, x, y, true, true);
     item.setVelocity(0, 0).setAlpha(1).setTexture(PICKUP_TEXTURES[kind]).setData({ kind, baseY: y });
@@ -490,8 +497,10 @@ export class RouteScene extends Phaser.Scene {
     }
   }
 
-  private hitEnemy(bug: Sprite): void {
-    const hp = Number(bug.getData('hp')) - 1;
+  // One shot that reaches a bug: `damage` is 1, or 2 for a Ráfaga shot (round 2). The meter and the racha count one hit
+  // per shot whatever its damage.
+  private hitEnemy(bug: Sprite, damage: number): void {
+    const hp = Number(bug.getData('hp')) - damage;
     this.meter = addMeter(this.meter, ROUTE.meterPerHit);
     const step = registerHit(this.combo);
     this.combo = step.combo;
@@ -500,7 +509,7 @@ export class RouteScene extends Phaser.Scene {
       bug.setData({ hp, hitUntil: this.anim + FLASH_MS });
       sfx.play('enemyHit');
       burst(this.fx, bug.x, bug.y, 3, 30, 160, 'light', this.anim);
-      this.floater('1', bug.x, bug.y - 8, 'damage');
+      this.floater(String(damage), bug.x, bug.y - 8, 'damage');
       return;
     }
     this.debugBug(bug);
@@ -630,6 +639,13 @@ export class RouteScene extends Phaser.Scene {
   private enterThreshold(): void {
     // Enemies stop and dissolve; the route falls quiet before the guardian.
     this.thresholdStarted = true;
+    // Round 2 (playtest 2026-10-13): the Umbral restores Kipu (+1 heart, meter to at least 60); runState() carries both.
+    const restored = umbralRestore(this.health.hp, this.meter);
+    this.umbral = { applied: true, hpBefore: this.health.hp, hpAfter: restored.hp, meterBefore: this.meter, meterAfter: restored.meter };
+    this.health = { ...this.health, hp: restored.hp }; this.meter = restored.meter;
+    sfx.play('pickupCorazon');
+    burst(this.fx, this.player.x, this.player.y, 8, 40, 300, 'light', this.anim, 2);
+    if (this.umbral.hpAfter > this.umbral.hpBefore) this.floater(TEXT.pickupHeal, this.player.x, this.player.y - 22, 'damage');
     for (const group of [this.glitchlings, this.corruptors, this.shadows, this.orbs]) for (const bug of this.alive(group)) {
       burst(this.fx, bug.x, bug.y, 6, 30, 400, 'violet', this.anim);
       bug.disableBody(true, true);
@@ -1055,7 +1071,8 @@ export class RouteScene extends Phaser.Scene {
       power: { rafaga: { active: rafagaActive(this.power, this.real), remainingMs: rafagaRemaining(this.power, this.real), until: this.power.rafagaUntil }, shield: this.power.shield, shieldBreakAt: this.shieldBreakAt },
       pickups: this.alive(this.pickups).map(p => ({ type: p.getData('kind') as PickupKind, x: p.x, y: p.y, screenX: p.x - cameraX, texture: p.texture.key })),
       pickupsCollected: { ...this.collected }, pickupBonus: this.tally.pickupBonus ?? 0, pickupCount: this.tally.pickups ?? 0,
-      fire: { ...this.volley, cooldownMs: shotCooldown(this.power, this.real) },
+      fire: { ...this.volley, cooldownMs: shotCooldown(this.power, this.real), damage: shotDamage(this.power, this.real) },
+      umbral: { ...this.umbral },
       enemies: enemyList.length, enemyList, fragmentCount: this.fragments.countActive(true), shotCount: this.shots.countActive(true),
       orbs: this.alive(this.orbs).map(o => ({ x: o.x, y: o.y, screenX: o.x - cameraX, vx: Number(o.getData('vx')), vy: Number(o.getData('vy')) })),
       capacity: {
@@ -1072,7 +1089,7 @@ export class RouteScene extends Phaser.Scene {
       glitchlings: this.alive(this.glitchlings).map(bug => ({ x: bug.x, y: bug.y, hp: Number(bug.getData('hp')) })),
       fragmentList: this.alive(this.fragments).map(knot => ({ x: knot.x, y: knot.y, dropped: knot.getData('dropped') === true, leak: Number(knot.getData('leak') ?? -1) >= 0 })),
       hazards: this.hazardSnapshot(),
-      shots: this.alive(this.shots).map(shot => ({ x: shot.x, y: shot.y, screenX: shot.x - cameraX })),
+      shots: this.alive(this.shots).map(shot => ({ x: shot.x, y: shot.y, screenX: shot.x - cameraX, damage: Number(shot.getData('damage') ?? 1) })),
       fx: { active: this.fx.activeCount, capacity: this.fx.items.length },
       audio: sfx.stats(), kipuFrame: this.animator.frame, hud: { score: this.hud.scoreText, combo: this.hud.comboText, rafaga: this.hud.rafagaText, shield: this.hud.shieldIcon, leak: this.hud.leakIcon }, panel: this.panelText.text,
     };

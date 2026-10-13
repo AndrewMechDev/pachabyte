@@ -35,7 +35,7 @@ Single writer per task; tests first (observe RED); parent spot-checks typecheck 
 
 ## Status
 - [x] v0.5 live (`530296e`).
-- [ ] P1
+- [x] P1 (v0.6): umbral heal, 3rd Corazón at 71.95 s, Ráfaga 9 s x2 damage, Amaru 80 HP (53/26), entry with >=3 hearts + Escudo, phase 3 Corazón, racha x3/x4 charges +25. RED observed; 308/308; pilots won first attempt in WebGL x3 and Canvas x1.
 - [ ] P2
 - [ ] P3
 - [ ] P4

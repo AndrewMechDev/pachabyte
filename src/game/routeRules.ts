@@ -64,7 +64,9 @@ const CAPTIONS: readonly Caption[] = [
   { start: 64000, end: 67500, text: TEXT.memoryLeak },
   { start: 72000, end: 75500, text: TEXT.marea },
   { start: 82000, end: 85500, text: TEXT.loop },
-  { start: 91000, end: TRANSITION_MS, text: TEXT.threshold },
+  // Round 2 (playtest 2026-10-13): the threshold first announces the restoration, then the pattern line.
+  { start: 90000, end: 92000, text: TEXT.umbral },
+  { start: 92000, end: TRANSITION_MS, text: TEXT.threshold },
 ];
 export function captionAt(ms: number): string {
   return CAPTIONS.find(c => ms >= c.start && ms < c.end)?.text ?? '';

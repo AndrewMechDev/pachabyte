@@ -1,3 +1,5 @@
+import { BALANCE } from './balanceRules';
+
 // PachaShift REVERSE as a pure state machine: CHARGING -> READY -> SLOW -> RELEASE -> RECOVERY -> CHARGING.
 // Every timer here runs on the REAL clock (player/UI). Only the world clock is scaled while SLOW.
 // Canon starts from docs/design/COMBAT_DESIGN.md; perHit, slowMs, captureRadius and the empty-activation refund come
@@ -5,6 +7,8 @@
 export const REVERSE = Object.freeze({
   meterMax: 100,
   perHit: 15,          // each Kipu shot that hits Amaru (shield deflections included); playtest: was 10
+  perHitRacha: BALANCE.racha.bossHitMeter, // playtest 2026-10-13 round 2: the same hit at racha x3 or x4
+  rachaFrom: BALANCE.racha.fromMultiplier, // playtest 2026-10-13 round 2: the racha multiplier that earns it
   perFragment: 20,     // fragments collected on the route; the carried meter is honoured on entry
   slowMs: 1200,        // real milliseconds of SLOW; playtest: was 800
   worldScale: 0.2,     // world speed while SLOW; Kipu keeps full speed
@@ -35,6 +39,9 @@ export function initialReverse(meter = 0): Reverse {
   const value = clampMeter(meter);
   return { state: value >= REVERSE.meterMax ? 'READY' : 'CHARGING', meter: value, captured: 0, pending: 0, until: 0, activations: 0, returnsTotal: 0 };
 }
+
+// Meter charged by one Kipu shot that reaches Amaru, from the racha multiplier at the moment of the hit.
+export const bossHitCharge = (multiplier: number): number => (multiplier >= REVERSE.rachaFrom ? REVERSE.perHitRacha : REVERSE.perHit);
 
 // Hits refill the meter in any state; only CHARGING turns READY. Taking damage never touches it.
 export function chargeReverse(r: Reverse, amount: number): Reverse {

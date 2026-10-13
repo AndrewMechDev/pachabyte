@@ -9,61 +9,76 @@ import { REVERSE, activateReverse, captureBolt, initialReverse, tickReverse } fr
 const at = (hp: number, extra: Partial<Boss> = {}): Boss => ({ ...initialBoss(), hp, phase: phaseFor(hp), ...extra });
 
 describe('Amaru phases', () => {
-  it('starts at 100 HP in phase 1 with no shield', () => {
-    expect(initialBoss()).toEqual({ hp: 100, phase: 1, shield: 0, vulnerableUntil: 0, doubleDamage: false });
-    expect(AMARU.maxHP).toBe(100);
+  // Balance round 2 (playtest 2026-10-13): 100 -> 80 HP, thresholds derived as 2/3 and 1/3 of the maximum.
+  it('starts at 80 HP in phase 1 with no shield', () => {
+    expect(initialBoss()).toEqual({ hp: 80, phase: 1, shield: 0, vulnerableUntil: 0, doubleDamage: false });
+    expect(AMARU.maxHP).toBe(80);
   });
-  it('maps HP to phases: 100-67, 66-34, 33-0', () => {
-    expect([100, 67, 66, 34, 33, 0].map(phaseFor)).toEqual([1, 1, 2, 2, 3, 3]);
+  it('maps HP to phases: 80-54, 53-27, 26-0', () => {
+    expect([80, 54, 53, 27, 26, 0].map(phaseFor)).toEqual([1, 1, 2, 2, 3, 3]);
   });
   it('changes phase only through HP events and raises the 6 HP shield on entering phase 2', () => {
-    const step = hitBoss(at(67), 'normal', 5000);
+    const step = hitBoss(at(54), 'normal', 5000);
     expect(step).toMatchObject({ result: 'damage', amount: 1, phaseChanged: true });
-    expect(step.boss).toMatchObject({ hp: 66, phase: 2, shield: AMARU.shieldMax });
+    expect(step.boss).toMatchObject({ hp: 53, phase: 2, shield: AMARU.shieldMax });
     expect(AMARU.shieldMax).toBe(6);
-    expect(hitBoss(at(68), 'normal', 0).phaseChanged).toBe(false);
+    expect(hitBoss(at(55), 'normal', 0).phaseChanged).toBe(false);
   });
 });
 
 describe('Amaru damage and shield', () => {
   it('takes 1 per normal shot and 3 per returned bolt in phase 1', () => {
-    expect(hitBoss(at(100), 'normal', 0)).toMatchObject({ result: 'damage', amount: 1, boss: { hp: 99 } });
-    expect(hitBoss(at(100), 'returned', 0)).toMatchObject({ result: 'damage', amount: 3, boss: { hp: 97 } });
+    expect(hitBoss(at(80), 'normal', 0)).toMatchObject({ result: 'damage', amount: 1, boss: { hp: 79 } });
+    expect(hitBoss(at(80), 'returned', 0)).toMatchObject({ result: 'damage', amount: 3, boss: { hp: 77 } });
+  });
+  it('takes the Ráfaga damage of a shot (round 2: 2 per Ráfaga shot), the shield still deflects it unbroken', () => {
+    expect(hitBoss(at(80), 'normal', 0, 2)).toMatchObject({ result: 'damage', amount: 2, boss: { hp: 78 } });
+    const shielded = at(40, { shield: 6 });
+    const deflected = hitBoss(shielded, 'normal', 0, 2);
+    expect(deflected).toMatchObject({ result: 'deflect', amount: 0, boss: shielded });
+    expect(deflected.boss.shield).toBe(6);
+    // A Ráfaga shot in the scripted final window keeps the double damage on top of its own.
+    const final = openWindow(at(20, { shield: 6 }), 1000, AMARU.finalWindowMs, true);
+    expect(hitBoss(final, 'normal', 1500, 2)).toMatchObject({ amount: 4, boss: { hp: 16 } });
+    // Returned bolts ignore the shot damage.
+    expect(hitBoss(at(80), 'returned', 0, 2).amount).toBe(3);
+    // A Ráfaga shot that crosses the phase threshold still raises the shield.
+    expect(hitBoss(at(54), 'normal', 0, 2)).toMatchObject({ phaseChanged: true, boss: { hp: 52, phase: 2, shield: 6 } });
   });
   it('deflects normal shots while the shield is up; only returned bolts damage it', () => {
-    const shielded = at(60, { shield: 6 });
+    const shielded = at(45, { shield: 6 });
     expect(shieldBlocks(shielded, 0)).toBe(true);
     expect(hitBoss(shielded, 'normal', 0)).toMatchObject({ result: 'deflect', amount: 0, boss: shielded });
     const cracked = hitBoss(shielded, 'returned', 0);
-    expect(cracked).toMatchObject({ result: 'shieldHit', amount: 3, boss: { hp: 60, shield: 3 } });
+    expect(cracked).toMatchObject({ result: 'shieldHit', amount: 3, boss: { hp: 45, shield: 3 } });
     const broken = hitBoss(cracked.boss, 'returned', 1000);
-    expect(broken).toMatchObject({ result: 'shieldBreak', boss: { hp: 60, shield: 0, vulnerableUntil: 1000 + AMARU.shieldWindowMs } });
+    expect(broken).toMatchObject({ result: 'shieldBreak', boss: { hp: 45, shield: 0, vulnerableUntil: 1000 + AMARU.shieldWindowMs } });
     expect(AMARU.shieldWindowMs).toBe(6500);
   });
   it('lets normal shots through during the 6.5 s window and regenerates the shield to full only afterwards', () => {
-    const broken = hitBoss(at(60, { shield: 3 }), 'returned', 1000).boss;
+    const broken = hitBoss(at(45, { shield: 3 }), 'returned', 1000).boss;
     expect(broken).toMatchObject({ shield: 0, vulnerableUntil: 7500 });
     expect(tickBoss(broken, 7499)).toBe(broken);
     expect(shieldBlocks(broken, 7499)).toBe(false);
     expect(tickBoss(broken, 7500)).toMatchObject({ shield: AMARU.shieldMax, vulnerableUntil: 0 });
-    const open = at(60, { shield: 0, vulnerableUntil: 5000 });
+    const open = at(45, { shield: 0, vulnerableUntil: 5000 });
     expect(isVulnerable(open, 4999)).toBe(true);
-    expect(hitBoss(open, 'normal', 4000)).toMatchObject({ result: 'damage', amount: 1, boss: { hp: 59 } });
-    expect(hitBoss(open, 'returned', 4000)).toMatchObject({ result: 'damage', amount: 3, boss: { hp: 57 } });
+    expect(hitBoss(open, 'normal', 4000)).toMatchObject({ result: 'damage', amount: 1, boss: { hp: 44 } });
+    expect(hitBoss(open, 'returned', 4000)).toMatchObject({ result: 'damage', amount: 3, boss: { hp: 42 } });
     expect(tickBoss(open, 4999)).toBe(open);
     expect(tickBoss(open, 5000)).toMatchObject({ shield: 6, vulnerableUntil: 0 });
     expect(tickBoss(at(80), 99999)).toEqual(at(80));
   });
   it('doubles normal damage inside a phase 3 vulnerability window', () => {
-    const final = openWindow(at(30, { shield: 6 }), 1000, AMARU.finalWindowMs, true);
+    const final = openWindow(at(20, { shield: 6 }), 1000, AMARU.finalWindowMs, true);
     expect(isVulnerable(final, 1000)).toBe(true);
-    expect(hitBoss(final, 'normal', 1500)).toMatchObject({ result: 'damage', amount: 2, boss: { hp: 28 } });
-    expect(hitBoss(at(30, { shield: 6 }), 'normal', 0).result).toBe('deflect');
+    expect(hitBoss(final, 'normal', 1500)).toMatchObject({ result: 'damage', amount: 2, boss: { hp: 18 } });
+    expect(hitBoss(at(20, { shield: 6 }), 'normal', 0).result).toBe('deflect');
     // A window that ends with the shield intact leaves it untouched.
     expect(tickBoss(final, 1000 + AMARU.finalWindowMs)).toMatchObject({ shield: 6, vulnerableUntil: 0, doubleDamage: false });
   });
   it('keeps single damage in a phase 3 shield-break window (double is only for the scripted final window)', () => {
-    const broken = hitBoss(at(30, { shield: 3 }), 'returned', 0);
+    const broken = hitBoss(at(20, { shield: 3 }), 'returned', 0);
     expect(broken.result).toBe('shieldBreak');
     expect(broken.boss.doubleDamage).toBe(false);
     expect(hitBoss(broken.boss, 'normal', 100).amount).toBe(1);
@@ -223,11 +238,11 @@ describe('phase checkpoints (first human playtest, 2026-10-13)', () => {
   it('resumes at the phase start HP with full hearts, a full meter and the shield up, keeping the returns scored', () => {
     const two = resumeFrom({ phase: 2, returnsTotal: 3, elapsedMs: 41000, comboBonus: 0 });
     expect(two.boss).toEqual({ hp: AMARU.phase2From, phase: 2, shield: AMARU.shieldMax, vulnerableUntil: 0, doubleDamage: false });
-    expect(two.boss.hp).toBe(66);
+    expect(two.boss.hp).toBe(53);
     expect(two.heroHp).toBe(4);
     expect(two.reverse).toMatchObject({ state: 'READY', meter: 100, captured: 0, pending: 0, activations: 0, returnsTotal: 3 });
     const three = resumeFrom({ phase: 3, returnsTotal: 7, elapsedMs: 90000, comboBonus: 0 });
-    expect(three.boss).toMatchObject({ hp: 33, phase: 3, shield: AMARU.shieldMax });
+    expect(three.boss).toMatchObject({ hp: 26, phase: 3, shield: AMARU.shieldMax });
     expect(phaseFor(three.boss.hp)).toBe(3);
     expect(phaseFor(two.boss.hp)).toBe(2);
   });

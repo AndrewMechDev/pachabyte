@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HEART, RAFAGA_BAR, comboLabel, formatScore, heartStates, meterDisplay, meterFill, wrapLines } from '../src/game/hudRules';
+import { HEART, RAFAGA_BAR, comboLabel, formatScore, heartStates, meterDisplay, meterFill, phaseTicks, wrapLines } from '../src/game/hudRules';
 import { TEXT } from '../src/game/text';
 import { missingGlyphs } from '../src/game/retroFont';
 
@@ -48,6 +48,12 @@ describe('HUD helpers', () => {
     expect(meterDisplay('RELEASE', 0, 0)).toEqual({ fill: 0, style: 'returning' });
     expect(meterDisplay('RECOVERY', 30, 0.5)).toEqual({ fill: 0.3, style: 'recovering' });
     expect(meterDisplay('SLOW', 0, 3).fill).toBe(1);
+  });
+  // Round 2: Amaru's HP bar marks the phase boundaries from the maximum HP (2/3 and 1/3), not from fixed 66/33.
+  it('places the phase ticks on the boss bar at 2/3 and 1/3 of the maximum HP', () => {
+    expect(phaseTicks(48, 80)).toEqual([32, 16]);
+    expect(phaseTicks(48, 100)).toEqual([32, 16]);
+    expect(phaseTicks(60, 90)).toEqual([40, 20]);
   });
   it('wraps long canvas text on word boundaries', () => {
     expect(wrapLines('UN BUCLE REPITE INSTRUCCIONES', 12)).toEqual(['UN BUCLE', 'REPITE', 'INSTRUCCIONES']);

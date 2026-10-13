@@ -14,6 +14,8 @@ export const TEXT = Object.freeze({
   loop: 'BUCLE: ROMPE EL NODO',
   loopBroken: 'BUCLE ROTO',
   threshold: 'ALGO REPITE UN PATRÓN...',
+  // Balance round 2 (playtest 2026-10-13): shown as the threshold starts, when it heals a heart and lifts the meter.
+  umbral: 'EL UMBRAL TE RESTAURA',
   routeDefeat: 'KIPU SE DESCONECTA',
   routeDefeatHelp: 'R: REINTENTAR  M: MAPA',
   pause: 'PAUSA',

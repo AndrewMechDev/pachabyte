@@ -1,5 +1,6 @@
 // Pure HUD helpers shared by the route and the guardian arena.
 import type { ReverseState } from './reverseRules';
+import { phaseThresholds } from './amaruRules';
 import { TEXT } from './text';
 
 export function formatScore(score: number): string {
@@ -56,4 +57,10 @@ export const RAFAGA_BAR = Object.freeze({ labelX: 194, x: 232, y: 5, width: 40, 
 // "RACHA ×N" in the top bar once the racha multiplies the score; hidden at ×1 so the bar stays quiet.
 export function comboLabel(multiplier: number): string {
   return multiplier >= 2 ? `${TEXT.combo} ×${Math.floor(multiplier)}` : '';
+}
+
+// X offsets (from the bar's left edge) of the phase 2 and phase 3 boundaries on Amaru's HP bar of `width` px.
+export function phaseTicks(width: number, maxHp: number): [number, number] {
+  const { phase2From, phase3From } = phaseThresholds(maxHp);
+  return [Math.round(width * phase2From / maxHp), Math.round(width * phase3From / maxHp)];
 }

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME } from './rules';
 import { CELL_WIDTH, fontKey } from './retroFont';
-import { HEART, RAFAGA_BAR, comboLabel, formatScore, heartStates, meterFill, type MeterStyle } from './hudRules';
+import { HEART, RAFAGA_BAR, comboLabel, formatScore, heartStates, meterFill, phaseTicks, type MeterStyle } from './hudRules';
 import { SHIELD_ICON } from './pickupArt';
 import { NOKIA } from './nokiaPalette';
 import { TEXT } from './text';
@@ -144,8 +144,9 @@ export class BossHud {
     const c = this.nokia ? GREEN : NORMAL, g = this.g.clear();
     const x = 268, width = 48, fill = Math.round(width * Math.max(0, v.hp) / v.maxHp);
     g.fillStyle(c.line).fillRect(x, 19, width, 5).fillStyle(c.meter).fillRect(x, 19, fill, 5);
-    // Phase boundaries (HP 66 and 33) marked on the bar so the next phase is readable in advance.
-    g.fillStyle(c.bar).fillRect(x + Math.round(width * 66 / v.maxHp), 19, 1, 5).fillRect(x + Math.round(width * 33 / v.maxHp), 19, 1, 5);
+    // Phase boundaries (2/3 and 1/3 of the maximum HP) marked on the bar so the next phase is readable in advance.
+    const [tick2, tick3] = phaseTicks(width, v.maxHp);
+    g.fillStyle(c.bar).fillRect(x + tick2, 19, 1, 5).fillRect(x + tick3, 19, 1, 5);
     const label = `${TEXT.phaseLabel} ${v.phase}`;
     if (this.phase.text !== label) this.phase.setText(label);
     if (v.phase < 2) return;

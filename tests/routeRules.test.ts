@@ -42,6 +42,10 @@ describe('route timeline', () => {
     expect(captionAt(64500)).toBe(TEXT.memoryLeak);
     expect(captionAt(72500)).toBe(TEXT.marea);
     expect(captionAt(82500)).toBe(TEXT.loop);
+    // Round 2 (playtest 2026-10-13): the first 2 s of the threshold announce the restoration, then the pattern line.
+    expect(captionAt(90500)).toBe(TEXT.umbral);
+    expect(TEXT.umbral).toBe('EL UMBRAL TE RESTAURA');
+    expect(captionAt(91999)).toBe(TEXT.umbral);
     expect(captionAt(92000)).toBe(TEXT.threshold);
     expect(captionAt(13000)).toBe('');
   });

@@ -1,3 +1,4 @@
+import { BALANCE } from './balanceRules';
 import type { Reverse } from './reverseRules';
 import { REVERSE, initialReverse } from './reverseRules';
 import { GAME } from './rules';
@@ -7,10 +8,15 @@ import { ROUTE, type Rect } from './routeRules';
 // and the head/body path. Times are WORLD-clock milliseconds (scaled to 20 % while REVERSE is SLOW).
 // Every value is tentative canon (docs/design/COMBAT_DESIGN.md) aimed at a 2-3 minute casual fight; values marked
 // "playtest" come from the first human playtest (2026-10-13), where phase 2 proved too hard to learn.
+// Phase thresholds are fractions of the maximum HP (phase 2 at 2/3, phase 3 at 1/3), floored: 100 HP gave 66/33 and
+// the round 2 maximum of 80 gives 53/26, so phases, drops and checkpoints follow any maximum.
+export function phaseThresholds(maxHP: number): { phase2From: number; phase3From: number } {
+  return { phase2From: Math.floor(maxHP * 2 / 3), phase3From: Math.floor(maxHP / 3) };
+}
+
 export const AMARU = Object.freeze({
-  maxHP: 100,
-  phase2From: 66,       // phase 2 covers HP 66..34
-  phase3From: 33,       // phase 3 covers HP 33..0
+  maxHP: BALANCE.amaru.maxHP, // playtest 2026-10-13 round 2: was 100
+  ...phaseThresholds(BALANCE.amaru.maxHP), // phase2From: phase 2 covers HP 53..27; phase3From: phase 3 covers HP 26..0
   normalDamage: 1,
   returnDamage: REVERSE.returnDamage,
   finalMultiplier: 2,   // normal shots inside the scripted phase 3 window (after the wave)
@@ -30,9 +36,12 @@ export const AMARU = Object.freeze({
 });
 
 export type Phase = 1 | 2 | 3;
-export function phaseFor(hp: number): Phase {
-  return hp > AMARU.phase2From ? 1 : hp > AMARU.phase3From ? 2 : 3;
+// Single-argument on purpose, so `.map(phaseFor)` stays safe; phaseForMax takes any maximum.
+export function phaseForMax(hp: number, maxHP: number): Phase {
+  const { phase2From, phase3From } = phaseThresholds(maxHP);
+  return hp > phase2From ? 1 : hp > phase3From ? 2 : 3;
 }
+export const phaseFor = (hp: number): Phase => phaseForMax(hp, AMARU.maxHP);
 
 // doubleDamage marks the scripted phase 3 window; a shield-break window keeps single damage.
 export interface Boss { readonly hp: number; readonly phase: Phase; readonly shield: number; readonly vulnerableUntil: number; readonly doubleDamage: boolean }
@@ -46,8 +55,10 @@ export type HitKind = 'normal' | 'returned';
 export type HitResult = 'damage' | 'deflect' | 'shieldHit' | 'shieldBreak';
 export interface Hit { boss: Boss; result: HitResult; amount: number; phaseChanged: boolean }
 
-// Phase changes come only from HP events. Entering phase 2 raises the full shield.
-export function hitBoss(b: Boss, kind: HitKind, now: number): Hit {
+// Phase changes come only from HP events. Entering phase 2 raises the full shield. `damage` is what one normal shot
+// deals (1, or 2 for a Ráfaga shot: playtest 2026-10-13 round 2); a returned bolt always deals its own damage, and a
+// shield deflects a normal shot whatever its damage (it never breaks it).
+export function hitBoss(b: Boss, kind: HitKind, now: number, damage: number = AMARU.normalDamage): Hit {
   if (shieldBlocks(b, now)) {
     if (kind === 'normal') return { boss: b, result: 'deflect', amount: 0, phaseChanged: false };
     const amount = Math.min(b.shield, AMARU.returnDamage), shield = b.shield - amount;
@@ -55,7 +66,7 @@ export function hitBoss(b: Boss, kind: HitKind, now: number): Hit {
     return { boss: { ...b, shield: 0, vulnerableUntil: now + AMARU.shieldWindowMs, doubleDamage: false }, result: 'shieldBreak', amount, phaseChanged: false };
   }
   const amount = kind === 'returned' ? AMARU.returnDamage
-    : AMARU.normalDamage * (b.phase === 3 && b.doubleDamage && isVulnerable(b, now) ? AMARU.finalMultiplier : 1);
+    : damage * (b.phase === 3 && b.doubleDamage && isVulnerable(b, now) ? AMARU.finalMultiplier : 1);
   const hp = Math.max(0, b.hp - amount), phase = phaseFor(hp);
   if (phase === b.phase) return { boss: { ...b, hp }, result: 'damage', amount, phaseChanged: false };
   // Every phase entry raises a full shield and closes any open window, so a phase 2 window can

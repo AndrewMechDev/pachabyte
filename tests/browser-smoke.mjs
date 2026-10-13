@@ -27,11 +27,16 @@ const BUG_SCORES = new Set([75, 150, 100, 40, 250]);
 const comboMultiplier = hits => 1 + [5, 12, 20].filter(t => hits >= t).length;
 // REVERSE tuning from the first human playtest (2026-10-13); mirrors src/game/reverseRules.ts.
 const SLOW_MS = 1200, CAPTURE_RADIUS = 40;
-const phaseFor = hp => (hp > 66 ? 1 : hp > 33 ? 2 : 3);
+// Balance round 2 (playtest 2026-10-13): Amaru 80 HP, phases at 2/3 and 1/3 (HP 53 and 26); mirrors amaruRules.ts.
+const AMARU_MAX = 80, PHASE2_FROM = 53, PHASE3_FROM = 26;
+const phaseFor = hp => (hp > PHASE2_FROM ? 1 : hp > PHASE3_FROM ? 2 : 3);
 // Rare pickups (B3, 2026-10-13); mirror src/game/pickupRules.ts.
-const RAFAGA_MS = 6000, RAFAGA_COOLDOWN = 120, SHOT_COOLDOWN = 180, SHOT_POOL = 36, MAX_HP = 4;
-// Guardian Ráfaga drops (2026-10-13): middle of phase 1 (HP 83) and every phase 2 shield break; mirror pickupRules.ts.
-const RAFAGA_DROP_HP = 83;
+// Round 2: the Ráfaga lasts 9 s and each of its shots deals 2 damage; the Umbral heals 1 heart and lifts the meter to 60;
+// Kipu enters the fight with at least 3 hearts and one Escudo; at racha x3/x4 a boss hit charges REVERSE 25 instead of 15.
+const RAFAGA_MS = 9000, RAFAGA_COOLDOWN = 120, SHOT_COOLDOWN = 180, SHOT_POOL = 36, MAX_HP = 4;
+const UMBRAL_METER = 60, ENTRY_HEARTS = 3, HIT_CHARGE = 15, HIT_CHARGE_RACHA = 25;
+// Guardian Ráfaga drops (2026-10-13): middle of phase 1 (HP 67 of 80) and every phase 2 shield break; mirror pickupRules.ts.
+const RAFAGA_DROP_HP = 67;
 // Route background (2026-10-13): only the arena backdrop and the ambient layers; mirror RouteScene.ts and routeAmbient.ts.
 const BACKGROUND_LAYERS = new Set(['backdrop', 'ambient-volcano', 'ambient-clouds']);
 // A2 route (2026-10-13): 98 s with Packet Loss, the eruption, Memory Leak and the Bucle; mirror routeRules.ts and the
@@ -40,7 +45,7 @@ const ROUTE_MS = 98000, MAREA = { start: 72000, peak: 78000, end: 82000 }, LOOP_
 const PL = { start: 37600, period: 2400, solid: 800, speed: 64, width: 10, lanes: [[19, 38], [59, 37], [98, 38], [138, 37]] };
 const plSolid = (t, i) => ((((t - PL.start + (i % 2 ? PL.period / 2 : 0)) % PL.period) + PL.period) % PL.period) < PL.solid;
 const EMBER_MARKER_MS = 700, LEAK_DRAIN = 25, LOOP_SCORE = 250, LOOP_BOB = 14, LOOP_ITERATION_MS = 2600;
-const TEXT_A2 = { packetLoss: 'PACKET LOSS: CRUZA CUANDO SE PIERDAN', eruption: '¡EL MISTI DESPIERTA!', memoryLeak: 'MEMORY LEAK: DRENA TU ENERGÍA', loop: 'BUCLE: ROMPE EL NODO', loopBroken: 'BUCLE ROTO' };
+const TEXT_A2 = { umbral: 'EL UMBRAL TE RESTAURA', packetLoss: 'PACKET LOSS: CRUZA CUANDO SE PIERDAN', eruption: '¡EL MISTI DESPIERTA!', memoryLeak: 'MEMORY LEAK: DRENA TU ENERGÍA', loop: 'BUCLE: ROMPE EL NODO', loopBroken: 'BUCLE ROTO' };
 // Multiple of 10 up to float noise (the Memory Leak drain makes the meter fractional).
 const step10 = d => { const r = ((d % 10) + 10) % 10; return r < 1e-6 || r > 10 - 1e-6; };
 
@@ -173,6 +178,7 @@ try {
       pw: s.power.rafaga.active, prm: s.power.rafaga.remainingMs, shd: s.power.shield, inv: s.player.invulnerableUntil, pk: s.pickups.map(p => p.type).join(','),
       pcr: s.pickupsCollected.rafaga, pce: s.pickupsCollected.escudo, pcc: s.pickupsCollected.corazon, pb: s.pickupBonus,
       vc: s.fire.count, vs: s.fire.lastSize, va: s.fire.lastAt, hr: s.hud.rafaga, hsh: s.hud.shield,
+      fd: s.fire.damage, sd: s.shots.map(x => x.damage), um: s.umbral.applied, umb: s.umbral.hpBefore, uma: s.umbral.hpAfter, umm: s.umbral.meterAfter, ump: s.umbral.meterBefore,
       bd: s.background.ambient.band, em: s.background.ambient.ember, pf: s.background.ambient.puffs, er: s.background.ambient.eruption, dim: s.background.ambient.dim,
       act: s.hazards.active.join(','), pl: s.hazards.packetLoss.map(c => `${c.index}:${c.states}`).join('|'),
       plTouch: s.hazards.packetLoss.some(c => left < c.screenX + 10 && left + w > c.screenX && [[19, 38], [59, 37], [98, 38], [138, 37]].some(([y, hh], i) => c.states[i] === 'S' && top < y + hh && top + h > y)),
@@ -415,7 +421,7 @@ try {
   assert.ok(R.some(s => s.shots > 0) && R.every(s => s.shots <= SHOT_POOL), `shots fire and stay within the ${SHOT_POOL}-shot pool`);
   for (const [a, b] of pairs) {
     assert.equal(b.sc - a.sc, 100 * (b.fr - a.fr) + (b.bp - a.bp) + (b.cb - a.cb) + (b.pb - a.pb), `score delta at ${b.c} ms`);
-    if (b.m < 100 && !a.lk && !b.lk) assert.ok(step10(b.m - a.m), `meter moves in steps of 10 outside Memory Leak at ${b.c} ms (${a.m} -> ${b.m})`);
+    if (b.m < 100 && !a.lk && !b.lk && !(b.um && !a.um)) assert.ok(step10(b.m - a.m), `meter moves in steps of 10 outside Memory Leak and the Umbral at ${b.c} ms (${a.m} -> ${b.m})`);
     if (b.bg === a.bg + 1) {
       assert.ok(BUG_SCORES.has(b.bp - a.bp), `a debugged bug scores its own value (${b.bp - a.bp}) at ${b.c} ms`);
       assert.equal(b.cb - a.cb, (b.bp - a.bp) * (comboMultiplier(b.ch) - 1), `racha bonus = base x (multiplier - 1) at ${b.c} ms`);
@@ -452,6 +458,15 @@ try {
   const threshold = R.filter(s => s.seg === 'threshold');
   assert.ok(threshold.length > 30 && threshold.every(s => s.en === 0 && s.oc === 0), 'at the threshold every bug and orb is gone and none spawn');
   assert.ok(threshold.some(s => s.cap === TEXT.threshold), 'threshold line must show');
+  // Round 2: the threshold restores Kipu: +1 heart (max 4) and the meter raised to at least 60, with a Spanish cue.
+  const umbral = R.find(s => s.um);
+  assert.ok(umbral, 'the Umbral applies when the threshold starts');
+  assert.equal(umbral.uma, Math.min(MAX_HP, umbral.umb + 1), `the Umbral heals one heart (${umbral.umb} -> ${umbral.uma})`);
+  assert.ok(umbral.umm >= UMBRAL_METER && umbral.umm === Math.max(UMBRAL_METER, umbral.ump), `the Umbral raises the meter to at least ${UMBRAL_METER} (${umbral.ump} -> ${umbral.umm})`);
+  assert.ok(R.some(s => s.cap === TEXT_A2.umbral && s.seg === 'threshold'), 'the Umbral cue shows in the threshold');
+  assert.ok(R.filter(s => s.c < THRESHOLD_MS).every(s => !s.um), 'the Umbral applies only once the threshold has started');
+  assert.ok(R.filter(s => s.um).every(s => s.hp === umbral.uma && s.m >= UMBRAL_METER), 'nothing takes the restored hearts or meter back before the guardian');
+  notes.push(`Umbral: hearts ${umbral.umb} -> ${umbral.uma}, meter ${umbral.ump} -> ${umbral.umm}`);
   const rightMost = Math.max(...threshold.map(s => s.right));
   assert.ok(rightMost >= 312.5 && rightMost <= 315, `right clamp keeps Kipu inside the play area (right edge ${rightMost})`);
   const final = R.at(-1);
@@ -461,7 +476,12 @@ try {
     { hp: arrival.run.hp, score: arrival.run.score, fragments: arrival.run.fragments, bugs: arrival.run.bugs, meter: arrival.run.meter },
     { hp: final.hp, score: final.sc, fragments: final.fr, bugs: final.bg, meter: final.m }, 'guardian must receive the route state');
   assert.ok(arrival.run.routeSeconds >= ROUTE_MS / 1000 && arrival.run.routeSeconds < ROUTE_MS / 1000 + 0.2, `route time ${arrival.run.routeSeconds}`);
-  assert.equal(arrival.heroHP, final.hp);
+  // Round 2: Kipu enters with a floor of 3 hearts and exactly one Escudo, whatever the route left.
+  assert.equal(arrival.heroHP, Math.max(ENTRY_HEARTS, final.hp), 'Kipu enters the fight with at least 3 hearts');
+  assert.ok(arrival.heroHP >= ENTRY_HEARTS && arrival.heroHP <= MAX_HP);
+  assert.equal(arrival.power.shield, true, 'Kipu enters the fight with one Escudo already active');
+  assert.deepEqual({ routeHp: arrival.entry.routeHp, hp: arrival.entry.hp, shield: arrival.entry.shield, applied: arrival.entry.applied }, { routeHp: final.hp, hp: arrival.heroHP, shield: true, applied: true });
+  assert.equal(arrival.fightPickups.count, 0, 'the entry Escudo is not a collected pickup');
   assert.equal(arrival.reverse.meter, final.m);
   assert.equal(arrival.score, final.sc);
   assert.equal(arrival.run.pickupBonus, final.pb, 'the full-heart bonus carries into the guardian');
@@ -583,6 +603,16 @@ try {
   assert.ok(route.rafagaPause, 'the pilot paused during a Ráfaga');
   assert.equal(route.rafagaPause.after, route.rafagaPause.before, 'Esc pause freezes the Ráfaga timer');
   assert.equal(route.rafagaPause.real[1], route.rafagaPause.real[0], 'Esc pause freezes the real clock');
+  // Round 2: every shot fired during a Ráfaga deals 2 damage (fixed when it leaves Kipu), every other shot 1.
+  assert.ok(R.every(s => s.fd === (s.pw ? 2 : 1)), 'Ráfaga shots deal 2 damage and normal shots 1');
+  assert.ok(R.every(s => s.sd.every(d => d === 1 || d === 2)), 'a shot deals 1 or 2 damage');
+  assert.ok(R.some(s => s.pw && s.sd.includes(2)), 'Ráfaga shots in flight carry 2 damage');
+  const nearRafaga = s => rafagaWindows.some(w => s.rc > w.start.rc - 200 && s.rc < w.end.rc + 1700);
+  assert.ok(R.filter(s => !nearRafaga(s) && !s.pw).every(s => s.sd.every(d => d === 1)), 'shots fired outside a Ráfaga deal 1 damage');
+  // Round 2: a second Corazón after the Memory Leak, never more than 2 on screen.
+  const heartsOn = s => s.pk.split(',').filter(k => k === 'corazon').length;
+  assert.ok(R.every(s => heartsOn(s) <= 2), 'at most 2 Corazón on screen');
+  assert.ok(R.some(s => s.c >= 71950 && s.c < MAREA.end && heartsOn(s) >= 1), 'a second Corazón appears after the Memory Leak');
   const shieldPick = pairs.find(([a, b]) => b.pce > a.pce);
   assert.ok(shieldPick, 'an Escudo must be collected');
   assert.ok(shieldPick[1].shd && shieldPick[1].hsh, 'a collected Escudo shows on Kipu and next to the hearts');
@@ -615,7 +645,7 @@ try {
       hs: s.hitStop.active, hsc: s.hitStop.count, ch: s.combo.hits, cm: s.combo.multiplier, fb: s.fightBonus, sc: s.score, fl: s.floaters.active,
       pk: s.pickups.map(p => p.type).join(','), pkt: s.pickups.map(p => p.texture).join(','), pdc: s.pickupsDropped.corazon, pde: s.pickupsDropped.escudo,
       pcc: s.pickupsCollected.corazon, pce: s.pickupsCollected.escudo, shd: s.power.shield, inv: s.invulnerableUntil, fpb: s.fightPickups.bonus,
-      pdr: s.pickupsDropped.rafaga, pcr: s.pickupsCollected.rafaga, pw: s.power.rafaga.active,
+      pdr: s.pickupsDropped.rafaga, pcr: s.pickupsCollected.rafaga, pw: s.power.rafaga.active, fd: s.fire.damage, bc: s.bossCharge, sdm: s.alliedShots.filter(x => !x.returned).map(x => x.damage),
     };
   });
   const fight = { nokiaDone: false, pauseDone: false, shiftKey: 0, attempts: 0, waveSeen: false };
@@ -624,7 +654,10 @@ try {
     // Phase 3 can start inside an open shield window, and normal fire alone can then end the fight before its wave.
     // The pilot holds normal fire in phase 3 until the wave has run once, so every run exercises the wave.
     if (s.wave?.active) fight.waveSeen = true;
-    if (s.phase === 3 && !fight.waveSeen) keys.delete('j');
+    // Round 2 (80 HP, a bigger racha charge) can also finish Amaru in phase 3 with returned bolts alone, so the pilot holds
+    // PachaShift there too until the wave has run once.
+    const waveGate = s.phase === 3 && !fight.waveSeen;
+    if (waveGate) keys.delete('j');
     // Aim where Amaru's body will be when the shot arrives (head path from amaruRules, world clock).
     const travel = Math.max(0, 240 - p.x - 12) / 230 * 1000 * s.worldScale;
     let tx = 80, ty = 94 + 34 * Math.sin(2 * Math.PI * (s.worldClock + travel) / 7000) + 10 + 1;
@@ -657,7 +690,7 @@ try {
     if (best.mx > 0) keys.add('d'); else if (best.mx < 0) keys.add('a');
     if (best.my > 0) keys.add('s'); else if (best.my < 0) keys.add('w');
     const close = capturable.filter(b => Math.hypot(b.x - p.x, b.y - p.y) < 55).length;
-    return { keys, shift: s.reverse.state === 'READY' && s.phase >= 2 && (close >= 2 || capturable.some(b => Math.hypot(b.x - p.x, b.y - p.y) < 30)) };
+    return { keys, shift: s.reverse.state === 'READY' && s.phase >= 2 && !waveGate && (close >= 2 || capturable.some(b => Math.hypot(b.x - p.x, b.y - p.y) < 30)) };
   };
   // Freeze the very first SLOW frame through the real blur handler, so the screenshot shows REVERSE.
   const armNokia = () => page.evaluate(() => {
@@ -736,7 +769,8 @@ try {
       notes.push('fight: switched to direct entry after two carried-run losses');
     } else await page.keyboard.press(lost.phase >= 2 ? 'Enter' : 'r');
     await wait(previous => window.pachaDebug?.().scene === 'guardian' && window.pachaDebug().sceneRun > previous && window.pachaDebug().outcome === 'playing', lost.sceneRun);
-    assert.equal((await snap()).bossHP, 100, 'the fight pilot restarts from phase 1');
+    assert.equal((await snap()).bossHP, AMARU_MAX, 'the fight pilot restarts from phase 1');
+    assert.ok((await snap()).heroHP >= ENTRY_HEARTS && (await snap()).power.shield, 'every fresh attempt starts with at least 3 hearts and an Escudo');
     outcome = await fightOnce();
   }
   assert.equal(outcome, 'victory', `the keyboard pilot must free Amaru (attempts ${fight.attempts})`);
@@ -760,7 +794,7 @@ try {
   await wait(() => window.pachaDebug?.().scene === 'map');
   const F = (await stopSampler('fight')).filter(s => s.scene === 'guardian');
   const runs = [...new Set(F.map(s => s.run))];
-  notes.push(`fight: ${fight.attempts} attempt(s), victory at real ${Math.round(won.realClock)} ms, returns ${won.reverse.returnsTotal}, activations ${won.reverse.activations}`);
+  notes.push(`fight: entered with ${arrival.heroHP} hearts (route left ${arrival.entry.routeHp}) and an Escudo; ${fight.attempts} attempt(s), victory at real ${Math.round(won.realClock)} ms, returns ${won.reverse.returnsTotal}, activations ${won.reverse.activations}`);
 
   stage = '3 REVERSE invariants (sampled frames)';
   const G = F.filter(s => s.out === 'playing');
@@ -813,7 +847,10 @@ try {
   assert.ok(toPhase(2).length >= 1 && toPhase(3).length >= 1, 'phase 2 and phase 3 starts were sampled');
   for (const [a, b] of toPhase(2)) assert.ok(b.pdc === a.pdc + 1 && b.pk.split(',').includes('corazon'), `Amaru drops a Corazón when phase 2 starts (${b.pk})`);
   for (const [a, b] of toPhase(3)) assert.ok(b.pde === a.pde + 1 && b.pk.split(',').includes('escudo'), `Amaru drops an Escudo when phase 3 starts (${b.pk})`);
-  assert.ok(G.every(s => s.pdc <= 1 && s.pde <= 1), 'one drop per phase start');
+  // Round 2: phase 3 also drops an extra Corazón; never more than 2 Corazón on screen.
+  for (const [a, b] of toPhase(3)) assert.ok(b.pdc === a.pdc + 1 && b.pk.split(',').includes('corazon'), `Amaru drops an extra Corazón when phase 3 starts (${b.pk})`);
+  assert.ok(G.every(s => s.pdc <= 2 && s.pde <= 1), 'a Corazón at phase 2 and phase 3, an Escudo at phase 3');
+  assert.ok(G.every(s => s.pk.split(',').filter(k => k === 'corazon').length <= 2), 'at most 2 Corazón on screen in the fight');
   // Ráfaga drops: at the middle of phase 1 and at each phase 2 shield break, never two on screen.
   const rafagaOn = s => s.pk.split(',').filter(k => k === 'rafaga').length;
   assert.ok(G.every(s => rafagaOn(s) <= 1), 'at most one Ráfaga drop on screen');
@@ -832,13 +869,39 @@ try {
   }
   for (const [a, b] of gPairs.filter(([a, b]) => a.shd && !b.shd && b.out === 'playing')) assert.ok(b.hero === a.hero && b.inv > a.inv, 'the Escudo absorbs a hit in the fight');
   notes.push(`fight pickups: drops corazón ${Math.max(...G.map(s => s.pdc))} / escudo ${Math.max(...G.map(s => s.pde))} per run, collected corazón ${Math.max(...G.map(s => s.pcc))} / escudo ${Math.max(...G.map(s => s.pce))}, ${drift.length} frames with a drop on screen`);
-  passed.push(`3 B3: Amaru drops a Corazón at every phase 2 start and an Escudo at every phase 3 start, drops use four-green twins in REVERSE, hearts capped at ${MAX_HP}`);
+  passed.push(`3 B3: Amaru drops a Corazón at every phase 2 start and an Escudo plus a Corazón at every phase 3 start (at most 2 Corazón on screen), drops use four-green twins in REVERSE, hearts capped at ${MAX_HP}`);
+  // Round 2: Ráfaga shots deal 2 to Amaru; a boss hit charges REVERSE 25 at racha x3/x4 and 15 below.
+  assert.ok(G.every(s => s.fd === (s.pw ? 2 : 1)), 'in the fight Ráfaga shots deal 2 damage and normal shots 1');
+  let rafagaSince = null;
+  const rafagaEven = [], rafagaFrames = G.filter(s => s.pw).length;
+  for (const [a, b] of gPairs) {
+    if (a.pw && rafagaSince === null) rafagaSince = a.rc;
+    if (!a.pw) rafagaSince = null;
+    if (a.pw && b.pw && a.rc > rafagaSince + 1700 && b.ret === a.ret && b.sh === a.sh && b.hp > 0 && b.hp < a.hp) rafagaEven.push([a, b]);
+  }
+  // The pilot collects a Ráfaga drop only when it happens to fly through it, so the Ráfaga checks apply when it did.
+  const rafagaInFight = G.some(s => s.pw && s.sdm.length > 0);
+  assert.ok(G.every(s => s.sdm.every(d => d === 1 || d === 2)), 'a shot at Amaru deals 1 or 2 damage');
+  if (rafagaInFight) assert.ok(G.some(s => s.pw && s.sdm.includes(2)), 'Ráfaga shots in flight at Amaru carry 2 damage');
+  notes.push(`fight Ráfaga: ${rafagaFrames} frames active, ${rafagaEven.length} even-damage hit frames`);
+  assert.ok(rafagaEven.every(([a, b]) => (a.hp - b.hp) % 2 === 0), `with a Ráfaga every normal hit on Amaru deals 2 (${rafagaEven.length} frames, deltas ${[...new Set(rafagaEven.map(([a, b]) => a.hp - b.hp))]})`);
+  const chargeFrames = gPairs.filter(([a, b]) => a.st === b.st && a.ph === b.ph && b.m < 100 && b.m > a.m && b.hero >= a.hero && b.wc >= a.wc);
+  const lowRacha = chargeFrames.filter(([a, b]) => a.cm <= 2 && b.cm <= 2 && a.st !== 'SLOW'), highRacha = chargeFrames.filter(([a]) => a.cm >= 3 && a.st !== 'SLOW');
+  assert.ok(lowRacha.every(([a, b]) => (b.m - a.m) % HIT_CHARGE === 0), `below racha x3 a boss hit charges ${HIT_CHARGE} (${[...new Set(lowRacha.map(([a, b]) => b.m - a.m))]})`);
+  assert.ok(highRacha.every(([a, b]) => (b.m - a.m) % HIT_CHARGE_RACHA === 0), `at racha x3 or x4 a boss hit charges ${HIT_CHARGE_RACHA} (${highRacha.length} frames, ${[...new Set(highRacha.map(([a, b]) => b.m - a.m))]})`);
+  // The scene also reports the charge it applied on its latest normal hit and the racha multiplier it read.
+  const chargeEvents = G.filter((s, i) => i > 0 && G[i - 1].run === s.run && s.bc.hits > G[i - 1].bc.hits);
+  assert.ok(chargeEvents.length >= 10, `Amaru was hit by many normal shots (${chargeEvents.length} sampled hit frames)`);
+  assert.ok(chargeEvents.every(s => s.bc.charge === (s.bc.multiplier >= 3 ? HIT_CHARGE_RACHA : HIT_CHARGE)), 'each hit charged 25 at racha x3/x4 and 15 below');
+  const highHits = Math.max(...G.map(s => s.bc.high));
+  notes.push(`fight racha: ${highHits} boss hit(s) at racha x3/x4 in the last run, ${highRacha.length} sampled meter frames at x3/x4`);
+  passed.push(`3 round 2: Ráfaga shots deal 2 to Amaru (${rafagaEven.length} frames), a boss hit charges REVERSE ${HIT_CHARGE} below racha x3 and ${HIT_CHARGE_RACHA} at x3/x4 (${highHits} hit(s) at x3/x4), the fight began with at least ${ENTRY_HEARTS} hearts and an Escudo`);
   passed.push(`3 A1: Ráfaga drops at mid phase 1 and at ${breaks.length} phase 2 shield breaks (${Math.max(...G.map(s => s.pdr))} dropped in the last run, ${Math.max(...G.map(s => s.pcr))} collected), never two on screen`);
   passed.push(`3 hit-stop and racha in the fight: ${gStopped.length} sampled frames with the world clock stopped while the real clock ran, damage numbers float, damage resets the racha`);
   passed.push(`3 REVERSE: READY only at 100, ${closed.length} SLOW windows of ${closed.map(r => Math.round(r.end.rc - r.start.rc)).join('/')} ms real at worldScale 0.2, ${captures.length} captures all within reach and never harmful, <= 6 per activation, shield drops only with returned bolts, rhombus/orb silhouettes, wave seen, Esc and focus pause froze real and world clocks`);
 
   stage = '5 phases, victory and liberation (sampled frames)';
-  assert.ok(G.every(s => s.ph === phaseFor(s.hp)), 'phase always follows Amaru HP thresholds (66/33)');
+  assert.ok(G.every(s => s.ph === phaseFor(s.hp)), 'phase always follows Amaru HP thresholds (53/26 of 80)');
   assert.deepEqual([...new Set(G.filter(s => s.run === runs.at(-1)).map(s => s.ph))], [1, 2, 3], 'the winning attempt crosses phases 1, 2 and 3 in order');
   const phase2 = G.find(s => s.ph === 2);
   assert.ok(phase2.m === 100 || phase2.st === 'SLOW', 'entering phase 2 awakens the core and fills the meter');
@@ -881,6 +944,7 @@ try {
   const direct = await snap();
   assert.deepEqual({ hp: direct.run.hp, meter: direct.run.meter, score: direct.run.score }, { hp: 4, meter: 0, score: 0 }, 'map key 2 is a fresh direct entry');
   assert.equal(direct.reverse.state, 'CHARGING');
+  assert.deepEqual({ hp: direct.heroHP, shield: direct.power.shield, boss: direct.bossHP }, { hp: 4, shield: true, boss: AMARU_MAX }, 'a direct entry also starts with its Escudo and Amaru at 80 HP');
   for (const key of ['Shift', 'k', 'x']) await page.keyboard.press(key);
   await frames(5);
   assert.equal((await snap()).reverse.activations, 0, 'PachaShift cannot activate before the meter is full');
@@ -896,7 +960,8 @@ try {
   const retried = await snap();
   assert.deepEqual(
     { outcome: retried.outcome, hero: retried.heroHP, boss: retried.bossHP, phase: retried.phase, shield: retried.shieldHP, state: retried.reverse.state, meter: retried.reverse.meter, activations: retried.reverse.activations, returns: retried.reverse.returnsTotal, liberation: retried.liberation, bolts: retried.enemyBolts.length },
-    { outcome: 'playing', hero: 4, boss: 100, phase: 1, shield: 0, state: 'CHARGING', meter: 0, activations: 0, returns: 0, liberation: null, bolts: 0 }, 'R resets the fight');
+    { outcome: 'playing', hero: 4, boss: AMARU_MAX, phase: 1, shield: 0, state: 'CHARGING', meter: 0, activations: 0, returns: 0, liberation: null, bolts: 0 }, 'R resets the fight');
+  assert.equal(retried.power.shield, true, 'R starts the fight again with the entry Escudo');
   assert.ok(retried.realClock < 1000);
   passed.push('5 defeat: Shift/K/X rejected while CHARGING, standing still loses all hearts, "KIPU SE DESCONECTA", bolts cleared, R restarts with full state reset');
 
@@ -933,7 +998,7 @@ try {
   const resumed = await snap();
   assert.deepEqual(
     { outcome: resumed.outcome, hero: resumed.heroHP, boss: resumed.bossHP, phase: resumed.phase, shield: resumed.shieldHP, state: resumed.reverse.state, meter: resumed.reverse.meter, returns: resumed.reverse.returnsTotal, checkpointed: resumed.checkpointed, from: resumed.resumedFrom, score: resumed.score },
-    { outcome: 'playing', hero: 4, boss: 66, phase: 2, shield: 6, state: 'READY', meter: 100, returns: lost2.reverse.returnsTotal, checkpointed: true, from: 2, score: lost2.score },
+    { outcome: 'playing', hero: 4, boss: PHASE2_FROM, phase: 2, shield: 6, state: 'READY', meter: 100, returns: lost2.reverse.returnsTotal, checkpointed: true, from: 2, score: lost2.score },
     'R after a phase 2 defeat resumes at phase 2 with full hearts, a full meter and the score kept');
   assert.ok(resumed.fightElapsedMs >= lost2.checkpoint.elapsedMs, 'resuming never resets the fight time (no time bonus abuse)');
   assert.match(await page.locator('#view-help').innerText(), /PachaShift/);
@@ -946,10 +1011,10 @@ try {
   const restarted = await snap();
   assert.deepEqual(
     { outcome: restarted.outcome, hero: restarted.heroHP, boss: restarted.bossHP, phase: restarted.phase, meter: restarted.reverse.meter, returns: restarted.reverse.returnsTotal, checkpointed: restarted.checkpointed },
-    { outcome: 'playing', hero: 4, boss: 100, phase: 1, meter: 0, returns: 0, checkpointed: false },
+    { outcome: 'playing', hero: 4, boss: AMARU_MAX, phase: 1, meter: 0, returns: 0, checkpointed: false },
     'Enter after a phase 2 defeat restarts the whole fight');
-  notes.push(`checkpoint: lost in phase 2 at boss HP ${lost2.bossHP}, R resumed at 66 with 4 hearts and meter 100; Enter restarted at 100`);
-  passed.push('5 checkpoint: a phase 2 defeat shows "R: REINTENTAR DESDE FASE 2" / "ENTER: DESDE EL INICIO  M: MAPA" (canvas and DOM help); R resumes at HP 66 with 4 hearts, a full meter, shield up, score and fight time kept; Enter restarts from phase 1');
+  notes.push(`checkpoint: lost in phase 2 at boss HP ${lost2.bossHP}, R resumed at ${PHASE2_FROM} with 4 hearts and meter 100; Enter restarted at ${AMARU_MAX}`);
+  passed.push('5 checkpoint: a phase 2 defeat shows "R: REINTENTAR DESDE FASE 2" / "ENTER: DESDE EL INICIO  M: MAPA" (canvas and DOM help); R resumes at HP 53 with 4 hearts, a full meter, shield up, score and fight time kept; Enter restarts from phase 1');
 
   // ================================================================== 7. sound
   stage = '7 sound toggle';
