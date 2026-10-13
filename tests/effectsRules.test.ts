@@ -27,6 +27,18 @@ describe('hit-stop on the world clock', () => {
     expect(worldStep(h, 1060, 16, 0.2)).toBeCloseTo(3.2);
     expect(worldStep(initialHitStop(), 0, 16, 1)).toBe(16);
   });
+  it('never steps the world clock backwards on a fully stopped frame (float rounding, A2 Marea smoke flake)', () => {
+    // (r + d) - r is 3.6e-12 larger than d here, which used to make the world step slightly negative.
+    const r = 57549.42859116429, d = 16.780959471045275, h = triggerHitStop(initialHitStop(), r);
+    expect(worldStep(h, r, d, 1)).toBe(0);
+    expect(worldStep(h, r, d, 0.2)).toBe(0);
+    for (let i = 0; i < 2000; i++) {
+      const real = 40000 + i * 7.31, delta = 16 + (i % 7) * 0.37, stop = triggerHitStop(initialHitStop(), real - (i % 3));
+      const w = worldStep(stop, real, delta, 1);
+      expect(w).toBeGreaterThanOrEqual(0);
+      expect(w).toBeLessThanOrEqual(delta);
+    }
+  });
   it('costs the world exactly 50 ms over a stretch of frames', () => {
     let h = initialHitStop(), real = 0, world = 0;
     for (let frame = 0; frame < 120; frame++) {

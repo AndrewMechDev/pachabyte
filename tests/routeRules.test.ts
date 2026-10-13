@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ROUTE, SEGMENTS, SPAWNS, WALLS, addMeter, cameraScroll, captionAt, defeatBug, directEntry, finalScore, glitchlingVelocity, mareaFront,
-  mareaTouches, overlaps, pickupFragment, quietSegment, readRunState, runningScore, scoreBreakdown, segmentAt, spawnsDue, takeHit, wallRects, wallScreenX, wallTelegraph, type Tally,
+  mareaTouches, overlaps, pickupFragment, quietSegment, firewallWindow, readRunState, runningScore, scoreBreakdown, segmentAt, spawnsDue, takeHit, wallRects, wallScreenX, wallTelegraph, type Tally,
 } from '../src/game/routeRules';
 import { BUGS, corruptorLifetime, sombraTravelMs } from '../src/game/bugRules';
 import { GAME } from '../src/game/rules';
@@ -9,19 +9,22 @@ import { TEXT } from '../src/game/text';
 
 describe('route timeline', () => {
   it('lists every Ruta 01 step in order with the approved boundaries', () => {
+    // A2 (2026-10-13): about 98 s with Packet Loss, the eruption, a mixed swarm, Memory Leak and the Bucle.
     expect(SEGMENTS.map(s => [s.name, s.start, s.end])).toEqual([
-      ['arrival', 0, 8000], ['firstBug', 8000, 16000], ['fragments', 16000, 26000], ['firewall', 26000, 38000],
-      ['swarm', 38000, 48000], ['marea', 48000, 62000], ['threshold', 62000, 70000],
+      ['arrival', 0, 8000], ['firstBug', 8000, 16000], ['fragments', 16000, 26000], ['firewall', 26000, 36000],
+      ['packetLoss', 36000, 46000], ['eruption', 46000, 56000], ['swarm', 56000, 64000], ['memoryLeak', 64000, 72000],
+      ['marea', 72000, 82000], ['loop', 82000, 90000], ['threshold', 90000, 98000],
     ]);
-    expect(ROUTE.transitionMs).toBe(70000);
+    expect(ROUTE.transitionMs).toBe(98000);
   });
   it('resolves segments with inclusive starts and exclusive ends', () => {
     expect(segmentAt(0)).toBe('arrival');
     expect(segmentAt(7999)).toBe('arrival');
     expect(segmentAt(8000)).toBe('firstBug');
-    expect(segmentAt(61999)).toBe('marea');
-    expect(segmentAt(62000)).toBe('threshold');
-    expect(segmentAt(70000)).toBe('transition');
+    expect(segmentAt(81999)).toBe('marea');
+    expect(segmentAt(82000)).toBe('loop');
+    expect(segmentAt(90000)).toBe('threshold');
+    expect(segmentAt(98000)).toBe('transition');
   });
   it('scrolls the camera at a constant speed and stops at the end of the world', () => {
     expect(cameraScroll(0)).toBe(0);
@@ -34,8 +37,12 @@ describe('route timeline', () => {
     expect([captionAt(4000), captionAt(7000)]).toEqual([TEXT.moveHint, TEXT.fireHint]);
     expect(captionAt(16500)).toBe(TEXT.fragments);
     expect(captionAt(26500)).toBe(TEXT.firewall);
-    expect(captionAt(48500)).toBe(TEXT.marea);
-    expect(captionAt(64000)).toBe(TEXT.threshold);
+    expect(captionAt(37500)).toBe(TEXT.packetLoss);
+    expect(captionAt(46500)).toBe(TEXT.eruption);
+    expect(captionAt(64500)).toBe(TEXT.memoryLeak);
+    expect(captionAt(72500)).toBe(TEXT.marea);
+    expect(captionAt(82500)).toBe(TEXT.loop);
+    expect(captionAt(92000)).toBe(TEXT.threshold);
     expect(captionAt(13000)).toBe('');
   });
 });
@@ -47,7 +54,7 @@ describe('scripted spawns', () => {
     for (const s of SPAWNS) {
       expect(s.y).toBeGreaterThanOrEqual(GAME.playTop + 4);
       expect(s.y).toBeLessThanOrEqual(GAME.playBottom - 4);
-      expect(s.at).toBeLessThan(62000);
+      expect(s.at).toBeLessThan(90000);
     }
   });
   it('introduce one bug first, then fragments, a swarm, and tempting fragments during the Marea', () => {
@@ -63,13 +70,14 @@ describe('scripted spawns', () => {
     const ys = new Set(SPAWNS.filter(s => segmentAt(s.at) === 'fragments' && s.kind === 'fragment').map(s => s.y));
     expect(ys.size).toBeGreaterThanOrEqual(3);
   });
-  it('adds Corruptors and Sombras de Error to the script, never inside the Firewall or the threshold', () => {
+  it('adds Corruptors and Sombras de Error to the script, never inside the Firewall, the new hazards or the threshold', () => {
     const corruptors = SPAWNS.filter(s => s.kind === 'corruptor'), sombras = SPAWNS.filter(s => s.kind === 'sombra');
     expect(corruptors.length).toBeGreaterThanOrEqual(2);
     expect(sombras.length).toBeGreaterThanOrEqual(2);
     expect(quietSegment('firewall')).toBe(true);
     expect(quietSegment('threshold')).toBe(true);
-    expect(quietSegment('swarm')).toBe(false);
+    for (const name of ['packetLoss', 'eruption', 'loop'] as const) expect(quietSegment(name), name).toBe(true);
+    for (const name of ['swarm', 'memoryLeak', 'marea'] as const) expect(quietSegment(name), name).toBe(false);
     const quiet = SEGMENTS.filter(s => quietSegment(s.name));
     const windows = [...corruptors.map(s => [s.at, s.at + corruptorLifetime()]), ...sombras.map(s => [s.at, s.at + sombraTravelMs()])];
     for (const [from, to] of windows) for (const q of quiet) expect(from >= q.end || to <= q.start, `${from}-${to} overlaps ${q.name}`).toBe(true);
@@ -84,9 +92,18 @@ describe('scripted spawns', () => {
     }
     expect(SPAWNS.filter(s => s.kind === 'corruptor').some(a => SPAWNS.some(b => b !== a && b.kind === 'corruptor' && Math.abs(b.at - a.at) < corruptorLifetime()))).toBe(true);
   });
+  it('sends the mixed swarm as waves of Corruptors and Sombras within the caps', () => {
+    const swarm = SPAWNS.filter(s => segmentAt(s.at) === 'swarm');
+    expect(swarm.filter(s => s.kind === 'corruptor')).toHaveLength(BUGS.caps.corruptors);
+    expect(swarm.filter(s => s.kind === 'sombra').length).toBeGreaterThanOrEqual(1);
+    expect(new Set(swarm.filter(s => s.kind === 'glitchling').map(s => s.at)).size).toBeGreaterThanOrEqual(3);
+  });
+  it('lets a few Glitchlings slip between the Packet Loss columns', () => {
+    expect(SPAWNS.filter(s => segmentAt(s.at) === 'packetLoss' && s.kind === 'glitchling').length).toBeGreaterThanOrEqual(2);
+  });
   it('releases each spawn exactly once as the clock advances', () => {
     let cursor = 0; const seen: number[] = [];
-    for (let t = 0; t <= 70000; t += 16) { const step = spawnsDue(cursor, t); cursor = step.next; seen.push(...step.due.map(s => s.at)); }
+    for (let t = 0; t <= 98000; t += 16) { const step = spawnsDue(cursor, t); cursor = step.next; seen.push(...step.due.map(s => s.at)); }
     expect(seen).toEqual(SPAWNS.map(s => s.at));
     expect(spawnsDue(cursor, 99999).due).toHaveLength(0);
   });
@@ -170,7 +187,10 @@ describe('Firewall', () => {
     expect(wallTelegraph(wall.at, wall)).toBe(false);
   });
   it('happens inside its segment with varying gaps', () => {
-    for (const wall of WALLS) expect(segmentAt(wall.at)).toBe('firewall');
+    for (const wall of WALLS) expect(segmentAt(wall.at - ROUTE.firewall.telegraphMs)).toBe('firewall');
+    const [start, end] = firewallWindow();
+    expect(start).toBe(WALLS[0].at - ROUTE.firewall.telegraphMs);
+    expect(wallScreenX(end, WALLS.at(-1)!)).toBeLessThanOrEqual(-ROUTE.firewall.width);
     expect(new Set(WALLS.map(w => w.gapY)).size).toBe(WALLS.length);
   });
   it('detects rectangle overlap with touching edges excluded', () => {
@@ -181,14 +201,15 @@ describe('Firewall', () => {
 
 describe('Marea del Desfase', () => {
   it('is absent outside its segment, advances, holds and recedes before the threshold', () => {
-    expect(mareaFront(47999)).toBe(0);
-    expect(mareaFront(48000)).toBe(0);
-    expect(mareaFront(52000)).toBeGreaterThan(0);
-    expect(mareaFront(52000)).toBeLessThan(mareaFront(ROUTE.marea.peakAt));
+    expect(mareaFront(71999)).toBe(0);
+    expect(mareaFront(72000)).toBe(0);
+    expect(mareaFront(75000)).toBeGreaterThan(0);
+    expect(mareaFront(75000)).toBeLessThan(mareaFront(ROUTE.marea.peakAt));
     expect(mareaFront(ROUTE.marea.peakAt)).toBe(ROUTE.marea.maxFront);
     expect(mareaFront(ROUTE.marea.holdUntil)).toBe(ROUTE.marea.maxFront);
-    expect(mareaFront(61000)).toBeLessThan(ROUTE.marea.maxFront);
-    expect(mareaFront(62000)).toBe(0);
+    expect(mareaFront(81000)).toBeLessThan(ROUTE.marea.maxFront);
+    expect(mareaFront(82000)).toBe(0);
+    expect(ROUTE.marea.start).toBe(72000);
     expect(ROUTE.marea.maxFront).toBeLessThan(GAME.width / 2);
   });
   it('touches only what lies left of the front', () => {

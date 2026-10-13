@@ -7,6 +7,12 @@ export const TEXT = Object.freeze({
   fragments: 'FRAGMENTOS: +ENERGÍA +PUNTOS',
   firewall: 'FIREWALL: BUSCA LA BRECHA',
   marea: 'LA MAREA DEL DESFASE AVANZA',
+  // A2 route hazards (2026-10-13): one caption the first time each appears, plus the cue when the Bucle breaks.
+  packetLoss: 'PACKET LOSS: CRUZA CUANDO SE PIERDAN',
+  eruption: '¡EL MISTI DESPIERTA!',
+  memoryLeak: 'MEMORY LEAK: DRENA TU ENERGÍA',
+  loop: 'BUCLE: ROMPE EL NODO',
+  loopBroken: 'BUCLE ROTO',
   threshold: 'ALGO REPITE UN PATRÓN...',
   routeDefeat: 'KIPU SE DESCONECTA',
   routeDefeatHelp: 'R: REINTENTAR  M: MAPA',

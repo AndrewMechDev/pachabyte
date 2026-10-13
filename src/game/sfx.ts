@@ -5,7 +5,8 @@ export type SfxName = 'shot' | 'bossHit' | 'reflectHit' | 'heroHit' | 'capture' 
   | 'bossFire' | 'victory' | 'defeat' | 'select' | 'fragment' | 'enemyHit' | 'enemyDown' | 'firewall' | 'pause'
   | 'deflect' | 'shieldHit' | 'shieldBreak' | 'wave' | 'restore' | 'blip'
   | 'corruptorCharge' | 'corruptorShot' | 'sombraDodge' | 'sombraSplit' | 'comboUp'
-  | 'pickupRafaga' | 'pickupEscudo' | 'pickupCorazon' | 'shieldAbsorb';
+  | 'pickupRafaga' | 'pickupEscudo' | 'pickupCorazon' | 'shieldAbsorb'
+  | 'emberImpact' | 'leakDrain' | 'loopReset' | 'loopBreak';
 
 export interface Voice { wave: 'square' | 'triangle' | 'sawtooth' | 'sine' | 'noise'; from: number; to: number; at: number; dur: number; gain: number }
 // For 'noise', from/to are the low-pass cutoff sweep in Hz instead of a pitch.
@@ -51,6 +52,12 @@ export const RECIPES: Readonly<Record<SfxName, readonly Voice[]>> = Object.freez
   pickupEscudo: [v('triangle', 600, 1200, 0, 0.18, 0.35), v('sine', 1200, 1800, 0.04, 0.2, 0.22)],
   pickupCorazon: [v('triangle', 523, 523, 0, 0.1, 0.4), v('triangle', 784, 784, 0.09, 0.18, 0.4)],
   shieldAbsorb: [v('noise', 5000, 800, 0, 0.18, 0.4), v('triangle', 1100, 300, 0, 0.2, 0.35)],
+  // A2 route hazards (2026-10-13): a dull thud where an ember lands, a soft falling blip while Memory Leak drains the
+  // meter, a rewinding sweep when the Bucle resets and a rising break when its node is destroyed.
+  emberImpact: [v('noise', 1600, 200, 0, 0.22, 0.4), v('sine', 140, 60, 0, 0.2, 0.35)],
+  leakDrain: [v('triangle', 520, 260, 0, 0.09, 0.18)],
+  loopReset: [v('sawtooth', 700, 180, 0, 0.22, 0.2), v('triangle', 1400, 360, 0.02, 0.2, 0.16)],
+  loopBreak: [v('square', 300, 1200, 0, 0.18, 0.3), v('noise', 4000, 900, 0.05, 0.25, 0.3), v('triangle', 990, 990, 0.2, 0.2, 0.3)],
 });
 export const SFX_NAMES = Object.keys(RECIPES) as SfxName[];
 

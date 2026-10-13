@@ -70,12 +70,12 @@ export interface PickupSpawn { at: number; kind: PickupKind; y: number }
 export const ROUTE_PICKUPS: readonly PickupSpawn[] = Object.freeze([
   // First bug segment: a low Ráfaga to try the spread on the first Sombra and the fragment guards.
   { at: 11500, kind: 'rafaga', y: 128 },
-  // Right after the last Firewall column: the hearts the barrier took can come back.
-  { at: 36200, kind: 'corazon', y: 128 },
-  // Just before the swarm formations.
-  { at: 37400, kind: 'rafaga', y: 64 },
-  // Late in the swarm, ready for the Marea del Desfase.
-  { at: 43500, kind: 'escudo', y: 112 },
+  // A2: behind the last Packet Loss column, drifting in as the embers begin: one ember hit can be shrugged off.
+  { at: 41500, kind: 'escudo', y: 100 },
+  // After the Packet Loss: the hearts the solid blocks took can come back.
+  { at: 46600, kind: 'corazon', y: 128 },
+  // In the eruption, ready for the mixed swarm that follows.
+  { at: 50200, kind: 'rafaga', y: 64 },
 ]);
 
 export function pickupsDue(cursor: number, now: number): { due: PickupSpawn[]; next: number } {

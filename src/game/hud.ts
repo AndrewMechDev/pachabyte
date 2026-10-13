@@ -6,8 +6,8 @@ import { SHIELD_ICON } from './pickupArt';
 import { NOKIA } from './nokiaPalette';
 import { TEXT } from './text';
 
-const NORMAL = { bar: 0x16343c, line: 0x3a6770, heart: 0xe86a5a, empty: 0x3a6770, meter: 0x59d3c4, full: 0xfff1c3, text: 0xfff1c3, title: 0xedc76c, shield: 0x7fb8ff, rafaga: 0xf2a65a };
-const GREEN = { bar: NOKIA[0], line: NOKIA[1], heart: NOKIA[3], empty: NOKIA[1], meter: NOKIA[2], full: NOKIA[3], text: NOKIA[3], shield: NOKIA[2], rafaga: NOKIA[3] };
+const NORMAL = { bar: 0x16343c, line: 0x3a6770, heart: 0xe86a5a, empty: 0x3a6770, meter: 0x59d3c4, full: 0xfff1c3, text: 0xfff1c3, title: 0xedc76c, shield: 0x7fb8ff, rafaga: 0xf2a65a, leak: 0xc985ef };
+const GREEN = { bar: NOKIA[0], line: NOKIA[1], heart: NOKIA[3], empty: NOKIA[1], meter: NOKIA[2], full: NOKIA[3], text: NOKIA[3], shield: NOKIA[2], rafaga: NOKIA[3], leak: NOKIA[3] };
 const METER = { x: 92, y: 5, width: 40, height: 6 };
 
 // meterStyle/meterLevel come from meterDisplay() in the guardian; the route derives them from the meter alone.
@@ -16,6 +16,8 @@ const METER = { x: 92, y: 5, width: 40, height: 6 };
 export interface HudValues {
   hp: number; maxHp: number; meter: number; score: number; now: number; meterStyle?: MeterStyle; meterLevel?: number; reduced?: boolean;
   combo?: number; comboHot?: boolean; shield?: boolean; rafaga?: number;
+  // A2 Memory Leak: the meter is being drained (violet frame and a small down arrow after the bar).
+  leaking?: boolean;
 }
 
 // Top bar (16 px): pixel hearts for HP, the ENERGÍA meter and a six-digit score. Fixed to the screen.
@@ -26,6 +28,7 @@ export class Hud {
   private readonly combo: Phaser.GameObjects.BitmapText;
   private readonly rafaga: Phaser.GameObjects.BitmapText;
   private shieldShown = false;
+  private leakShown = false;
   private comboFont = '';
   private nokia = false;
 
@@ -43,6 +46,7 @@ export class Hud {
   get comboText(): string { return this.combo.text; }
   get rafagaText(): string { return this.rafaga.visible ? this.rafaga.text : ''; }
   get shieldIcon(): boolean { return this.shieldShown; }
+  get leakIcon(): boolean { return this.leakShown; }
 
   // Canvas BitmapText ignores tint, so colors come from pre-colored atlases; four-green mode uses the Nokia one.
   setPalette(nokia: boolean): void {
@@ -81,8 +85,14 @@ export class Hud {
     const style: MeterStyle = values.meterStyle ?? (values.meter >= 100 ? 'ready' : 'charging');
     const inner = METER.width - 2, top = METER.y + 1, height = METER.height - 2;
     const fill = values.meterLevel === undefined ? meterFill(values.meter, inner) : Math.round(Math.min(1, Math.max(0, values.meterLevel)) * inner);
-    g.fillStyle(c.line).fillRect(METER.x, METER.y, METER.width, METER.height);
+    this.leakShown = values.leaking === true;
+    g.fillStyle(this.leakShown ? c.leak : c.line).fillRect(METER.x, METER.y, METER.width, METER.height);
     g.fillStyle(c.bar).fillRect(METER.x + 1, top, inner, height);
+    if (this.leakShown) {
+      // A steady 5x3 down arrow right after the bar: energy flows out.
+      const ax = METER.x + METER.width + 2, ay = METER.y + 1;
+      g.fillStyle(c.leak).fillRect(ax, ay, 5, 1).fillRect(ax + 1, ay + 1, 3, 1).fillRect(ax + 2, ay + 2, 1, 1);
+    }
     if (style === 'ready') {
       // A full meter glows by alternating fill colors; the pulse is slow and never flashes the screen.
       g.fillStyle(!values.reduced && Math.floor(values.now / 300) % 2 === 0 ? c.full : c.meter).fillRect(METER.x + 1, top, fill, height);

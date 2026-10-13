@@ -33,8 +33,11 @@ describe('sound recipes', () => {
   it('covers the three pickups and the Escudo absorbing a hit', () => {
     for (const name of ['pickupRafaga', 'pickupEscudo', 'pickupCorazon', 'shieldAbsorb']) expect(SFX_NAMES).toContain(name);
   });
+  it('covers the A2 route hazards: ember impact, Memory Leak drain, loop reset and loop break', () => {
+    for (const name of ['emberImpact', 'leakDrain', 'loopReset', 'loopBreak']) expect(SFX_NAMES).toContain(name);
+  });
   it('defines a bounded recipe for every named effect', () => {
-    expect(SFX_NAMES.length).toBe(32);
+    expect(SFX_NAMES.length).toBe(36);
     for (const name of SFX_NAMES) {
       const voices = RECIPES[name];
       expect(voices.length).toBeGreaterThan(0);

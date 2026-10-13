@@ -139,3 +139,35 @@ export function createRetroFont(scene: Phaser.Scene, color = 0xffffff): void {
 export function createRetroFonts(scene: Phaser.Scene): void {
   for (const color of FONT_COLORS) createRetroFont(scene, color);
 }
+
+// A2 route hazards (2026-10-13). PLACEHOLDERS pending asset requests, procedural and readable by shape:
+//   HAZARD_PACKET_LOSS  stacked data packets (blue blocks with bright bits), repeated by a TileSprite, never scaled;
+//   HAZARD_EMBER        a small round ember (orange rim, yellow-white core);
+//   HAZARD_MEMORY_LEAK  a binary purple dither (opaque pixels and holes, never alpha-blended), repeated by a TileSprite;
+//   HAZARD_LOOP_NODE    a gold ring with four notches around a violet core (plus a light hit-flash twin).
+export const HAZARD_TEXTURES = Object.freeze({
+  packetBlock: 'hazard-packet-block', ember: 'hazard-ember', leak: 'hazard-memory-leak', loopNode: 'hazard-loop-node', loopNodeHit: 'hazard-loop-node-hit',
+});
+const PACKET_BLOCK: PixelRows = [
+  'dddddddddd',
+  'dbbbbbbbbd',
+  'dblbbbblbd',
+  'dbbbbbbbbd',
+  'dbbblbbbbd',
+  'dbbbbbblbd',
+  'dbbbbbbbbd',
+  'dddddddddd',
+];
+const EMBER: PixelRows = ['.oyo.', 'oyYyo', 'yYwYy', 'oyYyo', '.oyo.'];
+const LEAK: PixelRows = ['p.m.', '.p.p', 'm.p.', '.p.p'];
+const LOOP_NODE: PixelRows = Array.from({ length: 13 }, (_, y) => Array.from({ length: 13 }, (_, x) => {
+  const d = Math.hypot(x - 6, y - 6), notch = (x === 6 || y === 6) && d > 4.4 && d < 6.6;
+  return notch ? 'l' : d >= 4.4 && d <= 6.2 ? 'g' : d < 2.3 ? 'c' : d < 3.3 ? 'v' : '.';
+}).join(''));
+export function createHazardTextures(scene: Phaser.Scene): void {
+  paint(scene, HAZARD_TEXTURES.packetBlock, PACKET_BLOCK, { d: 0x16343c, b: 0x7fb8ff, l: 0xfff1c3 });
+  paint(scene, HAZARD_TEXTURES.ember, EMBER, { o: 0xd8573f, y: 0xf2a65a, Y: 0xffd27a, w: 0xfff1c3 });
+  paint(scene, HAZARD_TEXTURES.leak, LEAK, { p: 0x7a3fa8, m: 0xc985ef });
+  paint(scene, HAZARD_TEXTURES.loopNode, LOOP_NODE, { g: 0xedc76c, l: 0xfff1c3, c: 0xfff1c3, v: 0x9b4fd0 });
+  paint(scene, HAZARD_TEXTURES.loopNodeHit, LOOP_NODE, { g: 0xfff1c3, l: 0xfff1c3, c: 0xfff1c3, v: 0xfff1c3 });
+}

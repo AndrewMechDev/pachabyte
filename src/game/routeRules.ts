@@ -5,7 +5,8 @@ import { comboPoints } from './comboRules';
 // Ruta 01 (Santuario de la Trama / Arequipa) as data. Times are milliseconds of the owned route clock.
 // Values come from odd/tasks/ruta01-flight-mvp.md and stay tentative until playtested.
 const SCROLL_SPEED = 32;
-const TRANSITION_MS = 70000;
+// A2 (2026-10-13): about 98 s, so the route changes beyond walls and the Marea (odd/tasks/ruta01-flight-mvp.md).
+const TRANSITION_MS = 98000;
 
 export const ROUTE = Object.freeze({
   scrollSpeed: SCROLL_SPEED,
@@ -19,22 +20,28 @@ export const ROUTE = Object.freeze({
   fragment: { score: 100, meter: 20 },
   returnScore: 200,
   firewall: { width: 8, gap: 40, screenSpeed: 72, telegraphMs: 1500 },
-  marea: { start: 48000, peakAt: 56000, holdUntil: 60000, end: 62000, maxFront: 120 },
+  marea: { start: 72000, peakAt: 78000, holdUntil: 80000, end: 82000, maxFront: 120 },
 });
 
-export type SegmentName = 'arrival' | 'firstBug' | 'fragments' | 'firewall' | 'swarm' | 'marea' | 'threshold';
+export type SegmentName =
+  | 'arrival' | 'firstBug' | 'fragments' | 'firewall' | 'packetLoss' | 'eruption' | 'swarm' | 'memoryLeak' | 'marea' | 'loop' | 'threshold';
 export interface Segment { name: SegmentName; start: number; end: number }
 
 export const SEGMENTS: readonly Segment[] = Object.freeze([
   { name: 'arrival', start: 0, end: 8000 },
   { name: 'firstBug', start: 8000, end: 16000 },
   { name: 'fragments', start: 16000, end: 26000 },
-  { name: 'firewall', start: 26000, end: 38000 },
-  { name: 'swarm', start: 38000, end: 48000 },
-  { name: 'marea', start: 48000, end: 62000 },
-  { name: 'threshold', start: 62000, end: TRANSITION_MS },
+  { name: 'firewall', start: 26000, end: 36000 },
+  { name: 'packetLoss', start: 36000, end: 46000 },
+  { name: 'eruption', start: 46000, end: 56000 },
+  { name: 'swarm', start: 56000, end: 64000 },
+  { name: 'memoryLeak', start: 64000, end: 72000 },
+  { name: 'marea', start: 72000, end: 82000 },
+  { name: 'loop', start: 82000, end: 90000 },
+  { name: 'threshold', start: 90000, end: TRANSITION_MS },
 ]);
 
+export const segmentStart = (name: SegmentName): number => SEGMENTS.find(s => s.name === name)?.start ?? 0;
 export function segmentAt(ms: number): SegmentName | 'transition' {
   return SEGMENTS.find(s => ms >= s.start && ms < s.end)?.name ?? 'transition';
 }
@@ -44,6 +51,7 @@ export function cameraScroll(ms: number): number {
   return Math.min(ROUTE.worldWidth - GAME.width, Math.max(0, ms) * ROUTE.scrollSpeed / 1000);
 }
 
+// Each hazard is captioned once, the first time it appears (A2: the Packet Loss line waits for the last wall to go).
 interface Caption { start: number; end: number; text: string }
 const CAPTIONS: readonly Caption[] = [
   { start: 0, end: 3500, text: TEXT.intro },
@@ -51,8 +59,12 @@ const CAPTIONS: readonly Caption[] = [
   { start: 5800, end: 8000, text: TEXT.fireHint },
   { start: 16000, end: 19500, text: TEXT.fragments },
   { start: 26000, end: 29500, text: TEXT.firewall },
-  { start: 48000, end: 51500, text: TEXT.marea },
-  { start: 63000, end: TRANSITION_MS, text: TEXT.threshold },
+  { start: 37000, end: 40500, text: TEXT.packetLoss },
+  { start: 46000, end: 49500, text: TEXT.eruption },
+  { start: 64000, end: 67500, text: TEXT.memoryLeak },
+  { start: 72000, end: 75500, text: TEXT.marea },
+  { start: 82000, end: 85500, text: TEXT.loop },
+  { start: 91000, end: TRANSITION_MS, text: TEXT.threshold },
 ];
 export function captionAt(ms: number): string {
   return CAPTIONS.find(c => ms >= c.start && ms < c.end)?.text ?? '';
@@ -66,12 +78,16 @@ const knot = (at: number, y: number): Spawn => ({ at, kind: 'fragment', y });
 const corruptor = (at: number, y: number): Spawn => ({ at, kind: 'corruptor', y });
 const sombra = (at: number, y: number): Spawn => ({ at, kind: 'sombra', y });
 
-// The Firewall gap and the threshold stay free of Corruptors, Sombras and their orbs; the scene also purges any
-// leftover on entering them, so a slow player can never meet a ranged bug inside the wall gaps.
-export const quietSegment = (name: SegmentName | 'transition'): boolean => name === 'firewall' || name === 'threshold';
+// The Firewall gap, the new hazards that need Kipu's full attention (Packet Loss, the eruption, the Bucle) and the
+// threshold stay free of Corruptors, Sombras and their orbs; the scene also purges any leftover on entering them, so a
+// slow player can never meet a ranged bug inside a hazard. Memory Leak costs no hearts, so a Sombra may linger there.
+const QUIET: readonly SegmentName[] = ['firewall', 'packetLoss', 'eruption', 'loop', 'threshold'];
+export const quietSegment = (name: SegmentName | 'transition'): boolean => (QUIET as readonly string[]).includes(name);
 
 // Deterministic script: no randomness, so every run teaches the same lesson in the same order.
 // Corruptors and Sombras (2026-10-13) are spaced so at most 2 Corruptors and one large Sombra share the screen.
+// A2 re-placed everything after the fragments for the 98 s route; the Memory Leak fragments and the Bucle formation
+// belong to their hazard modules (memoryLeakRules.ts, loopRules.ts).
 export const SPAWNS: readonly Spawn[] = Object.freeze([
   // First bug: one Glitchling at a time teaches dodge and shoot; then one Sombra de Error dodges a lined-up shot.
   bug(9000, 96), bug(12000, 60), sombra(12500, 104), bug(14500, 132),
@@ -80,15 +96,20 @@ export const SPAWNS: readonly Spawn[] = Object.freeze([
   bug(19600, 40), knot(20000, 28), knot(20700, 28), knot(21400, 28),
   bug(22800, 150), knot(23200, 166), knot(23900, 166), knot(24600, 166),
   // Firewall: each fragment sits at the height of the gap of the wall that will overtake it.
-  knot(29800, 132), knot(33800, 96),
-  // Swarm: groups of Glitchlings in staggered formations, two Corruptors overlapping and one Sombra.
-  bug(39000, 50), bug(39000, 90), bug(39000, 130), corruptor(38500, 128),
-  sombra(40500, 64), bug(41500, 40), bug(41500, 92), bug(41500, 145), corruptor(42500, 48),
-  bug(44500, 60), bug(44500, 100), bug(44500, 140),
-  bug(46500, 30), bug(46500, 160),
+  knot(29700, 132), knot(32300, 96),
+  // Packet Loss: single Glitchlings slip between the columns; a calm fragment after the last one.
+  bug(38500, 60), bug(40300, 136), bug(42100, 96), knot(43800, 97),
+  // Eruption: a fragment high and one low make the player cross the ember field.
+  knot(47600, 44), knot(51200, 146), bug(53400, 100),
+  // Mixed swarm: the two Corruptors arrive together, a Sombra follows, then staggered Glitchling waves.
+  corruptor(56000, 60), corruptor(56300, 126), sombra(56700, 96),
+  bug(57200, 36), bug(57200, 156), bug(58900, 76), bug(58900, 122),
+  bug(60700, 40), bug(60700, 97), bug(60700, 152), bug(62500, 64), bug(62500, 132),
+  // Memory Leak: a couple of Glitchlings between the zones.
+  bug(65600, 150), bug(67600, 40),
   // Marea: fragments drift toward the advancing front as a temptation.
-  knot(49000, 40), bug(50000, 70), knot(50500, 150), sombra(51500, 120), knot(52000, 96), bug(53000, 120),
-  knot(54000, 30), knot(55500, 160), bug(56000, 50), knot(57000, 96),
+  sombra(72400, 120), knot(73000, 40), bug(74000, 70), knot(74500, 150), knot(76000, 96), bug(77000, 120),
+  knot(78000, 30), knot(79500, 160), bug(80000, 50),
 ].sort((a, b) => a.at - b.at));
 
 // Returns spawns with at <= now starting from cursor; the caller keeps the returned cursor.
@@ -146,7 +167,7 @@ export function overlaps(a: Rect, b: Rect): boolean {
 // Firewall: vertical barrier columns with one gap (gapY is its center).
 export interface Wall { at: number; gapY: number }
 export const WALLS: readonly Wall[] = Object.freeze([
-  { at: 27500, gapY: 60 }, { at: 31500, gapY: 132 }, { at: 35500, gapY: 96 },
+  { at: 27500, gapY: 60 }, { at: 30200, gapY: 132 }, { at: 32900, gapY: 96 },
 ]);
 
 // Screen-space left edge: enters just past the right edge, then scrolls left faster than the world.
@@ -161,6 +182,12 @@ export function wallRects(wall: Wall, x: number): [Rect, Rect] {
     { x, y: GAME.playTop, width, height: gapTop - GAME.playTop },
     { x, y: gapBottom, width, height: GAME.playBottom - gapBottom },
   ];
+}
+
+// From the first right-edge telegraph until the last column has left the screen.
+export function firewallWindow(): [number, number] {
+  const f = ROUTE.firewall, last = WALLS[WALLS.length - 1];
+  return [WALLS[0].at - f.telegraphMs, last.at + Math.ceil((GAME.width + 4 + f.width) / f.screenSpeed * 1000)];
 }
 
 export function wallTelegraph(now: number, wall: Wall): boolean {

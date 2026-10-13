@@ -2,8 +2,13 @@ import Phaser from 'phaser';
 import { GAME, canShoot, flight, frameDelta, oncePerEvent, playBounds, projectileExpired, shotVelocity } from './rules';
 import {
   ROUTE, RUN_KEY, WALLS, addMeter, cameraScroll, captionAt, defeatBug, glitchlingVelocity, mareaFront, mareaTouches, overlaps, pickupFragment, quietSegment,
-  runningScore, segmentAt, spawnsDue, wallRects, wallScreenX, wallTelegraph, type Health, type Rect, type RunState, type Spawn, type Tally,
+  runningScore, segmentAt, segmentStart, spawnsDue, wallRects, wallScreenX, wallTelegraph, firewallWindow,
+  type Health, type Rect, type RunState, type SegmentName, type Spawn, type Tally,
 } from './routeRules';
+import { PACKET_LOSS, blockRects, packetLossColumns, packetLossWindow, type PacketColumn } from './packetLossRules';
+import { ERUPTION, emberHits, emberLanding, emberPosition, emberStage, embersDue, eruptionLevel, eruptionWindow, markerSize } from './eruptionRules';
+import { MEMORY_LEAK, drainMeter, leakFragmentPosition, leakWindow, leakZones } from './memoryLeakRules';
+import { LOOP, cueVisible, formationDue, hitLoopNode, initialLoop, loopActive, loopEnd, loopMarkerX, nodePosition, sceneryRewind, stepLoop, type LoopState } from './loopRules';
 import {
   BUGS, BUG_STATS, corruptorCharge, corruptorScreen, corruptorShotsDue, dodgeStage, dropsFragment, linedUpShot, orbExpired, orbVelocity, shadowPosition,
   sombraWorldX, splitCount, startSombra, stepSombra, type EnemyType, type SombraMotion,
@@ -11,7 +16,7 @@ import {
 import { breakCombo, comboMultiplier, initialCombo, registerHit, type Combo } from './comboRules';
 import { FloaterPool, floaterView, hitStopActive, initialHitStop, triggerHitStop, worldStep, type FloaterSlot, type HitStop } from './effectsRules';
 import { completeRoute, initialProgress, type Progress } from './challengeRules';
-import { BUG_TEXTURES, PICKUP_TEXTURES, createBugTextures, createTextures, createRetroFonts, createRouteTextures } from './textures';
+import { BUG_TEXTURES, HAZARD_TEXTURES, PICKUP_TEXTURES, createBugTextures, createHazardTextures, createTextures, createRetroFonts, createRouteTextures } from './textures';
 import { createSheetTextures, loadSpriteSheets } from './sheetTextures';
 import { corruptorFrame, pickupFrame, shadowFrame, sombraFrame } from './spriteFrames';
 import { backdropCopies, summitsX } from './ambientRules';
@@ -39,6 +44,13 @@ type Body = Phaser.Physics.Arcade.Body;
 type KeyName = 'left' | 'right' | 'up' | 'down' | 'a' | 'd' | 'w' | 's' | 'space' | 'j' | 'z' | 'esc' | 'p' | 'r' | 'm';
 type Keys = Record<KeyName, Phaser.Input.Keyboard.Key>;
 type Ending = 'playing' | 'defeat' | 'transition';
+type HurtSource = 'bug' | 'firewall' | 'marea' | 'packet' | 'ember';
+interface EmberSlot { active: boolean; at: number; x: number; y: number; aimed: boolean; impacted: boolean }
+// A2: each hazard's own stretch of the route, for the debug snapshot (hazardSchedule.test.ts proves they never overlap).
+const HAZARD_WINDOWS: ReadonlyArray<readonly [string, readonly [number, number]]> = [
+  ['firewall', firewallWindow()], ['packetLoss', packetLossWindow()], ['eruption', eruptionWindow()], ['memoryLeak', leakWindow()],
+  ['marea', [ROUTE.marea.start, ROUTE.marea.end]], ['loop', [LOOP.start, loopEnd()]],
+];
 
 const POOL = {
   shots: PICKUPS.shotPool, glitchlings: 12, fragments: 10, particles: 128, floaters: 8, pickups: 4,
@@ -50,7 +62,8 @@ const POOL = {
 // layers carry the parallax.
 const BACKDROP = { alpha: 0.85, scrollFactor: 0, depth: -12 } as const;
 const ROUTE_SHEETS = ['corruptor', 'sombra', 'shadow', 'pickups'] as const;
-const LIGHT = 0xfff1c3, GOLD = 0xedc76c, DIM = 0x3a6770, BAR = 0x16343c, VIOLET = 0xc985ef, SHIELD = 0x7fb8ff;
+const LIGHT = 0xfff1c3, GOLD = 0xedc76c, DIM = 0x3a6770, BAR = 0x16343c, VIOLET = 0xc985ef, SHIELD = 0x7fb8ff, EMBER = 0xf2a65a, ASH = 0x3a1a20;
+const LEAK_SOUND_MS = 380, LEAK_SPARK_MS = 120;
 // Caption strip under the HUD: one clear row, the accent rows, the 8 px line cell and one more clear row.
 const CAPTION = Object.freeze({ top: GAME.hudHeight + 2, textY: GAME.hudHeight + 3 + MARK_ROWS, height: 1 + MARK_ROWS + CELL_HEIGHT + 1 });
 // Forgiving bodies, smaller than the drawn sprites; the art is never scaled and the bodies keep their tuned sizes.
@@ -114,11 +127,31 @@ export class RouteScene extends Phaser.Scene {
   private shieldBreakAt = -Infinity;
   private volley = { count: 0, shots: 0, lastSize: 0, lastAt: 0 };
   private thresholdStarted = false;
-  private firewallPurged = false;
   private retryRequested = false;
   private mapRequested = false;
   private nextGlintAt = 0;
   private ambient!: RouteAmbient;
+  // A2 hazards: bounded tile/image pools and their world-clock state.
+  private hazardFx!: Phaser.GameObjects.Graphics;
+  private packetTiles: Phaser.GameObjects.TileSprite[][] = [];
+  private packetView: PacketColumn[] = [];
+  private emberImages: Phaser.GameObjects.Image[] = [];
+  private embers: EmberSlot[] = [];
+  private emberCursor = 0;
+  private emberImpacts = 0;
+  private leakTiles: Phaser.GameObjects.TileSprite[] = [];
+  private leakFragmentsSpawned = 0;
+  private leak = { inside: false, drained: 0, nextSoundAt: 0, nextSparkAt: 0 };
+  private loop: LoopState = initialLoop();
+  private loopNode!: Phaser.GameObjects.Image;
+  private loopResetAt = -Infinity;
+  private loopHitUntil = 0;
+  private purgedSegment: SegmentName | null = null;
+  private hurts: Record<HurtSource, { damage: number; absorbed: number }> = RouteScene.noHurts();
+
+  private static noHurts(): Record<HurtSource, { damage: number; absorbed: number }> {
+    return { bug: { damage: 0, absorbed: 0 }, firewall: { damage: 0, absorbed: 0 }, marea: { damage: 0, absorbed: 0 }, packet: { damage: 0, absorbed: 0 }, ember: { damage: 0, absorbed: 0 } };
+  }
 
   constructor() { super('RouteScene'); }
 
@@ -134,12 +167,15 @@ export class RouteScene extends Phaser.Scene {
     this.clock = 0; this.real = 0; this.anim = 0; this.worldRate = 1; this.focused = true; this.paused = false; this.ending = 'playing';
     this.health = { hp: ROUTE.maxHp, invulnerableUntil: 0 }; this.meter = 0; this.tally = { fragments: 0, bugs: 0, returns: 0, bugPoints: 0, comboBonus: 0, pickups: 0, pickupBonus: 0 };
     this.combo = initialCombo(); this.comboHotUntil = 0; this.hitStop = initialHitStop(); this.fragmentsDropped = 0;
-    this.nextShotAt = 0; this.spawnCursor = 0; this.thresholdStarted = false; this.firewallPurged = false;
+    this.nextShotAt = 0; this.spawnCursor = 0; this.thresholdStarted = false; this.purgedSegment = null;
+    this.packetView = []; this.embers = Array.from({ length: ERUPTION.pool }, () => ({ active: false, at: 0, x: 0, y: 0, aimed: false, impacted: false }));
+    this.emberCursor = 0; this.emberImpacts = 0; this.leakFragmentsSpawned = 0; this.leak = { inside: false, drained: 0, nextSoundAt: 0, nextSparkAt: 0 };
+    this.loop = initialLoop(); this.loopResetAt = -Infinity; this.loopHitUntil = 0; this.hurts = RouteScene.noHurts();
     this.power = initialPower(); this.pickupCursor = 0; this.collected = noPickups(); this.shieldBreakAt = -Infinity;
     this.volley = { count: 0, shots: 0, lastSize: 0, lastAt: 0 };
     this.retryRequested = false; this.mapRequested = false; this.nextGlintAt = 0;
     this.time.paused = false;
-    createTextures(this); createRouteTextures(this); createBugTextures(this); createSheetTextures(this, ROUTE_SHEETS); createRetroFonts(this); ensureKipuFrames(this);
+    createTextures(this); createRouteTextures(this); createBugTextures(this); createSheetTextures(this, ROUTE_SHEETS); createRetroFonts(this); ensureKipuFrames(this); createHazardTextures(this);
 
     this.cameras.main.setBackgroundColor(BAR).setBounds(0, 0, ROUTE.worldWidth, GAME.height).setScroll(0, 0);
     // The arena art at native size; backdropCopies would tile it (mirrored) if the far layer ever scrolls again.
@@ -168,6 +204,13 @@ export class RouteScene extends Phaser.Scene {
     this.marea = this.add.tileSprite(0, GAME.playTop, ROUTE.marea.maxFront, GAME.playBottom - GAME.playTop, 'marea').setOrigin(0).setScrollFactor(0).setDepth(8).setVisible(false);
     this.overlay = this.add.graphics().setScrollFactor(0).setDepth(9);
     this.pattern = this.add.graphics().setScrollFactor(0).setDepth(2);
+    // A2 hazards, all screen-space and created once: Packet Loss blocks (one column of tiles per scripted column),
+    // Memory Leak zones (one dithered tile each), the ember pool and the loop node. Markers and outlines go on hazardFx.
+    this.hazardFx = this.add.graphics().setScrollFactor(0).setDepth(3);
+    this.packetTiles = PACKET_LOSS.columns.map(() => blockRects(0).map(r => this.add.tileSprite(0, r.y, r.width, r.height, HAZARD_TEXTURES.packetBlock).setOrigin(0).setScrollFactor(0).setDepth(4).setVisible(false)));
+    this.leakTiles = MEMORY_LEAK.zones.map(z => this.add.tileSprite(0, z.y, z.width, z.height, HAZARD_TEXTURES.leak).setOrigin(0).setScrollFactor(0).setDepth(1).setVisible(false));
+    this.emberImages = this.embers.map(() => this.add.image(0, 0, HAZARD_TEXTURES.ember).setScrollFactor(0).setDepth(6).setVisible(false));
+    this.loopNode = this.add.image(LOOP.node.x, LOOP.node.y, HAZARD_TEXTURES.loopNode).setScrollFactor(0).setDepth(5).setVisible(false);
 
     for (const group of [this.glitchlings, this.corruptors, this.shadows]) {
       this.physics.add.overlap(this.shots, group, (first, second) => {
@@ -266,7 +309,7 @@ export class RouteScene extends Phaser.Scene {
     this.pickupCursor = pickupStep.next;
     for (const p of pickupStep.due) this.spawnPickup(p.kind, p.y, cameraX);
     if (!this.thresholdStarted && segment === 'threshold') this.enterThreshold();
-    if (!this.firewallPurged && quietSegment(segment) && !this.thresholdStarted) this.purgeRanged();
+    if (segment !== 'transition' && segment !== 'threshold' && segment !== this.purgedSegment && quietSegment(segment)) this.purgeRanged(segment);
 
     for (const bug of this.alive(this.glitchlings)) {
       if (bug.x < cameraX - 16) { bug.disableBody(true, true); continue; }
@@ -282,16 +325,20 @@ export class RouteScene extends Phaser.Scene {
       else if (mareaTouches(front, knot.x - cameraX)) { knot.disableBody(true, true); burst(this.fx, knot.x, knot.y, 5, 30, 240, 'violet', this.anim); }
     }
     this.stepPickups(front, cameraX);
+    this.stepLeak(now, worldDelta, cameraX);
+    this.stepLoop(now, now - worldDelta, cameraX);
     for (const shot of this.alive(this.shots)) {
       if (projectileExpired(real, Number(shot.getData('expiresAt')), shot.x, cameraX - 8, cameraX + GAME.width + 8) || shot.y < GAME.playTop || shot.y > GAME.playBottom) shot.disableBody(true, true);
     }
     this.updateWalls(now, cameraX);
+    this.updatePacketLoss(now, cameraX);
+    this.updateEmbers(now, cameraX);
     this.updateMarea(front, cameraX);
     if (this.ending !== 'playing') return;
 
     const blinking = real < this.health.invulnerableUntil;
     this.player.setAlpha(!blinking ? 1 : motion.reduced ? 0.5 : Math.floor(real / 90) % 2 ? 0.25 : 1);
-    this.updateCaption(captionAt(now));
+    this.updateCaption(cueVisible(this.loop, now) ? TEXT.loopBroken : captionAt(now));
     this.drawOverlay(now, front, cameraX);
     this.animate(delta, carry);
     this.drawHud();
@@ -313,15 +360,15 @@ export class RouteScene extends Phaser.Scene {
     return group.getChildren().filter(child => child.active) as Sprite[];
   }
 
-  private spawn(spawn: Spawn, cameraX: number, now: number): void {
+  private spawn(spawn: Spawn, cameraX: number, now: number): Sprite | null {
     const group = spawn.kind === 'glitchling' ? this.glitchlings : spawn.kind === 'corruptor' ? this.corruptors : spawn.kind === 'sombra' ? this.shadows : this.fragments;
     const sprite = group.getFirstDead(false) as Sprite | null;
-    if (!sprite) return; // bounded pool: a full pool drops the spawn by design (this is also the on-screen cap)
+    if (!sprite) return null; // bounded pool: a full pool drops the spawn by design (this is also the on-screen cap)
     sprite.enableBody(true, cameraX + GAME.width + 10, spawn.y, true, true);
     sprite.setVelocity(0, 0).setAlpha(1);
     switch (spawn.kind) {
-      case 'glitchling': sprite.setTexture('glitchling').setData({ type: 'glitchling', hp: BUG_STATS.glitchling.hp, hitUntil: 0, graceUntil: 0 }); break;
-      case 'fragment': sprite.setTexture('fragment').setData({ dropped: false }); (sprite.body as Body).setSize(7, 7, true); break;
+      case 'glitchling': sprite.setTexture('glitchling').setData({ type: 'glitchling', hp: BUG_STATS.glitchling.hp, hitUntil: 0, graceUntil: 0, loop: false }); break;
+      case 'fragment': sprite.setTexture('fragment').setData({ dropped: false, leak: -1 }); (sprite.body as Body).setSize(7, 7, true); break;
       case 'corruptor': {
         const p = corruptorScreen(0, spawn.y);
         sprite.setTexture(BUG_TEXTURES.corruptor).setData({ type: 'corruptor', hp: BUG_STATS.corruptor.hp, hitUntil: 0, graceUntil: 0, born: now, baseY: spawn.y, fired: 0, charging: false });
@@ -334,6 +381,7 @@ export class RouteScene extends Phaser.Scene {
         (sprite.body as Body).reset(cameraX + BUGS.sombra.spawnX, spawn.y);
         break;
     }
+    return sprite;
   }
 
   // Kipu always fires to the right on the route. A Ráfaga fires a triple spread (centre first) at the shorter cooldown;
@@ -492,7 +540,7 @@ export class RouteScene extends Phaser.Scene {
     const knot = this.fragments.getFirstDead(false) as Sprite | null;
     if (!knot) return; // bounded pool
     knot.enableBody(true, x, y, true, true);
-    knot.setVelocity(0, 0).setAlpha(1).setTexture(BUG_TEXTURES.fragmentSmall).setData({ dropped: true });
+    knot.setVelocity(0, 0).setAlpha(1).setTexture(BUG_TEXTURES.fragmentSmall).setData({ dropped: true, leak: -1 });
     (knot.body as Body).setSize(5, 5, true);
     this.fragmentsDropped += 1;
     burst(this.fx, x, y, 4, 22, 220, 'gold', this.anim);
@@ -509,10 +557,12 @@ export class RouteScene extends Phaser.Scene {
     this.hurt('bug');
   }
 
-  private hurt(source: 'bug' | 'firewall' | 'marea'): void {
+  // Every hazard hit costs exactly one heart (or the Escudo) and starts the normal invulnerability.
+  private hurt(source: HurtSource): void {
     const step = absorbHit(this.health, this.power, this.real);
     if (step.result === 'ignored') return;
     this.health = step.health; this.power = step.power;
+    this.hurts[source][step.result === 'absorbed' ? 'absorbed' : 'damage'] += 1;
     if (step.result === 'absorbed') {
       // The Escudo takes the hit: no heart lost and the racha survives; the normal invulnerability still runs.
       this.shieldBreakAt = this.anim;
@@ -523,7 +573,7 @@ export class RouteScene extends Phaser.Scene {
     }
     const next = step.health;
     this.combo = breakCombo(this.combo);
-    sfx.play(source === 'firewall' ? 'firewall' : 'heroHit');
+    sfx.play(source === 'firewall' || source === 'packet' ? 'firewall' : 'heroHit');
     burst(this.fx, this.player.x, this.player.y - 4, 10, 60, 320, 'violet', this.anim, 2);
     if (!motion.reduced) this.cameras.main.shake(110, 0.006);
     if (next.hp <= 0) this.defeat();
@@ -569,8 +619,8 @@ export class RouteScene extends Phaser.Scene {
   }
 
   // Ranged bugs and their orbs never share the screen with the Firewall gaps: the barrier filters them out.
-  private purgeRanged(): void {
-    this.firewallPurged = true;
+  private purgeRanged(segment: SegmentName): void {
+    this.purgedSegment = segment;
     for (const group of [this.corruptors, this.shadows, this.orbs]) for (const sprite of this.alive(group)) {
       burst(this.fx, sprite.x, sprite.y, 5, 30, 300, 'violet', this.anim);
       sprite.disableBody(true, true);
@@ -621,13 +671,14 @@ export class RouteScene extends Phaser.Scene {
       if (size >= 3) g.fillStyle(LIGHT).fillRect(vx, vy, 1, 1);
     }
     this.drawThresholdPattern(now);
+    this.drawHazards(now);
   }
 
   // A row of rings lights in a fixed repeating sequence: the loop motif that announces Amaru.
   private drawThresholdPattern(now: number): void {
     const g = this.pattern.clear();
     if (!this.thresholdStarted) return;
-    const lit = Math.floor((now - 62000) / 350) % 7;
+    const lit = Math.floor((now - segmentStart('threshold')) / 350) % 7;
     for (let i = 0; i < 7; i++) {
       const x = 46 + i * 38, y = 100;
       g.fillStyle(i === lit ? GOLD : DIM).fillRect(x - 3, y - 4, 7, 1).fillRect(x - 3, y + 4, 7, 1).fillRect(x - 4, y - 3, 1, 7).fillRect(x + 4, y - 3, 1, 7);
@@ -661,7 +712,8 @@ export class RouteScene extends Phaser.Scene {
       } else this.setKey(s, hit(s) ? t.shadowHit : shadowFrame(this.anim, reduced));
     }
     for (const item of this.alive(this.pickups)) this.setKey(item, pickupFrame(item.getData('kind') as PickupKind, this.anim, reduced));
-    this.ambient.update(this.anim, this.clock, this.cameras.main.scrollX, reduced);
+    // The Bucle rewinds the clouds at every reset (the scenery visibly repeats); the eruption thickens the Misti.
+    this.ambient.update(this.anim, this.clock, this.cameras.main.scrollX - sceneryRewind(this.loop.resets), reduced, eruptionLevel(this.clock));
     if (this.anim >= this.nextGlintAt) {
       const knots = this.alive(this.fragments);
       const knot = knots[Math.floor(this.anim / 900) % Math.max(1, knots.length)];
@@ -690,6 +742,7 @@ export class RouteScene extends Phaser.Scene {
       hp: this.health.hp, maxHp: ROUTE.maxHp, meter: this.meter, score: runningScore(this.tally), now: this.anim,
       combo: comboMultiplier(this.combo.hits), comboHot: this.anim < this.comboHotUntil,
       shield: this.ending === 'playing' && this.power.shield, rafaga: this.ending === 'playing' ? rafagaLevel(this.power, this.real) : 0,
+      leaking: this.ending === 'playing' && this.leak.inside && this.meter > 0,
     });
   }
 
@@ -767,6 +820,209 @@ export class RouteScene extends Phaser.Scene {
     this.input.keyboard?.resetKeys();
   }
 
+  // ------------------------------------------------------------------ A2 hazards
+  // Packet Loss: solid blocks hurt and stop shots; telegraphing and lost blocks are only outlines (drawHazards).
+  private updatePacketLoss(now: number, cameraX: number): void {
+    this.packetView = packetLossColumns(now);
+    for (const tiles of this.packetTiles) for (const tile of tiles) tile.setVisible(false);
+    if (this.packetView.length === 0) return;
+    const player = this.playerRect(cameraX);
+    for (const column of this.packetView) {
+      const rects = blockRects(Math.round(column.x)), tiles = this.packetTiles[column.index];
+      rects.forEach((rect, i) => {
+        const solid = column.states[i] === 'solid';
+        tiles[i].setVisible(solid).setX(rect.x);
+        if (!solid) return;
+        if (overlaps(player, rect)) this.hurt('packet');
+        for (const shot of this.alive(this.shots)) {
+          const body = shot.body as Body;
+          if (overlaps({ x: body.x - cameraX, y: body.y, width: body.width, height: body.height }, rect)) { shot.disableBody(true, true); burst(this.fx, shot.x, shot.y, 3, 30, 140, 'teal', this.anim); }
+        }
+      });
+    }
+  }
+
+  // Erupción del Misti: each marker takes a pooled slot 700 ms before its impact; the ember falls into it and hurts
+  // in a small radius for a moment.
+  private updateEmbers(now: number, cameraX: number): void {
+    const step = embersDue(this.emberCursor, now);
+    this.emberCursor = step.next;
+    for (const spec of step.due) {
+      const slot = this.embers.find(e => !e.active);
+      if (!slot) continue; // bounded pool
+      const landing = emberLanding(spec, { x: this.player.x - cameraX, y: this.player.y });
+      Object.assign(slot, { active: true, at: spec.at, x: landing.x, y: landing.y, aimed: spec.x === undefined, impacted: false });
+    }
+    const player = this.playerRect(cameraX);
+    this.embers.forEach((e, i) => {
+      const image = this.emberImages[i];
+      if (!e.active) { image.setVisible(false); return; }
+      const stage = emberStage(now, e.at);
+      if (stage === 'done') { e.active = false; image.setVisible(false); return; }
+      if (stage === 'marker') { const p = emberPosition(now, e.at, e); image.setVisible(true).setPosition(p.x, p.y); return; }
+      image.setVisible(false);
+      if (!e.impacted) {
+        e.impacted = true; this.emberImpacts += 1;
+        sfx.play('emberImpact');
+        burst(this.fx, cameraX + e.x, e.y, 8, 50, 300, 'gold', this.anim, 2);
+      }
+      if (emberHits(e, player)) this.hurt('ember');
+    });
+  }
+
+  // Memory Leak: dithered zones drain the meter while Kipu is inside; their fragments ride with them.
+  private stepLeak(now: number, worldDelta: number, cameraX: number): void {
+    const zones = leakZones(now);
+    this.leakTiles.forEach(tile => tile.setVisible(false));
+    for (const z of zones) {
+      const tile = this.leakTiles[z.index].setVisible(true).setPosition(Math.round(z.rect.x), z.rect.y);
+      if (!motion.reduced) tile.setTilePosition(Math.floor(this.anim / 260) % 2, 0);
+    }
+    while (this.leakFragmentsSpawned < MEMORY_LEAK.fragments.length && now >= MEMORY_LEAK.zones[MEMORY_LEAK.fragments[this.leakFragmentsSpawned].zone].at) {
+      const index = this.leakFragmentsSpawned++, pos = leakFragmentPosition(now, MEMORY_LEAK.fragments[index]);
+      const knot = pos ? this.spawn({ at: now, kind: 'fragment', y: pos.y }, cameraX, now) : null;
+      if (knot && pos) { knot.setData('leak', index); (knot.body as Body).reset(cameraX + pos.x, pos.y); }
+    }
+    for (const knot of this.alive(this.fragments)) {
+      const index = Number(knot.getData('leak') ?? -1);
+      if (index < 0) continue;
+      const pos = leakFragmentPosition(now, MEMORY_LEAK.fragments[index]);
+      if (!pos) { knot.disableBody(true, true); continue; }
+      (knot.body as Body).reset(cameraX + pos.x, pos.y);
+    }
+    const player = this.playerRect(cameraX);
+    this.leak.inside = this.ending === 'playing' && zones.some(z => overlaps(player, z.rect));
+    if (!this.leak.inside || this.meter <= 0) return;
+    const before = this.meter;
+    this.meter = drainMeter(this.meter, worldDelta);
+    this.leak.drained += before - this.meter;
+    if (this.real >= this.leak.nextSoundAt) { sfx.play('leakDrain'); this.leak.nextSoundAt = this.real + LEAK_SOUND_MS; }
+    if (this.anim >= this.leak.nextSparkAt) {
+      // Energy visibly leaves Kipu: a violet spark drifts up and away (particles are off under reduced motion).
+      this.fx.emit({ x: this.player.x, y: this.player.y - 4, vx: -12, vy: -26, ttl: 420, slot: 'violet', size: 1 }, this.anim);
+      this.leak.nextSparkAt = this.anim + LEAK_SPARK_MS;
+    }
+  }
+
+  // Bucle: resets its Glitchling formation at every iteration until the node breaks (shot) or it gives up (timeout).
+  private stepLoop(now: number, prev: number, cameraX: number): void {
+    const step = stepLoop(this.loop, now);
+    this.loop = step.state;
+    if (step.reset) {
+      for (const bug of this.alive(this.glitchlings)) if (bug.getData('loop') === true) { burst(this.fx, bug.x, bug.y, 5, 30, 260, 'violet', this.anim); bug.disableBody(true, true); }
+      this.loopResetAt = this.anim;
+      sfx.play('loopReset');
+    }
+    if (step.broke) this.breakLoop(cameraX);
+    for (const f of formationDue(prev, now, this.loop)) this.spawn({ at: f.at, kind: 'glitchling', y: f.y }, cameraX, now)?.setData('loop', true);
+    const active = loopActive(this.loop, now);
+    this.loopNode.setVisible(active);
+    if (!active) return;
+    const p = nodePosition(now), half = LOOP.node.body / 2;
+    this.loopNode.setPosition(p.x, p.y).setTexture(this.anim < this.loopHitUntil ? HAZARD_TEXTURES.loopNodeHit : HAZARD_TEXTURES.loopNode);
+    const node = { x: p.x - half, y: p.y - half, width: LOOP.node.body, height: LOOP.node.body };
+    for (const shot of this.alive(this.shots)) {
+      const body = shot.body as Body;
+      if (!overlaps({ x: body.x - cameraX, y: body.y, width: body.width, height: body.height }, node)) continue;
+      shot.disableBody(true, true);
+      const hit = hitLoopNode(this.loop, now);
+      this.loop = hit.state;
+      this.meter = addMeter(this.meter, ROUTE.meterPerHit);
+      const combo = registerHit(this.combo);
+      this.combo = combo.combo;
+      if (combo.tierUp) { sfx.play('comboUp'); this.comboHotUntil = this.anim + COMBO_HOT_MS; }
+      this.loopHitUntil = this.anim + FLASH_MS;
+      if (hit.broke) { this.breakLoop(cameraX); return; }
+      sfx.play('enemyHit');
+      this.floater('1', cameraX + p.x, p.y - 10, 'damage');
+      burst(this.fx, cameraX + p.x, p.y, 3, 30, 160, 'light', this.anim);
+    }
+  }
+
+  // "BUCLE ROTO": a shot break debugs the loop like a bug (score at the racha multiplier, hit-stop, maybe a drop); a
+  // timeout break only shows the cue.
+  private breakLoop(cameraX: number): void {
+    const p = nodePosition(this.clock), x = cameraX + p.x;
+    this.loopNode.setVisible(false);
+    sfx.play('loopBreak');
+    dissolve(this.fx, x, p.y, LOOP.node.size, LOOP.node.size, this.anim);
+    if (this.loop.brokenBy !== 'shot') return;
+    const result = defeatBug(this.tally, LOOP.score, this.combo.hits);
+    this.tally = result.tally;
+    this.floater(`+${result.points}`, x, p.y - 12, 'points');
+    if (!motion.reduced) this.hitStop = triggerHitStop(this.hitStop, this.real);
+    if (dropsFragment(this.tally.bugs)) this.dropFragment(x, p.y);
+  }
+
+  // Telegraphs and markers, all kept under reduced motion (blinking becomes steady).
+  private drawHazards(now: number): void {
+    const g = this.hazardFx.clear(), blink = motion.reduced || Math.floor(this.anim / 100) % 2 === 0;
+    // Packet Loss: lost blocks are a dim dotted frame; a telegraphing block blinks a bright frame before turning solid.
+    for (const column of this.packetView) {
+      blockRects(Math.round(column.x)).forEach((r, i) => {
+        const state = column.states[i];
+        if (state === 'solid') return;
+        if (state === 'telegraph') {
+          if (!blink) return;
+          g.fillStyle(LIGHT).fillRect(r.x, r.y, r.width, 1).fillRect(r.x, r.y + r.height - 1, r.width, 1).fillRect(r.x, r.y, 1, r.height).fillRect(r.x + r.width - 1, r.y, 1, r.height);
+          return;
+        }
+        g.fillStyle(DIM);
+        for (let y = r.y; y < r.y + r.height; y += 4) g.fillRect(r.x, y, 1, 2).fillRect(r.x + r.width - 1, y, 1, 2);
+      });
+    }
+    // Ember markers: a dark landing shadow and closing corner brackets, from 700 ms before the impact.
+    for (const e of this.embers) {
+      if (!e.active) continue;
+      const stage = emberStage(now, e.at);
+      if (stage === 'impact') { g.fillStyle(EMBER).fillRect(e.x - 3, e.y - 1, 7, 3); continue; }
+      if (stage !== 'marker') continue;
+      const size = markerSize(now, e.at);
+      g.fillStyle(ASH).fillRect(e.x - 4, e.y - 1, 9, 3);
+      g.fillStyle(EMBER);
+      for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+        const cx = e.x + dx * size, cy = e.y + dy * size;
+        g.fillRect(dx < 0 ? cx : cx - 3, cy, 4, 1).fillRect(cx, dy < 0 ? cy : cy - 3, 1, 4);
+      }
+      if (blink) g.fillStyle(LIGHT).fillRect(e.x, e.y, 1, 1);
+    }
+    // Memory Leak zones: a 1 px violet frame around each dither; it blinks light while it drains Kipu.
+    for (const z of leakZones(now)) {
+      const x = Math.round(z.rect.x), r = z.rect;
+      g.fillStyle(this.leak.inside && blink ? LIGHT : VIOLET).fillRect(x, r.y, r.width, 1).fillRect(x, r.y + r.height - 1, r.width, 1).fillRect(x, r.y, 1, r.height).fillRect(x + r.width - 1, r.y, 1, r.height);
+    }
+    // Bucle: the loop marker sweeps right to left; the node is framed by blinking brackets with its HP pips below.
+    if (!loopActive(this.loop, now)) return;
+    const mx = loopMarkerX(now);
+    for (let y = GAME.playTop; y < GAME.playBottom; y += 6) g.fillStyle(y % 12 === 0 ? GOLD : VIOLET).fillRect(mx, y, 1, 3);
+    if (this.anim - this.loopResetAt < 240) g.fillStyle(LIGHT).fillRect(0, GAME.playTop, 2, GAME.playBottom - GAME.playTop);
+    const p = nodePosition(now), h = 10;
+    if (blink) {
+      g.fillStyle(GOLD);
+      for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+        const cx = p.x + dx * h, cy = p.y + dy * h;
+        g.fillRect(dx < 0 ? cx : cx - 2, cy, 3, 1).fillRect(cx, dy < 0 ? cy : cy - 2, 1, 3);
+      }
+    }
+    for (let i = 0; i < LOOP.hp; i++) g.fillStyle(i < this.loop.hp ? GOLD : DIM).fillRect(p.x - 9 + i * 4, p.y + h + 3, 3, 2);
+  }
+
+  private hazardSnapshot() {
+    const clock = this.clock, cameraX = this.cameras.main.scrollX;
+    return {
+      active: HAZARD_WINDOWS.filter(([, [from, to]]) => clock >= from && clock < to).map(([name]) => name),
+      packetLoss: this.packetView.map(c => ({ index: c.index, screenX: c.x, states: c.states.map(s => (s === 'solid' ? 'S' : s === 'telegraph' ? 'T' : 'L')).join('') })),
+      embers: this.embers.filter(e => e.active).map(e => ({ at: e.at, x: e.x, y: e.y, aimed: e.aimed, stage: emberStage(clock, e.at), size: markerSize(clock, e.at) })),
+      emberImpacts: this.emberImpacts, eruption: eruptionLevel(clock),
+      leak: { inside: this.leak.inside, drained: this.leak.drained, zones: leakZones(clock).map(z => ({ index: z.index, screenX: z.rect.x, y: z.rect.y, width: z.rect.width, height: z.rect.height })) },
+      loop: {
+        ...this.loop, active: loopActive(this.loop, clock), node: nodePosition(clock), markerX: loopMarkerX(clock), cue: cueVisible(this.loop, clock),
+        formation: this.alive(this.glitchlings).filter(b => b.getData('loop') === true).map(b => ({ x: b.x - cameraX, y: b.y })),
+      },
+      hurts: JSON.parse(JSON.stringify(this.hurts)) as Record<HurtSource, { damage: number; absorbed: number }>,
+    };
+  }
+
   private snapshot() {
     const body = this.player.body as Body, cameraX = this.cameras.main.scrollX;
     const enemy = (e: Sprite) => {
@@ -814,10 +1070,11 @@ export class RouteScene extends Phaser.Scene {
       walls: WALLS.map((wall, index) => ({ screenX: wallScreenX(this.clock, wall), gapY: wall.gapY, visible: this.walls[index][0].visible, telegraph: wallTelegraph(this.clock, wall) }))
         .filter(wall => wall.visible || wall.telegraph),
       glitchlings: this.alive(this.glitchlings).map(bug => ({ x: bug.x, y: bug.y, hp: Number(bug.getData('hp')) })),
-      fragmentList: this.alive(this.fragments).map(knot => ({ x: knot.x, y: knot.y, dropped: knot.getData('dropped') === true })),
+      fragmentList: this.alive(this.fragments).map(knot => ({ x: knot.x, y: knot.y, dropped: knot.getData('dropped') === true, leak: Number(knot.getData('leak') ?? -1) >= 0 })),
+      hazards: this.hazardSnapshot(),
       shots: this.alive(this.shots).map(shot => ({ x: shot.x, y: shot.y, screenX: shot.x - cameraX })),
       fx: { active: this.fx.activeCount, capacity: this.fx.items.length },
-      audio: sfx.stats(), kipuFrame: this.animator.frame, hud: { score: this.hud.scoreText, combo: this.hud.comboText, rafaga: this.hud.rafagaText, shield: this.hud.shieldIcon }, panel: this.panelText.text,
+      audio: sfx.stats(), kipuFrame: this.animator.frame, hud: { score: this.hud.scoreText, combo: this.hud.comboText, rafaga: this.hud.rafagaText, shield: this.hud.shieldIcon, leak: this.hud.leakIcon }, panel: this.panelText.text,
     };
   }
 }

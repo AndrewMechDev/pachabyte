@@ -22,7 +22,8 @@ const TEXT = {
   checkpointHelp: phase => `R: REINTENTAR DESDE FASE ${phase}\nENTER: DESDE EL INICIO  M: MAPA`,
 };
 // Route bug values (2026-10-13); mirror src/game/bugRules.ts and comboRules.ts.
-const BUG_SCORES = new Set([75, 150, 100, 40]);
+// 250 is the Bucle node (A2): breaking it by shots debugs the loop like a bug.
+const BUG_SCORES = new Set([75, 150, 100, 40, 250]);
 const comboMultiplier = hits => 1 + [5, 12, 20].filter(t => hits >= t).length;
 // REVERSE tuning from the first human playtest (2026-10-13); mirrors src/game/reverseRules.ts.
 const SLOW_MS = 1200, CAPTURE_RADIUS = 40;
@@ -33,6 +34,15 @@ const RAFAGA_MS = 6000, RAFAGA_COOLDOWN = 120, SHOT_COOLDOWN = 180, SHOT_POOL = 
 const RAFAGA_DROP_HP = 83;
 // Route background (2026-10-13): only the arena backdrop and the ambient layers; mirror RouteScene.ts and routeAmbient.ts.
 const BACKGROUND_LAYERS = new Set(['backdrop', 'ambient-volcano', 'ambient-clouds']);
+// A2 route (2026-10-13): 98 s with Packet Loss, the eruption, Memory Leak and the Bucle; mirror routeRules.ts and the
+// hazard modules. Packet Loss lanes are the four inset blocks of packetLossRules.blockRects.
+const ROUTE_MS = 98000, MAREA = { start: 72000, peak: 78000, end: 82000 }, LOOP_START = 82000, THRESHOLD_MS = 90000;
+const PL = { start: 37600, period: 2400, solid: 800, speed: 64, width: 10, lanes: [[19, 38], [59, 37], [98, 38], [138, 37]] };
+const plSolid = (t, i) => ((((t - PL.start + (i % 2 ? PL.period / 2 : 0)) % PL.period) + PL.period) % PL.period) < PL.solid;
+const EMBER_MARKER_MS = 700, LEAK_DRAIN = 25, LOOP_SCORE = 250, LOOP_BOB = 14, LOOP_ITERATION_MS = 2600;
+const TEXT_A2 = { packetLoss: 'PACKET LOSS: CRUZA CUANDO SE PIERDAN', eruption: '¡EL MISTI DESPIERTA!', memoryLeak: 'MEMORY LEAK: DRENA TU ENERGÍA', loop: 'BUCLE: ROMPE EL NODO', loopBroken: 'BUCLE ROTO' };
+// Multiple of 10 up to float noise (the Memory Leak drain makes the meter fractional).
+const step10 = d => { const r = ((d % 10) + 10) % 10; return r < 1e-6 || r > 10 - 1e-6; };
 
 const passed = [];
 const errors = [];
@@ -163,7 +173,13 @@ try {
       pw: s.power.rafaga.active, prm: s.power.rafaga.remainingMs, shd: s.power.shield, inv: s.player.invulnerableUntil, pk: s.pickups.map(p => p.type).join(','),
       pcr: s.pickupsCollected.rafaga, pce: s.pickupsCollected.escudo, pcc: s.pickupsCollected.corazon, pb: s.pickupBonus,
       vc: s.fire.count, vs: s.fire.lastSize, va: s.fire.lastAt, hr: s.hud.rafaga, hsh: s.hud.shield,
-      bd: s.background.ambient.band, em: s.background.ambient.ember, pf: s.background.ambient.puffs,
+      bd: s.background.ambient.band, em: s.background.ambient.ember, pf: s.background.ambient.puffs, er: s.background.ambient.eruption, dim: s.background.ambient.dim,
+      act: s.hazards.active.join(','), pl: s.hazards.packetLoss.map(c => `${c.index}:${c.states}`).join('|'),
+      plTouch: s.hazards.packetLoss.some(c => left < c.screenX + 10 && left + w > c.screenX && [[19, 38], [59, 37], [98, 38], [138, 37]].some(([y, hh], i) => c.states[i] === 'S' && top < y + hh && top + h > y)),
+      emb: s.hazards.embers.map(e => `${e.at}:${e.stage}:${e.x}:${e.y}`).join('|'), ei: s.hazards.emberImpacts,
+      hp_: s.hazards.hurts.packet.damage + s.hazards.hurts.packet.absorbed, he_: s.hazards.hurts.ember.damage + s.hazards.hurts.ember.absorbed,
+      lk: s.hazards.leak.inside, ld: s.hazards.leak.drained, lz: s.hazards.leak.zones.length, hl: s.hud.leak,
+      la: s.hazards.loop.active, lr: s.hazards.loop.resets, lh: s.hazards.loop.hp, lb: s.hazards.loop.brokenBy ?? '', lf: s.hazards.loop.formation.length,
       tex: [...new Set([...s.enemyList.filter(e => e.type !== 'glitchling').map(e => e.texture), ...s.pickups.map(p => p.texture)])].join(','),
     };
   });
@@ -230,15 +246,25 @@ try {
 
   // ------------------------------------------------------------------ route bot
   stage = '2 route: scripted keyboard pilot through Ruta 01';
-  const route = { mareaTouched: false, rightDone: false, screenshot: false, bugShot: false, deliberateWall: true, rafagaPause: null, pickupShot: false };
+  const route = {
+    mareaTouched: false, rightDone: false, screenshot: false, bugShot: false, deliberateWall: true, rafagaPause: null, pickupShot: false,
+    // A2: take one solid Packet Loss block and one ember on purpose, drain the meter in the first Memory Leak zone, and
+    // (WebGL) shoot the Bucle node after its first repeat or (Canvas) let it break by itself after two repeats.
+    deliberatePacket: true, deliberateEmber: null, leakDone: false, shots: { packetloss: false, eruption: false, memoryleak: false, loop: false },
+  };
+  const breakLoopByShot = renderer === 'webgl';
   // Forecast 0.6 s of the nine flight directions against round orbs and Corruptor bodies (screen space).
   const avoid = (s, px, py, tx, ty) => {
     const rate = s.worldRate ?? 1;
     const threats = [
       ...s.orbs.map(o => ({ x: o.screenX, y: o.y, vx: o.vx - s.scrollSpeed * rate, vy: o.vy, rx: 11, ry: 14 })),
       ...s.enemyList.filter(e => e.type === 'corruptor').map(e => ({ x: e.screenX, y: e.y, vx: 0, vy: 0, rx: 20, ry: 20 })),
+      // A2: the longer route leaves less room for stray contact, so the pilot also steers around close Glitchlings.
+      ...s.enemyList.filter(e => e.type === 'glitchling' && e.screenX > px - 10 && e.screenX < px + 110).map(e => ({ x: e.screenX, y: e.y, vx: -45, vy: 0, rx: 11, ry: 14 })),
     ];
-    if (!threats.length) return null;
+    // Ember landing points: dangerous around their impact time (marker 700 ms ahead); the deliberate one is ignored.
+    const embers = s.hazards.embers.filter(e => e.at !== route.deliberateEmber && (e.stage === 'marker' || e.stage === 'impact')).map(e => ({ x: e.x, y: e.y, dt: (e.at - s.clock) / 1000 }));
+    if (!threats.length && !embers.length) return null;
     let best = null;
     for (const mx of [-1, 0, 1]) for (const my of [-1, 0, 1]) {
       const norm = Math.hypot(mx, my) || 1, vx = 110 * mx / norm, vy = 110 * my / norm;
@@ -246,28 +272,62 @@ try {
       for (let step = 1; step <= 12; step++) {
         const t = step * 0.05, x = Math.min(300, Math.max(12, px + vx * t)), y = Math.min(168, Math.max(28, py + vy * t));
         for (const b of threats) if (Math.abs(b.x + b.vx * t - x) < b.rx && Math.abs(b.y + b.vy * t - (y + 1)) < b.ry) cost += (13 - step) * 40;
+        for (const e of embers) if (t > e.dt - 0.25 && t < e.dt + 0.2 && Math.abs(e.x - x) < 21 && Math.abs(e.y - (y + 1)) < 24) cost += (13 - step) * 50;
         reach = Math.min(reach, Math.hypot(tx - x, ty - y));
       }
       cost += Math.min(reach, Math.hypot(tx - px, ty - py));
       if (!best || cost < best.cost) best = { cost, mx, my };
     }
-    return best.cost >= 40 || threats.some(b => Math.abs(b.x - px) < 70) ? best : null;
+    return best.cost >= 40 || threats.some(b => Math.abs(b.x - px) < 70) || embers.some(e => e.dt < 0.9) ? best : null;
   };
   const routeKeys = s => {
     const px = s.player.x - s.cameraX, py = s.player.y, t = s.clock, keys = new Set(['j']);
     let tx = 56, ty = 97;
-    const bugs = s.enemyList.filter(bug => bug.x > s.player.x + 2).sort((a, b) => a.x - b.x);
+    // Let the first Corruptor fire once (its charge and fire frames and an orb must be observed) before engaging it.
+    if (s.orbs.length) route.orbSeen = true;
+    const spare = s.enemyList.filter(e => e.type === 'corruptor' && !route.orbSeen);
+    const bugs = s.enemyList.filter(bug => bug.x > s.player.x + 2 && !spare.includes(bug)).sort((a, b) => a.x - b.x);
     const knots = s.fragmentList.filter(knot => knot.x > s.player.x - 4 && knot.x - s.cameraX > s.marea.front + 14).sort((a, b) => a.x - b.x);
     if (bugs.length) ty = bugs[0].y + 1; else if (knots.length) ty = knots[0].y;
     // Rare pickups: fly out to meet the nearest one ahead (it rides the scroll toward Kipu).
     const item = s.pickups.filter(p => p.screenX > px - 4 && p.screenX < 312 && p.screenX > s.marea.front + 14).sort((a, b) => a.screenX - b.screenX)[0];
-    if (item) { ty = item.y; tx = Math.max(56, Math.min(item.screenX - 4, 230)); }
+    if (item) { ty = item.y; tx = Math.max(56, Math.min(item.screenX - 4, s.hazards.packetLoss.length ? 56 : 170)); }
     // Firewalls: aim for the gap; the first wall (gap 60) is touched on purpose at y 130 to prove its damage.
     const wall = s.walls.filter(w => w.screenX + 8 > px - 10 && w.screenX < px + 190).sort((a, b) => a.screenX - b.screenX)[0];
     if (wall) { ty = wall.gapY === 60 && route.deliberateWall ? 130 : wall.gapY - 1; tx = 56; }
+    // Packet Loss: pick a lane that stays open while the nearest column passes (one deliberate solid hit first).
+    const column = s.hazards.packetLoss.filter(c => c.screenX + PL.width > px - 8 && c.screenX < px + 200).sort((a, b) => a.screenX - b.screenX)[0];
+    if (column) {
+      const arrive = Math.max(0, (column.screenX - (px + 6)) / PL.speed * 1000), leave = Math.max(0, (column.screenX + PL.width - (px - 6)) / PL.speed * 1000);
+      // Fraction of the crossing window (with a margin) in which a lane stays open; the most open lane wins, then the nearest.
+      const openness = i => { let open = 0, n = 0; for (let dt = arrive - 160; dt <= leave + 160; dt += 20, n++) if (!plSolid(t + dt, i)) open++; return open / n; };
+      const centre = i => PL.lanes[i][0] + PL.lanes[i][1] / 2 - 1;
+      const lanes = [0, 1, 2, 3].sort((a, b) => openness(b) - openness(a) || Math.abs(centre(a) - py) - Math.abs(centre(b) - py));
+      const lane = route.deliberatePacket && s.player.invulnerableUntil < s.realClock && s.player.hp >= 2 ? lanes.find(i => plSolid(t + (arrive + leave) / 2, i)) : lanes[0];
+      if (lane !== undefined) { ty = centre(lane); tx = 56; }
+    }
+    // Erupción: stand still under the first aimed ember once, to prove the impact hurts (the Escudo may take it).
+    const deliberate = route.deliberateEmber === null ? s.hazards.embers.find(e => e.aimed && e.stage === 'marker' && e.at - s.clock > 500 && s.player.invulnerableUntil < s.realClock + e.at - s.clock) : s.hazards.embers.find(e => e.at === route.deliberateEmber);
+    if (deliberate && route.deliberateEmber === null && !route.emberDone) route.deliberateEmber = deliberate.at;
+    if (deliberate && deliberate.at === route.deliberateEmber && deliberate.stage !== 'done') return keys;
+    // Memory Leak: fly into the first zone until it drains some energy, then carry on.
+    const zone = !route.leakDone && s.hazards.leak.zones.find(z => z.screenX + z.width > px);
+    if (zone) { tx = Math.max(56, Math.min(230, zone.screenX + 30)); ty = zone.y + zone.height / 2; }
+    // Bucle: let it repeat; then (WebGL) shoot the node, or (Canvas) hold fire near the node's lane until it gives up.
+    const loop = s.hazards.loop;
+    if (loop.active) {
+      if (breakLoopByShot && loop.resets >= 1) {
+        // Lead the bobbing node by the shot's travel time (node path mirrors loopRules.nodePosition).
+        tx = 120;
+        const travel = Math.max(0, loop.node.x - (px + 12)) / 230 * 1000;
+        ty = 97 + LOOP_BOB * Math.sin(2 * Math.PI * (t + travel - LOOP_START) / LOOP_ITERATION_MS) + 1;
+      }
+      else { tx = 40; if (Math.abs(py - 1 - loop.node.y) <= 20) keys.delete('j'); }
+    }
     // Marea: wait at the left edge until its contact drains one heart, then flee right.
-    if (t > 46500 && t < 62000) tx = route.mareaTouched ? 210 : 30;
-    if (t >= 62000) { tx = route.rightDone ? 200 : 400; ty = 97; keys.delete('j'); }
+    if (t > MAREA.start - 1500 && t < MAREA.end) tx = route.mareaTouched ? 210 : 30;
+    if (t >= THRESHOLD_MS) { tx = route.rightDone ? 200 : 400; ty = 97; keys.delete('j'); }
+    if (spare.some(e => Math.abs(e.y - (py - 1)) < 16)) keys.delete('j');
     const dodge = avoid(s, px, py, Math.min(tx, 300), ty);
     if (dodge) {
       if (dodge.mx > 0) keys.add('d'); else if (dodge.mx < 0) keys.add('a');
@@ -278,15 +338,25 @@ try {
   };
   const flyRoute = async () => {
     let previous = await snap();
-    const deadline = Date.now() + 160000;
+    const deadline = Date.now() + 220000;
     while (Date.now() < deadline) {
       const s = await snap();
       if (!s || s.scene !== 'route') break;
       if (s.outcome === 'defeat') return 'defeat';
-      if (s.clock > 46500 && !route.mareaTouched && s.player.hp < previous.player.hp && s.marea.front >= s.player.x - 6 - s.cameraX - 1) route.mareaTouched = true;
-      if (s.clock > 50500 && s.marea.front > 0 && !route.mareaTouched && s.player.hp < previous.player.hp) route.mareaTouched = true;
-      if (s.clock > 55000) route.mareaTouched = true; // never stay in the Marea past its peak
-      if (s.clock > 62000 && s.player.x + 6 - s.cameraX >= 313) route.rightDone = true;
+      if (s.clock > MAREA.start && !route.mareaTouched && s.player.hp < previous.player.hp && s.marea.front >= s.player.x - 6 - s.cameraX - 1) route.mareaTouched = true;
+      if (s.clock > MAREA.start + 2500 && s.marea.front > 0 && !route.mareaTouched && s.player.hp < previous.player.hp) route.mareaTouched = true;
+      if (s.clock > MAREA.peak + 1000) route.mareaTouched = true; // never stay in the Marea past its peak
+      if (s.clock > THRESHOLD_MS && s.player.x + 6 - s.cameraX >= 313) route.rightDone = true;
+      if (route.deliberatePacket && s.hazards.hurts.packet.damage + s.hazards.hurts.packet.absorbed > 0) route.deliberatePacket = false;
+      if (route.deliberatePacket && s.clock > PL.start + 9000) route.deliberatePacket = false;
+      if (route.deliberateEmber !== null && !s.hazards.embers.some(e => e.at === route.deliberateEmber && e.stage !== 'done')) { route.deliberateEmber = null; route.emberDone = s.hazards.hurts.ember.damage + s.hazards.hurts.ember.absorbed > 0; }
+      if (!route.leakDone && (s.hazards.leak.drained >= 15 || s.clock > 70500)) route.leakDone = true;
+      // One capture per new A2 segment, taken when the hazard is clearly readable.
+      const shoot = async (key, file) => { route.shots[key] = true; await canvas.screenshot({ path: `docs/ruta01-${file}.png` }); };
+      if (!route.shots.packetloss && s.hazards.packetLoss.filter(c => c.screenX < 300).length >= 2 && s.hazards.packetLoss.some(c => c.states.includes('S'))) await shoot('packetloss', 'packetloss');
+      if (!route.shots.eruption && s.hazards.eruption === 1 && s.hazards.embers.filter(e => e.stage === 'marker').length >= 2) await shoot('eruption', 'eruption');
+      if (!route.shots.memoryleak && s.hazards.leak.inside && s.hazards.leak.zones.length >= 2) await shoot('memoryleak', 'memoryleak');
+      if (!route.shots.loop && s.hazards.loop.active && s.hazards.loop.resets >= 1 && s.hazards.loop.formation.filter(f => f.x < 300).length >= 2) await shoot('loop', 'loop');
       if (!route.screenshot && s.clock > 29000) {
         route.screenshot = true;
         await canvas.screenshot({ path: 'docs/ruta01-route.png' });
@@ -320,14 +390,15 @@ try {
   };
   let routeResult = await flyRoute();
   let routeAttempts = 1;
-  while (routeResult === 'defeat' && routeAttempts < 2) {
-    notes.push(`route attempt ${routeAttempts} ended in defeat at ${(await snap()).clock} ms`);
+  // The 98 s A2 route takes four deliberate hits (Firewall, Packet Loss, ember, Marea), so allow a third attempt.
+  while (routeResult === 'defeat' && routeAttempts < 3) {
+    { const lost = await snap(); notes.push(`route attempt ${routeAttempts} ended in defeat at ${Math.round(lost.clock)} ms (hurts ${JSON.stringify(lost.hazards.hurts)})`); }
     const panel = (await snap()).panel;
     assert.match(panel, /KIPU SE DESCONECTA/);
     const run = (await snap()).sceneRun;
     await page.keyboard.press('r');
     await wait(previous => window.pachaDebug?.().scene === 'route' && window.pachaDebug().sceneRun > previous && window.pachaDebug().clock > 0, run);
-    Object.assign(route, { mareaTouched: false, rightDone: false, rafagaPause: null });
+    Object.assign(route, { orbSeen: false, mareaTouched: false, rightDone: false, rafagaPause: null, deliberatePacket: true, deliberateEmber: null, emberDone: false, leakDone: false });
     routeAttempts += 1;
     routeResult = await flyRoute();
   }
@@ -344,20 +415,21 @@ try {
   assert.ok(R.some(s => s.shots > 0) && R.every(s => s.shots <= SHOT_POOL), `shots fire and stay within the ${SHOT_POOL}-shot pool`);
   for (const [a, b] of pairs) {
     assert.equal(b.sc - a.sc, 100 * (b.fr - a.fr) + (b.bp - a.bp) + (b.cb - a.cb) + (b.pb - a.pb), `score delta at ${b.c} ms`);
-    if (b.m < 100) assert.equal((b.m - a.m) % 10, 0, `meter moves in steps of 10 at ${b.c} ms`);
+    if (b.m < 100 && !a.lk && !b.lk) assert.ok(step10(b.m - a.m), `meter moves in steps of 10 outside Memory Leak at ${b.c} ms (${a.m} -> ${b.m})`);
     if (b.bg === a.bg + 1) {
       assert.ok(BUG_SCORES.has(b.bp - a.bp), `a debugged bug scores its own value (${b.bp - a.bp}) at ${b.c} ms`);
       assert.equal(b.cb - a.cb, (b.bp - a.bp) * (comboMultiplier(b.ch) - 1), `racha bonus = base x (multiplier - 1) at ${b.c} ms`);
     }
   }
-  const firstWound = pairs.find(([a, b]) => b.g1 > a.g1 && b.bg === a.bg && b.fr === a.fr && b.m < 100);
+  const firstWound = pairs.find(([a, b]) => b.g1 > a.g1 && b.bg === a.bg && b.fr === a.fr && b.m < 100 && !a.lk && !b.lk);
   assert.ok(firstWound, 'a Glitchling must lose one of its two HP to a shot');
-  assert.equal(firstWound[1].m - firstWound[0].m, 10, 'each Glitchling hit adds +10 meter');
+  assert.ok(Math.abs(firstWound[1].m - firstWound[0].m - 10) < 1e-6, 'each Glitchling hit adds +10 meter');
   const firstKill = pairs.find(([a, b]) => b.bg === a.bg + 1 && b.fr === a.fr);
   assert.ok(firstKill, 'a Glitchling must be destroyed by shots');
   assert.equal(firstKill[1].bp - firstKill[0].bp, 75, 'the first debugged bug is a Glitchling worth 75');
   assert.equal(firstKill[1].sc - firstKill[0].sc, 75 * comboMultiplier(firstKill[1].ch));
-  if (firstKill[1].m < 100) assert.equal(firstKill[1].m - firstKill[0].m, 10, 'the killing hit adds +10 meter');
+  // A Ráfaga volley can land several hits in one frame; each hit (racha +1) adds exactly +10.
+  if (firstKill[1].m < 100) assert.ok(Math.abs(firstKill[1].m - firstKill[0].m - 10 * (firstKill[1].ch - firstKill[0].ch)) < 1e-6 && firstKill[1].ch > firstKill[0].ch, 'the killing hit adds +10 meter');
   const firstFragment = pairs.find(([a, b]) => b.fr === a.fr + 1 && b.bg === a.bg);
   assert.ok(firstFragment, 'a fragment must be collected');
   assert.equal(firstFragment[1].sc - firstFragment[0].sc, 100, 'a fragment adds 100 score');
@@ -366,13 +438,14 @@ try {
   assert.ok(wallHit, 'touching a Firewall column outside its gap must cost a heart');
   assert.equal(R.reduce((n, s) => n + s.beyond, 0), 0, 'no shot may appear beyond a Firewall while Kipu is in front of it');
   // Ambient (visual only): a smoke plume always, a faint ember glow now and then, mist bands at the marked transitions.
-  assert.ok(R.every(s => s.pf > 0) && R.some(s => s.em > 0) && R.every(s => s.em <= 0.3), 'the Misti smokes and glows faintly');
+  assert.ok(R.every(s => s.pf > 0) && R.some(s => s.em > 0) && R.every(s => s.em <= 0.3 || s.er > 0), 'the Misti smokes and glows faintly (brighter only in the eruption)');
+  assert.ok(R.some(s => s.er === 1 && s.dim > 0 && s.dim <= 0.25) && R.filter(s => s.seg !== 'eruption').every(s => s.dim === 0), 'the eruption dims the sky slightly, only in its segment');
   for (const seg of ['firewall', 'marea', 'threshold']) assert.ok(R.some(s => s.bd === seg), `a mist band marks the ${seg} start`);
   assert.ok(R.every(s => s.bd === null || ['firewall', 'marea', 'threshold'].includes(s.bd)), 'mist bands only at the marked transitions');
   const textures = new Set(R.flatMap(s => s.tex.split(',').filter(Boolean)));
   for (const key of ['corruptor', 'corruptor-charge', 'corruptor-fire', 'sombra', 'sombra-blink', 'shadow', 'pickup-rafaga', 'pickup-rafaga-shine']) assert.ok(textures.has(key), `user sprite frame ${key} shown (${[...textures]})`);
   assert.ok(R.some(s => s.near > 0), 'shots must have been fired at a Firewall column');
-  const mareaFronts = R.filter(s => s.c > 48000 && s.c < 56000).map(s => s.front);
+  const mareaFronts = R.filter(s => s.c > MAREA.start && s.c < MAREA.peak).map(s => s.front);
   assert.ok(mareaFronts.length > 10 && mareaFronts.every((f, i) => i === 0 || f >= mareaFronts[i - 1]) && Math.max(...mareaFronts) > 100, `the Marea front advances from the left edge (${mareaFronts.length} samples, max ${Math.max(...mareaFronts)}, first drop at ${mareaFronts.findIndex((f, i) => i > 0 && f < mareaFronts[i - 1])})`);
   const mareaHit = pairs.find(([a, b]) => b.hp < a.hp && b.front > 0 && b.front >= b.left - 1);
   assert.ok(mareaHit, 'contact with the Marea front must cost a heart');
@@ -387,11 +460,66 @@ try {
   assert.deepEqual(
     { hp: arrival.run.hp, score: arrival.run.score, fragments: arrival.run.fragments, bugs: arrival.run.bugs, meter: arrival.run.meter },
     { hp: final.hp, score: final.sc, fragments: final.fr, bugs: final.bg, meter: final.m }, 'guardian must receive the route state');
-  assert.ok(arrival.run.routeSeconds >= 70 && arrival.run.routeSeconds < 70.2, `route time ${arrival.run.routeSeconds}`);
+  assert.ok(arrival.run.routeSeconds >= ROUTE_MS / 1000 && arrival.run.routeSeconds < ROUTE_MS / 1000 + 0.2, `route time ${arrival.run.routeSeconds}`);
   assert.equal(arrival.heroHP, final.hp);
   assert.equal(arrival.reverse.meter, final.m);
   assert.equal(arrival.score, final.sc);
   assert.equal(arrival.run.pickupBonus, final.pb, 'the full-heart bonus carries into the guardian');
+
+  stage = '2 route A2: Packet Loss, Erupción del Misti, Memory Leak, Bucle and fairness (sampled frames)';
+  // Fairness: never two hazard types at once; every heart lost costs exactly one.
+  assert.ok(R.every(s => s.act.split(',').filter(Boolean).length <= 1), 'never two hazard types active at once');
+  for (const [a, b] of pairs) if (b.hp < a.hp) assert.equal(a.hp - b.hp, 1, `a hit costs exactly one heart (${b.c} ms)`);
+  for (const [key, text] of Object.entries({ packetLoss: TEXT_A2.packetLoss, eruption: TEXT_A2.eruption, memoryLeak: TEXT_A2.memoryLeak, loop: TEXT_A2.loop })) {
+    assert.ok(R.some(s => s.cap === text), `${key} caption "${text}" shows`);
+  }
+  // Packet Loss: every block that turns solid was telegraphing in the previous frame; a solid block costs a heart.
+  const plStates = s => Object.fromEntries(s.pl.split('|').filter(Boolean).map(x => x.split(':')));
+  let solidTurns = 0;
+  for (const [a, b] of pairs) {
+    const before = plStates(a), now = plStates(b);
+    for (const [index, states] of Object.entries(now)) {
+      if (!before[index]) continue;
+      for (let i = 0; i < states.length; i++) if (states[i] === 'S' && before[index][i] !== 'S') { solidTurns++; assert.equal(before[index][i], 'T', `block ${index}/${i} telegraphs before turning solid (${b.c} ms)`); }
+    }
+  }
+  assert.ok(solidTurns >= 4, `blocks turned solid ${solidTurns} times`);
+  const packetHits = pairs.filter(([a, b]) => b.hp_ > a.hp_);
+  assert.ok(packetHits.length >= 1, 'touching a solid Packet Loss block must cost a heart (or the Escudo)');
+  for (const [a, b] of packetHits) assert.ok((a.plTouch || b.plTouch) && (b.hp === a.hp - 1 || (a.shd && !b.shd)), `a Packet Loss hit only while touching a solid block (${b.c} ms)`);
+  // Erupción: every impact was marked at least 600 ms before; an ember impact hurts in its radius.
+  const markerSeen = new Map();
+  for (const s of R) for (const e of s.emb.split('|').filter(Boolean)) { const [at, st] = e.split(':'); if (st === 'marker' && !markerSeen.has(at)) markerSeen.set(at, s.c); }
+  const impacts = new Set();
+  for (const s of R) for (const e of s.emb.split('|').filter(Boolean)) { const [at, st] = e.split(':'); if (st === 'impact') impacts.add(at); }
+  assert.ok(impacts.size >= 10, `embers landed (${impacts.size})`);
+  for (const at of impacts) assert.ok(markerSeen.has(at) && Number(at) - markerSeen.get(at) >= 600, `ember ${at} was marked ${Number(at) - (markerSeen.get(at) ?? at)} ms before impact`);
+  const emberHits = pairs.filter(([a, b]) => b.he_ > a.he_);
+  assert.ok(emberHits.length >= 1, 'an ember impact must hurt Kipu (a heart or the Escudo)');
+  for (const [a, b] of emberHits) assert.ok(b.emb.includes(':impact:') && (b.hp === a.hp - 1 || (a.shd && !b.shd)), `an ember hurts only at impact (${b.c} ms)`);
+  // Memory Leak: inside a zone the meter drains at 25/s of world time and the hearts never change.
+  const drains = pairs.filter(([a, b]) => a.lk && b.lk && a.m > 0 && b.c > a.c && b.fr === a.fr && b.ch === a.ch);
+  assert.ok(drains.length >= 10 && drains.every(([a, b]) => Math.abs((a.m - b.m) - Math.min(a.m, LEAK_DRAIN * (b.c - a.c) / 1000)) < 0.01), `Memory Leak drains ${LEAK_DRAIN}/s (${drains.length} frames)`);
+  assert.ok(drains.every(([a, b]) => b.hp === a.hp || b.hp_ > a.hp_ || b.he_ > a.he_), 'Memory Leak never costs a heart');
+  assert.ok(R.some(s => s.lk && s.hl) && R.filter(s => !s.lk).every(s => !s.hl), 'the HUD shows the drain indicator only while draining');
+  assert.ok(R.at(-1).ld >= 15, `the pilot was drained (${R.at(-1).ld})`);
+  // Bucle: it repeats (formation cleared and respawned) and then breaks by a shot (WebGL) or by itself (Canvas).
+  const loopFrames = R.filter(s => s.la);
+  assert.ok(loopFrames.length > 30, 'the Bucle runs');
+  const resetPairs = pairs.filter(([a, b]) => b.lr > a.lr);
+  assert.ok(resetPairs.length >= 1 && resetPairs.every(([, b]) => b.lf === 0), 'each repeat clears the formation');
+  assert.ok(resetPairs.every(([a, b]) => R.some(s => s.c > b.c && s.c < b.c + 1500 && s.lr === b.lr && s.lf > 0)), 'and brings it back');
+  const final2 = R.at(-1);
+  assert.ok(final2.lr >= 1 && final2.lr <= 2, `the Bucle repeated ${final2.lr} time(s), at most 2`);
+  assert.equal(final2.lb, breakLoopByShot ? 'shot' : 'timeout', 'the Bucle breaks the expected way');
+  if (breakLoopByShot) {
+    const broke = pairs.find(([a, b]) => a.lb === '' && b.lb === 'shot');
+    assert.ok(broke && broke[1].bp - broke[0].bp === LOOP_SCORE && broke[1].bg === broke[0].bg + 1, 'breaking the node scores like a bug worth 250');
+  } else assert.equal(final2.lr, 2, 'left alone, the Bucle breaks by itself after two repeats');
+  assert.ok(R.some(s => s.cap === TEXT_A2.loopBroken), '"BUCLE ROTO" shows');
+  for (const key of Object.keys(route.shots)) assert.ok(route.shots[key], `capture docs/ruta01-${key}.png taken`);
+  notes.push(`A2: ${solidTurns} solid turns, ${packetHits.length} Packet Loss hit(s), ${impacts.size} ember impacts (${emberHits.length} hit Kipu), leak drained ${Math.round(final2.ld)}, Bucle ${final2.lr} repeat(s) then ${final2.lb}`);
+  passed.push(`2 route A2: one hazard at a time, each hit costs one heart; Packet Loss telegraphs before every solid turn (${solidTurns}) and a solid block hurt; ${impacts.size} embers each marked >= 600 ms ahead and one hurt; Memory Leak drained ${LEAK_DRAIN}/s with the HUD indicator and no heart lost; Bucle repeated ${final2.lr} time(s) then broke by ${final2.lb} with "BUCLE ROTO"`);
   stage = '2 route B2: Corruptor, Sombra de Error, racha, hit-stop, debug-drop (sampled frames)';
   const firstOrb = pairs.find(([a, b]) => b.oc > a.oc);
   assert.ok(firstOrb, 'a Corruptor must fire an orb');
@@ -400,7 +528,7 @@ try {
     assert.ok(before.some(s => s.chg), `every orb is telegraphed by a Corruptor charge in the previous 600 ms (orb at ${b.c} ms)`);
   }
   assert.ok(R.every(s => s.ct <= 2 && s.lg + s.sm <= 3), 'at most 2 Corruptors and 3 shadow units on screen');
-  assert.ok(R.filter(s => s.seg === 'firewall').every(s => s.ct === 0 && s.lg + s.sm === 0 && s.oc === 0), 'no Corruptor, Sombra or orb during the Firewall');
+  for (const seg of ['firewall', 'packetLoss', 'eruption', 'loop']) assert.ok(R.filter(s => s.seg === seg).every(s => s.ct === 0 && s.lg + s.sm === 0 && s.oc === 0), `no Corruptor, Sombra or orb during ${seg}`);
   assert.ok(R.some(s => s.dodge), 'a Sombra de Error telegraphs a sideways dodge');
   const split = pairs.find(([a, b]) => b.lg === a.lg - 1 && b.bg >= a.bg + 1 && b.sm === a.sm + 2);
   assert.ok(split, 'a debugged Sombra splits into two small shadows');
@@ -447,9 +575,9 @@ try {
   assert.ok(fastGaps.filter(g => g < SHOT_COOLDOWN - 1).length > fastGaps.length / 2, 'the Ráfaga fires faster than the normal cooldown');
   assert.ok(Math.max(...R.filter(inside).map(s => s.shots)) > 12, 'a Ráfaga keeps more shots on screen than the old 12-shot pool');
   const after = rafagaWindows[0].end;
-  const single = pairs.filter(([a, b]) => b.vc > a.vc && a.rc >= after.rc && !a.pw && !b.pw && b.c < 62000);
+  const single = pairs.filter(([a, b]) => b.vc > a.vc && a.rc >= after.rc && !a.pw && !b.pw && b.c < THRESHOLD_MS);
   assert.ok(single.length >= 5 && single.every(([, b]) => b.vs === 1), 'after the Ráfaga Kipu fires single shots again');
-  const slowGaps = gaps(volleyTimes(s => s.rc >= after.rc && !s.pw && s.vs === 1 && s.c < 62000)).filter(g => g < 400);
+  const slowGaps = gaps(volleyTimes(s => s.rc >= after.rc && !s.pw && s.vs === 1 && s.c < THRESHOLD_MS)).filter(g => g < 400);
   assert.ok(slowGaps.length >= 3 && slowGaps.every(g => g >= SHOT_COOLDOWN - 0.01), `normal cooldown ${SHOT_COOLDOWN} ms returns (${Math.min(...slowGaps)})`);
   assert.ok(R.filter(s => !s.pw).every(s => s.hr === ''), 'the RÁFAGA bar hides when it runs out');
   assert.ok(route.rafagaPause, 'the pilot paused during a Ráfaga');
@@ -690,7 +818,9 @@ try {
   const rafagaOn = s => s.pk.split(',').filter(k => k === 'rafaga').length;
   assert.ok(G.every(s => rafagaOn(s) <= 1), 'at most one Ráfaga drop on screen');
   const halfway = gPairs.filter(([a, b]) => a.ph === 1 && a.hp > RAFAGA_DROP_HP && b.hp <= RAFAGA_DROP_HP);
-  const breaks = gPairs.filter(([a, b]) => a.ph === 2 && b.ph === 2 && a.sh > 0 && b.sh === 0);
+  // A volley of returned bolts can break the phase 2 shield and push Amaru into phase 3 in the same frame (phase 3
+  // raises a fresh shield), so a shielded phase 2 sample followed by a phase 3 sample also contains a shield break.
+  const breaks = gPairs.filter(([a, b]) => a.ph === 2 && a.sh > 0 && ((b.ph === 2 && b.sh === 0) || b.ph === 3));
   assert.ok(halfway.length >= 1 && breaks.length >= 1, 'the phase 1 halfway mark and a phase 2 shield break were sampled');
   for (const [a, b] of [...halfway, ...breaks]) assert.ok(b.pdr === a.pdr + (rafagaOn(a) ? 0 : 1), `a Ráfaga drops at ${a.ph === 1 ? 'mid phase 1' : 'a shield break'} (${a.pdr} -> ${b.pdr}, on screen: ${a.pk})`);
   for (const pair of gPairs.filter(([a, b]) => b.run === a.run && b.pdr > a.pdr)) assert.ok(halfway.includes(pair) || breaks.includes(pair), `Ráfaga drops only at those two moments (${pair[0].ph}:${pair[0].hp}/${pair[0].sh} -> ${pair[1].hp}/${pair[1].sh})`);

@@ -7,6 +7,8 @@ import {
 import { AMARU, hitBoss, initialBoss, phaseFor, type Boss } from '../src/game/amaruRules';
 import { ROUTE, SEGMENTS, WALLS, overlaps, segmentAt, wallRects, wallScreenX } from '../src/game/routeRules';
 import { GAME } from '../src/game/rules';
+import { PACKET_LOSS, packetLossColumns, packetLossWindow } from '../src/game/packetLossRules';
+import { ERUPTION } from '../src/game/eruptionRules';
 
 describe('Ráfaga de la Trama (approved 2026-10-13)', () => {
   it('lasts 6 s of real time with a triple spread and a 120 ms cooldown, then reverts', () => {
@@ -97,15 +99,28 @@ describe('route placement', () => {
       expect(segmentAt(p.at)).not.toBe('threshold');
     }
   });
-  it('places a Ráfaga before the swarm, the Corazón after the Firewall and the Escudo before the Marea', () => {
-    const swarm = SEGMENTS.find(s => s.name === 'swarm')!, marea = SEGMENTS.find(s => s.name === 'marea')!;
-    const lastWall = Math.max(...WALLS.map(w => w.at));
-    expect(ROUTE_PICKUPS.some(p => p.kind === 'rafaga' && p.at < swarm.start && p.at > lastWall)).toBe(true);
-    const heart = ROUTE_PICKUPS.find(p => p.kind === 'corazon')!;
-    expect(heart.at).toBeGreaterThan(lastWall);
+  it('places the Escudo before the eruption, the Corazón after the Packet Loss and a Ráfaga in the eruption (A2)', () => {
+    const eruption = SEGMENTS.find(s => s.name === 'eruption')!, swarm = SEGMENTS.find(s => s.name === 'swarm')!;
     const shield = ROUTE_PICKUPS.find(p => p.kind === 'escudo')!;
-    expect(shield.at).toBeLessThan(marea.start);
-    expect(shield.at).toBeGreaterThan(swarm.start);
+    expect(segmentAt(shield.at)).toBe('packetLoss');
+    // Spawned behind the last column, so the columns can never take it.
+    expect(shield.at).toBeGreaterThan(Math.max(...PACKET_LOSS.columns));
+    // It drifts in at scroll speed and reaches Kipu's usual spot only as the embers begin.
+    expect(shield.at + (routePickupScreenX(shield, shield.at) - 56) / ROUTE.scrollSpeed * 1000).toBeLessThan(ERUPTION.embers[0].at + 3000);
+    const heart = ROUTE_PICKUPS.find(p => p.kind === 'corazon')!;
+    expect(heart.at).toBeGreaterThanOrEqual(eruption.start);
+    expect(heart.at).toBeGreaterThan(packetLossWindow()[0]);
+    expect(ROUTE_PICKUPS.some(p => p.kind === 'rafaga' && segmentAt(p.at) === 'eruption' && p.at < swarm.start)).toBe(true);
+  });
+  it('never puts a pickup inside a solid Packet Loss block column while both are on screen', () => {
+    const [w, h] = PICKUPS.drawn;
+    for (const p of ROUTE_PICKUPS) {
+      for (let t = p.at; routePickupScreenX(p, t) > -w; t += 20) {
+        const x = routePickupScreenX(p, t);
+        const rect = { x: x - w / 2, y: p.y - h / 2 - PICKUPS.bob.px, width: w, height: h + 2 * PICKUPS.bob.px };
+        for (const column of packetLossColumns(t)) expect(overlaps(rect, { x: column.x, y: GAME.playTop, width: PACKET_LOSS.width, height: GAME.playBottom - GAME.playTop }), `${p.kind} at ${t} ms`).toBe(false);
+      }
+    }
   });
   it('never puts a pickup inside a Firewall column while both are on screen (bob included)', () => {
     const [w, h] = PICKUPS.drawn;
@@ -127,7 +142,7 @@ describe('route placement', () => {
   });
   it('releases each pickup exactly once as the clock advances', () => {
     let cursor = 0; const seen: number[] = [];
-    for (let t = 0; t <= 70000; t += 16) { const step = pickupsDue(cursor, t); cursor = step.next; seen.push(...step.due.map(p => p.at)); }
+    for (let t = 0; t <= 98000; t += 16) { const step = pickupsDue(cursor, t); cursor = step.next; seen.push(...step.due.map(p => p.at)); }
     expect(seen).toEqual(ROUTE_PICKUPS.map(p => p.at));
   });
 });

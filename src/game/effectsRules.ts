@@ -17,14 +17,16 @@ export function triggerHitStop(h: HitStop, realNow: number, ms: number = HIT_STO
 export const hitStopActive = (h: HitStop, realNow: number): boolean => realNow >= h.from && realNow < h.until;
 
 // Milliseconds of the real step [realBefore, realBefore + delta) that fall inside the stop.
+// Clamped to [0, delta]: (realBefore + delta) - realBefore can exceed delta by one float ulp.
 export function stoppedPart(h: HitStop, realBefore: number, delta: number): number {
-  const end = realBefore + Math.max(0, delta);
-  return Math.max(0, Math.min(end, h.until) - Math.max(realBefore, h.from));
+  const step = Math.max(0, delta), end = realBefore + step;
+  return Math.min(step, Math.max(0, Math.min(end, h.until) - Math.max(realBefore, h.from)));
 }
 
 // World milliseconds for one real step: the stopped part does not advance, the rest advances at `scale`.
+// Never negative, so the world clock (and everything timed by it, like the Marea front) never steps backwards.
 export function worldStep(h: HitStop, realBefore: number, delta: number, scale: number): number {
-  return scale * (Math.max(0, delta) - stoppedPart(h, realBefore, delta));
+  return Math.max(0, scale * (Math.max(0, delta) - stoppedPart(h, realBefore, delta)));
 }
 
 // Floating numbers: damage and points rise a few pixels and fade. Bounded pool, no allocation after construction.
