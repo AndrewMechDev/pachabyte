@@ -13,6 +13,7 @@ Status flow: `requested → review → approved → integrated → verified`. Un
 | 5 | `KIPU_FLY_ACTIONS` | 2 × 4 frames × 32×40 | Kipu shooting and PachaShift | requested (optional) |
 | 6 | `BUG_CORRUPTOR` | 4 frames × 24×24 | Ranged route enemy | requested |
 | 7 | `BUG_SOMBRA_DE_ERROR` | 4 × 20×20 + 2 × 12×12 | Splitting route enemy | requested |
+| 8 | `PICKUPS` (Ráfaga, Escudo, Corazón) | 3 × 2 frames × 12×12 | Power-ups on the route and boss drops | requested |
 
 ---
 
@@ -142,4 +143,24 @@ Draw everything at exactly 8x scale (every logical pixel a square 8x8 block of o
 Style: crisp hard-edged pixel art, max 6 colors, binary alpha only (no semi-transparent pixels), no anti-aliasing, no blur.
 Background: real transparent PNG, or flat #FF00FF magenta if transparency is impossible.
 Do NOT include: text, labels, borders, ground, shadows, weapons, logos, programming-language mascots, or characters from existing games.
+```
+
+## 8. PICKUPS (PICKUP_RAFAGA, PICKUP_ESCUDO, PICKUP_CORAZON)
+
+Attach: the approved sheet and `assets/prepared/kipu-v4-32x40.png` (for scale and palette). Native: three pickups, 2 frames each, 12×12. The game adds the floating bob itself, so the art must not move between frames; only the shine changes.
+
+```text
+Original pixel-art game sprites for "PachaByte", a 320x180 side-scrolling arcade with a retro Andean, digital-fantasy style. Use the attached concept sheet and hero sprite ONLY as style, palette and scale reference.
+
+Create THREE collectible power-up icons that the small hero Kipu picks up in flight. Each must be recognizable by SHAPE alone (the screen sometimes turns monochrome green), and must NOT look like: a gold ring or knot (that is a fragment), a rhombus / diamond (those are capturable enemy bolts), or anything purple (that is the enemy color).
+
+1. RAFAGA (rapid fire): three stacked forward-pointing chevrons ">>>" pointing RIGHT, warm gold #E7BD67 with terracotta #C66D49 shading and an ivory #F1E5C5 tip on each chevron, small woven-thread texture inspired by Andean textile patterns (invented, not a real symbol).
+2. ESCUDO (shield): a small hexagonal shield outline with a thicker rim, turquoise #35B9AE with dark teal #173D32 outline and an ivory highlight on the upper-left edge, an empty centre so it reads as a ring.
+3. CORAZON (heart / extra life): a chunky pixel heart, terracotta-red #C66D49 with a lighter coral highlight and dark outline, a tiny golden thread stitch across it to tie it to the "Trama" theme.
+
+Layout: one image with three rows (RAFAGA, ESCUDO, CORAZON from top to bottom). Each row has 2 frames side by side: frame 1 normal, frame 2 identical shape with a 1-2 pixel brighter glint (a shine loop). Each frame is 12x12 logical pixels drawn at exactly 8x scale, so every logical pixel is a perfectly square 8x8 block of one flat color: 96x96 px cells, rows 192x96 px, total image 192x288 px. Keep a 1-logical-pixel transparent margin inside each cell; same position in both frames.
+
+Style: crisp hard-edged pixel art, max 6 colors per icon, binary transparency only, no anti-aliasing, no gradients, no blur, no glow outside the pixel grid.
+Background: real transparent PNG, or a single flat #FF00FF magenta background if transparency is impossible.
+Do NOT include: text, numbers, letters, labels, borders, grid lines, shadows, coins, gems, rhombus shapes, purple, logos, or icons from existing games.
 ```
