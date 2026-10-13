@@ -5,6 +5,7 @@ import { MapScene } from './game/MapScene';
 import { GuardianScene } from './game/GuardianScene';
 import { GAME } from './game/rules';
 import { sfx } from './game/sfx';
+import { motion } from './game/motion';
 import { initialProgress } from './game/challengeRules';
 import { VIEW_EVENT, FOCUS_EVENT, sceneForView, viewCopy, type ViewState, type View } from './game/viewState';
 
@@ -43,6 +44,13 @@ function focusState(): void {
   sfx.setActive(active);
   game.events.emit(FOCUS_EVENT,active);
 }
+function syncMotionButton():void {
+  const button=document.getElementById('motion')!;
+  button.textContent=motion.reduced?'Reduce motion: on':'Reduce motion: off';
+  button.setAttribute('aria-pressed',String(motion.reduced));
+}
+function toggleMotion():void { motion.set(!motion.reduced); syncMotionButton(); host!.focus(); focusState(); }
+syncMotionButton();
 function toggleSound():void {
   sfx.setMuted(!sfx.isMuted());
   const button=document.getElementById('sound')!;
@@ -64,6 +72,7 @@ const clickNav=(event:Event)=>{
   if(!button) return;
   const view=button.dataset.view as View|undefined;
   if(button.id==='sound') toggleSound();
+  else if(button.id==='motion') toggleMotion();
   else if(view) navigate(view);
   else if(button.id==='choose') navigate('map');
   else if(button.id==='retry') navigate(current.view);

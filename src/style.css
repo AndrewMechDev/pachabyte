@@ -16,8 +16,14 @@ canvas { display: block; image-rendering: pixelated; }
 
 h2 { margin: 10px 0; font-size: clamp(18px, 3vw, 24px); }
 #navigation { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 12px 0 18px; }
-button { font: inherit; font-weight: 600; padding: 10px 14px; border: 1px solid #64d6c7; border-radius: 6px; background: #213f4b; color: #e7e6cf; cursor: pointer; }
+button { font: inherit; font-weight: 600; padding: 10px 14px; border: 1px solid #64d6c7; border-radius: 6px; background: #213f4b; color: #e7e6cf; cursor: pointer;
+  /* Named properties only, ease-out so feedback starts immediately; nothing animates on keyboard-driven game actions. */
+  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), background-color 120ms ease, border-color 120ms ease; }
+@media (hover: hover) { button:hover { background: #2a4c59; } }
+button:active { transform: scale(0.97); }
 button[aria-pressed="true"] { background: #345b60; border-color: #edc76c; }
 button:focus-visible { outline: 3px solid #edc76c; outline-offset: 3px; }
 button[hidden] { display: none; }
 #view-result { line-height: 1.5; }
+
+@media (prefers-reduced-motion: reduce) { button { transition: none; } button:active { transform: none; } }

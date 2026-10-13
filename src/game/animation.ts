@@ -80,11 +80,12 @@ export type ParticleSpec = Omit<Particle, 'born' | 'active'>;
 // Fixed capacity, no allocation after construction; a full pool drops new particles by design.
 export class ParticlePool {
   readonly items: Particle[];
-  constructor(capacity: number) {
+  constructor(capacity: number, private readonly suppressed: () => boolean = () => false) {
     this.items = Array.from({ length: capacity }, () => ({ x: 0, y: 0, vx: 0, vy: 0, born: 0, ttl: 0, slot: 'light' as FxSlot, size: 1, active: false }));
   }
   get activeCount(): number { return this.items.reduce((count, p) => count + (p.active ? 1 : 0), 0); }
   emit(spec: ParticleSpec, now: number): boolean {
+    if (this.suppressed()) return false;
     const slot = this.items.find(p => !p.active);
     if (!slot) return false;
     Object.assign(slot, spec, { born: now, active: true });

@@ -6,7 +6,7 @@ export const KIPU_BAND = Object.freeze({ top: 9, bottom: 32 });
 // Structural slice of a Phaser sprite so the animator stays testable without a browser.
 export interface KipuSprite { texture: { key: string }; setTexture(key: string): unknown }
 
-export interface KipuTick { now: number; grounded: boolean; velocityX: number; velocityY: number; facing: 1 | -1; footX: number; footY: number; nokia: boolean }
+export interface KipuTick { now: number; grounded: boolean; velocityX: number; velocityY: number; facing: 1 | -1; footX: number; footY: number; nokia: boolean; reduced?: boolean }
 
 // Pure visual follower: reads physics state, never writes it. Swaps only the texture key (same 32x40 frame),
 // so origin, body size and offset are untouched.
@@ -37,7 +37,7 @@ export class KipuAnimator {
     }
     this.wasGrounded = grounded;
     this.lastVelocityY = velocityY;
-    const frame = kipuFrame({ grounded, velocityX, velocityY, now, landedAt: this.landedAt });
+    const frame = tick.reduced ? 'idle' : kipuFrame({ grounded, velocityX, velocityY, now, landedAt: this.landedAt });
     const key = kipuTextureKey(frame, nokia);
     this.frame = frame;
     if (this.sprite.texture.key !== key) this.sprite.setTexture(key);

@@ -239,3 +239,12 @@ User approved WebAudio effects. All 16 effects are generated at runtime from osc
 Observed in this checkout: typecheck exit 0; unit tests passed including 7 new sfx tests and the animator event test; build exit 0; `test:browser` serial on owned port 4175 passed in WebGL and in Canvas, including a new group that asserts effects fire from real input, the mute button silences them and focus returns to the game. Tests were written before `sfx.ts` but not executed before implementing, so no RED is claimed.
 
 Limits: automation proves that sounds are scheduled and gated, not how they sound. Loudness, pitch and taste need a human listening pass. No music. Real output-device behavior across browsers and OSes is untested.
+
+
+## Reduced motion and polish pass, October 12, 2026
+
+Added: reduce-motion option (OS `prefers-reduced-motion` initialises it; page button overrides; gates shake, flicker, sway, particles, squash/stretch and button transitions, never gameplay telegraphs); once-per-session typed title and breathing Kipu on the map; victory panel with time, remaining HP and session best; button press feedback with named-property transitions. Principles were read from Emil Kowalski's and Hallmark's `SKILL.md` files without installing anything (see `skills/pachabyte-gameplay-quality/references/ui-motion-principles.md`). Hit-stop was deliberately not added because it would alter the owned combat clock.
+
+Observed: typecheck exit 0; 71/71 unit tests (5 new motion tests, RED observed on the missing module first); build exit 0; browser smoke passed in WebGL and Canvas, including a new reduced-motion group and a victory-stats assertion; the relative Vite base was also verified by serving the build under a `/pachabyte/` subpath and running the full smoke against it.
+
+Retained failures: during this pass four serial smoke runs failed intermittently (WebGL: "airborne repress must not reset jump velocity" at the `w` jump binding; Canvas: waitForFunction timeouts at three different stages). They coincided with about 49% machine CPU load and an idle game tab still running in the in-app browser; a 12-iteration jump loop reproduced 0 misses in each renderer, and after the tab was released and load fell to about 13%, Canvas passed twice and WebGL passed twice. Cause is plausible (wall-clock timing between Playwright round trips under CPU load) but not proven; the assertions were not weakened. Same class as the earlier single-hit flake.

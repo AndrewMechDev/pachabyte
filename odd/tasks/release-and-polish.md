@@ -6,9 +6,9 @@ Ship a publicly playable PachaByte before the Oct 14 deadline: Pages deploy, pub
 ## Tasks
 - [x] REL-1: Pages workflow (`.github/workflows/pages.yml`); relative Vite base verified under a `/pachabyte/` subpath (browser smoke passed).
 - [x] REL-2: Public README, LICENSE (MIT code), CREDITS, refreshed screenshots.
-- [ ] REL-3: Reduced-motion option (respect `prefers-reduced-motion`, disable shake and flicker).
-- [ ] REL-4: Extract 5-8 principles from Emil Kowalski / Hallmark SKILL.md files (read only, no install).
-- [ ] REL-5: Game-feel and shell polish from those principles (hit-stop, title/victory screens, HTML shell).
+- [x] REL-3: Reduced-motion option (respect `prefers-reduced-motion`, disable shake and flicker).
+- [x] REL-4: Extract 5-8 principles from Emil Kowalski / Hallmark SKILL.md files (read only, no install).
+- [x] REL-5: Game-feel and shell polish (typed title, map Kipu, victory stats, button feedback). Hit-stop dropped: it would alter the owned combat clock.
 - [ ] REL-6: Optional Andean flight stage (spec, tests, code). Needs spec approval; drop if REL-3..5 slip.
 - [ ] REL-7: Human playtest, fixes, delivery package (link, short video, description, Cloudflare/Netlify backup).
 

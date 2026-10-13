@@ -8,6 +8,7 @@ import { KIPU_FRAMES, ParticlePool, bossAngle, burst, chargeLevel, drawParticles
 import { KipuAnimator } from './kipuAnimator';
 import { ensureKipuFrames } from './kipuTextures';
 import { sfx } from './sfx';
+import { motion } from './motion';
 import { initialProgress } from './challengeRules';
 import { VIEW_EVENT, FOCUS_EVENT, type ViewState } from './viewState';
 import kipuUrl from '../../assets/prepared/kipu-v4-32x40.png';
@@ -85,7 +86,7 @@ export class GuardianScene extends Phaser.Scene {
     const floor=this.physics.add.staticImage(160,172,'platform').setDisplaySize(320,16).refreshBody().setVisible(false);
     this.player=this.physics.add.sprite(48,145,'kipu-evaluation').setOrigin(0.5,0.55).setSize(12,18).setOffset(10,14).setCollideWorldBounds(true).setDepth(5);
     this.physics.add.collider(this.player,floor);
-    this.fx=new ParticlePool(64); this.fxGraphics=this.add.graphics().setDepth(6);
+    this.fx=new ParticlePool(64,() => motion.reduced); this.fxGraphics=this.add.graphics().setDepth(6);
     this.animator=new KipuAnimator(this.player,this.fx);
     this.boss=this.physics.add.sprite(260,126,'amaru-head').setDepth(4);
     (this.boss.body as Phaser.Physics.Arcade.Body).setAllowGravity(false).setImmovable(true);
@@ -112,7 +113,7 @@ export class GuardianScene extends Phaser.Scene {
         this.heroHP=damage(this.heroHP,1); this.invulnerableUntil=this.clock+COMBAT.invulnerability;
         sfx.play('heroHit');
         burst(this.fx,this.player.x,this.player.y-4,10,60,320,'violet',this.anim,2);
-        this.cameras.main.shake(110,0.006);
+        if (!motion.reduced) this.cameras.main.shake(110,0.006);
         this.finishIfNeeded();
       }
     });
@@ -177,13 +178,13 @@ export class GuardianScene extends Phaser.Scene {
     const body=this.player.body as Phaser.Physics.Arcade.Body;
     if (this.ending==='playing') {
       this.animator.update({now:this.anim,grounded:body.blocked.down||body.touching.down,velocityX:body.velocity.x,velocityY:body.velocity.y,
-        facing:this.facing,footX:this.player.x,footY:body.bottom,nokia:this.palette});
+        facing:this.facing,footX:this.player.x,footY:body.bottom,nokia:this.palette,reduced:motion.reduced});
       if (this.animator.event==='land') sfx.play('land');
     } else if (this.ending==='defeat') this.animator.hold('squash',false);
     let flash=this.anim<this.bossFlashUntil,angle=0,alpha=1;
     if (this.ending==='victory') {
       const t=this.anim-this.deathAt;
-      flash=t<500 && Math.floor(t/70)%2===0; angle=t<500 ? Math.sin(t/30)*4 : 0; alpha=t<500 ? 1 : Math.max(0,1-(t-500)/500);
+      flash=!motion.reduced && t<500 && Math.floor(t/70)%2===0; angle=!motion.reduced && t<500 ? Math.sin(t/30)*4 : 0; alpha=t<500 ? 1 : Math.max(0,1-(t-500)/500);
       while (this.deathBursts<3 && t>=this.deathBursts*180) {
         const i=this.deathBursts++;
         burst(this.fx,this.boss.x-10+i*10,this.boss.y-8+(i%2)*14,10,70,520,i%2?'gold':'light',this.anim,2);
@@ -194,7 +195,7 @@ export class GuardianScene extends Phaser.Scene {
         const elapsed=this.clock-this.attackStart,stage=attackStage(elapsed);
         phase=stage; phaseElapsed=stage==='anticipation'?elapsed:stage==='action'?elapsed-800:elapsed-1300;
       }
-      angle=bossAngle(phase,phaseElapsed,this.anim);
+      angle=motion.reduced ? 0 : bossAngle(phase,phaseElapsed,this.anim);
     }
     const key=flash ? (this.palette?'amaru-head-flash-nokia':'amaru-head-flash') : (this.palette?'amaru-head-nokia':'amaru-head');
     if (this.boss.texture.key!==key) this.boss.setTexture(key);
@@ -262,7 +263,14 @@ export class GuardianScene extends Phaser.Scene {
     this.publishView();
     for (const group of [this.shots,this.enemies]) for(const child of group.getChildren()) (child as Sprite).disableBody(true,true);
     this.physics.world.pause(); this.player.setVisible(true); this.togglePalette(false);
-    this.draw(); this.result.setText(`${this.ending.toUpperCase()} - ${this.ending==='victory'?'AMARU CLEARED':'TRY AGAIN'}\nR: RETRY   M OR ENTER: MAP`);
+    this.draw(); this.result.setText(`${this.ending.toUpperCase()} - ${this.ending==='victory'?'AMARU CLEARED':'TRY AGAIN'}\n${this.statsLine()}R: RETRY   M OR ENTER: MAP`);
+  }
+  // Session-only stats on the victory panel; read from the owned clock, never fed back into combat.
+  private statsLine(): string {
+    if (this.ending!=='victory') return '';
+    const time=this.clock/1000,best=Math.min(time,this.registry.get('bestTime') ?? Infinity);
+    this.registry.set('bestTime',best);
+    return `TIME ${time.toFixed(1)}S  HP ${this.heroHP}/3  BEST ${best.toFixed(1)}S\n`;
   }
   private text(x:number,y:number,text:string): Phaser.GameObjects.BitmapText { return this.add.bitmapText(x,y,RETRO_FONT,text,6).setTint(0xfff1c3); }
   private preparePalette(key:string): void {
@@ -308,7 +316,7 @@ export class GuardianScene extends Phaser.Scene {
     }
     if(active) {
       // Hard-pixel square aura and orbiting stored energy avoid blended fifth colors.
-      const inset=Math.floor(this.anim/200)%2 ? 2 : 0;
+      const inset=!motion.reduced && Math.floor(this.anim/200)%2 ? 2 : 0;
       this.pixelFrame(Math.round(this.player.x)-52+inset,Math.round(this.player.y)-52+inset,104-2*inset,104-2*inset,colors[2]);
       for(let i=0;i<this.shift.captured;i++) {
         const angle=this.clock/190+i*Math.PI*2/3;

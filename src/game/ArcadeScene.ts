@@ -9,6 +9,7 @@ import { ParticlePool, burst, drawParticles } from './animation';
 import { KipuAnimator } from './kipuAnimator';
 import { ensureKipuFrames } from './kipuTextures';
 import { sfx } from './sfx';
+import { motion } from './motion';
 import { arenaUrl } from './demoAssets';
 import { VIEW_EVENT, FOCUS_EVENT, type ViewState } from './viewState';
 import kipuEvaluationUrl from '../../assets/prepared/kipu-v4-32x40.png';
@@ -103,7 +104,7 @@ export class ArcadeScene extends Phaser.Scene {
     // Align the occupied scarf edge to the surface while preserving the body at (-6, -8).
     this.player.setSize(12, 18).setOffset(10, 14);
     this.physics.add.collider(this.player, platforms);
-    this.fx = new ParticlePool(64);
+    this.fx = new ParticlePool(64, () => motion.reduced);
     this.fxGraphics = this.add.graphics().setDepth(6);
     this.animator = new KipuAnimator(this.player, this.fx);
 
@@ -197,7 +198,7 @@ export class ArcadeScene extends Phaser.Scene {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     if (!this.completed) {
       this.animator.update({ now: this.animClock, grounded: body.blocked.down || body.touching.down, velocityX: body.velocity.x, velocityY: body.velocity.y,
-        facing: this.facing, footX: this.player.x, footY: body.bottom, nokia: false });
+        facing: this.facing, footX: this.player.x, footY: body.bottom, nokia: false, reduced: motion.reduced });
       if (this.animator.event === 'land') sfx.play('land');
     }
     const cycle = Math.floor(this.animClock / 1100);

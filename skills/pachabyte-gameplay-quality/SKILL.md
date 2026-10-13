@@ -36,3 +36,4 @@ Return changed behavior, preserved invariants, observed checks, unavailable chec
 
 ## References
 - [Design principles](references/design-principles.md): sourced inspiration and project-specific interpretation.
+- [UI and motion principles](references/ui-motion-principles.md): adapted web-UI/animation rules, reduced motion, what was deliberately not adopted.
