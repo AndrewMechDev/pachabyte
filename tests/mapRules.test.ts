@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { initialProgress, nodeState } from '../src/game/challengeRules';
 import { MAP_TEXT, type MapTextKey } from '../src/game/mapText';
 import {
-  BOTTOM_PANEL_Y, CURSOR_RX, CURSOR_RY, MAP_NODES, START_NODE, TOP_PANEL_HEIGHT, actionFor, cardFor, moveSelection, nodeStatus,
+  BOTTOM_PANEL_Y, CURSOR_RX, CURSOR_RY, MAP_NODES, START_NODE, TOP_PANEL_HEIGHT, actionFor, cardFor, moveSelection, nodeAt, nodeStatus, tapOutcome,
 } from '../src/game/mapRules';
 
 const arequipa = MAP_NODES.find(node => node.id === 'arequipa')!;
@@ -94,5 +94,29 @@ describe('node action', () => {
   it('starts the route from the playable node and refuses every locked one', () => {
     expect(actionFor(arequipa)).toBe('startRoute');
     for (const node of locked) expect(actionFor(node), node.id).toBe('locked');
+  });
+});
+
+describe('touch input on the map', () => {
+  it('finds the node under a point and nothing in empty space', () => {
+    for (const node of MAP_NODES) expect(nodeAt(MAP_NODES, node.x, node.y)?.id).toBe(node.id);
+    
+    expect(nodeAt(MAP_NODES, 5, 5)).toBeUndefined();
+    expect(nodeAt(MAP_NODES, 300, 100)).toBeUndefined();
+  });
+  it('has a tap target at least as large as the socket ring and not wider than the cursor', () => {
+    const first = MAP_NODES[0];
+    expect(nodeAt(MAP_NODES, first.x + 7, first.y + 5)?.id).toBe(first.id);
+    expect(nodeAt(MAP_NODES, first.x + CURSOR_RX + 4, first.y)).toBeUndefined();
+  });
+  it('selects on the first tap and starts the route only on a selected playable node', () => {
+    expect(tapOutcome(MAP_NODES, START_NODE, arequipa.x, arequipa.y)).toEqual({ selected: START_NODE, act: true });
+    expect(tapOutcome(MAP_NODES, 'route-02', arequipa.x, arequipa.y)).toEqual({ selected: START_NODE, act: false });
+    const first = locked[0];
+    expect(tapOutcome(MAP_NODES, first.id, first.x, first.y)).toEqual({ selected: first.id, act: false });
+    expect(tapOutcome(MAP_NODES, START_NODE, first.x, first.y)).toEqual({ selected: first.id, act: false });
+  });
+  it('ignores taps on empty space', () => {
+    expect(tapOutcome(MAP_NODES, 'route-03', 5, 5)).toEqual({ selected: 'route-03', act: false });
   });
 });

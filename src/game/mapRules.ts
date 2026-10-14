@@ -45,3 +45,16 @@ export function cardFor(node: MapNode, status: NodeStatus): NodeCard {
 }
 
 export function actionFor(node: MapNode): NodeAction { return node.playable ? 'startRoute' : 'locked'; }
+
+// Touch/pointer: a tap target slightly larger than the ~14x10 px socket ring but inside the selection cursor. The first tap
+// selects, a tap on the already-selected playable node acts (so one tap on Arequipa starts the route, like Enter).
+export const TAP_RX = 10;
+export const TAP_RY = 8;
+export function nodeAt(nodes: readonly MapNode[], x: number, y: number): MapNode | undefined {
+  return nodes.find(node => Math.abs(x - node.x) <= TAP_RX && Math.abs(y - node.y) <= TAP_RY);
+}
+export function tapOutcome(nodes: readonly MapNode[], selected: NodeId, x: number, y: number): { selected: NodeId; act: boolean } {
+  const hit = nodeAt(nodes, x, y);
+  if (!hit) return { selected, act: false };
+  return { selected: hit.id, act: hit.id === selected && hit.playable };
+}

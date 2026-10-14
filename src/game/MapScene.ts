@@ -5,7 +5,7 @@ import { initialProgress, nodeState, type Progress } from './challengeRules';
 import { RUN_KEY } from './routeRules';
 import { VIEW_EVENT, type ViewState } from './viewState';
 import {
-  BOTTOM_PANEL_Y, CURSOR_RX, CURSOR_RY, MAP_NODES, START_NODE, TOP_PANEL_HEIGHT, actionFor, cardFor, moveSelection, nodeStatus,
+  BOTTOM_PANEL_Y, CURSOR_RX, CURSOR_RY, MAP_NODES, START_NODE, TOP_PANEL_HEIGHT, actionFor, cardFor, moveSelection, nodeStatus, tapOutcome,
   type MapNode, type NodeId, type NodeStatus,
 } from './mapRules';
 import { MAP_TEXT } from './mapText';
@@ -57,6 +57,9 @@ export class MapScene extends Phaser.Scene {
       ['keydown-ENTER', e => this.act(e)], ['keydown-ONE', e => { if (!e?.repeat) this.startRoute(); }], ['keydown-TWO', e => { if (!e?.repeat) this.startGuardian(); }],
     ];
     for (const [name, handler] of bindings) keyboard.on(name, handler);
+    // Touch and mouse use the 'down' event (not 'up'), so a tap responds immediately.
+    const onDown = (pointer: Phaser.Input.Pointer): void => this.tap(pointer.x, pointer.y);
+    this.input.on('pointerdown', onDown);
     this.game.events.emit(VIEW_EVENT, { view: 'map', outcome: 'playing', progress: { ...this.progress } } satisfies ViewState);
     exposeDebug(() => ({
       scene: 'map', audio: sfx.stats(), selected: this.node.playable ? 'route' : 'locked', selectedNode: this.selected,
@@ -65,6 +68,7 @@ export class MapScene extends Phaser.Scene {
     }));
     this.events.once('shutdown', () => {
       for (const [name, handler] of bindings) keyboard.off(name, handler);
+      this.input.off('pointerdown', onDown);
       keyboard.resetKeys(); clearDebug();
     });
   }
@@ -79,7 +83,7 @@ export class MapScene extends Phaser.Scene {
       this.cursor.fillStyle(color);
       for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
         const cx = x + sx * (CURSOR_RX - 1 + grow) + shift, cy = y + sy * (CURSOR_RY - 1 + grow) + shift;
-        this.cursor.fillRect(sx < 0 ? cx : cx - 3, cy, 4, 1).fillRect(cx, sy < 0 ? cy : cy - 3, 1, 4);
+        this.cursor.fillRect(sx < 0 ? cx : cx - 4, sy < 0 ? cy : cy - 1, 6, 2).fillRect(sx < 0 ? cx : cx - 1, sy < 0 ? cy : cy - 4, 2, 6);
       }
     }
   }
@@ -118,6 +122,11 @@ export class MapScene extends Phaser.Scene {
   private act(event?: KeyboardEvent): void {
     if (event?.repeat) return;
     if (actionFor(this.node) === 'startRoute') this.startRoute(); else sfx.play('deflect');
+  }
+  private tap(x: number, y: number): void {
+    const { selected, act } = tapOutcome(MAP_NODES, this.selected, x, y);
+    if (act) { this.startRoute(); return; }
+    if (selected !== this.selected) { this.selected = selected; sfx.play('blip'); this.refreshCard(); }
   }
   private startRoute(): void { sfx.play('select'); this.input.keyboard?.resetKeys(); this.scene.start('RouteScene'); }
   // Direct entry from the map: a fresh 4 HP, empty-meter run state.
