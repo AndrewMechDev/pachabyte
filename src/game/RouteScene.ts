@@ -8,7 +8,7 @@ import {
 import { PACKET_LOSS, blockRects, packetLossColumns, packetLossWindow, type PacketColumn } from './packetLossRules';
 import { ERUPTION, emberHits, emberLanding, emberPosition, emberStage, embersDue, eruptionLevel, eruptionWindow, markerSize } from './eruptionRules';
 import { MEMORY_LEAK, drainMeter, leakFragmentPosition, leakWindow, leakZones } from './memoryLeakRules';
-import { LOOP, cueVisible, formationDue, hitLoopNode, initialLoop, loopActive, loopEnd, loopMarkerX, nodePosition, sceneryRewind, stepLoop, type LoopState } from './loopRules';
+import { LOOP, cueVisible, formationDue, hitLoopNode, initialLoop, loopActive, loopEnd, loopMarkerX, nodeHitbox, nodePosition, sceneryRewind, stepLoop, type LoopState } from './loopRules';
 import {
   BUGS, BUG_STATS, corruptorCharge, corruptorScreen, corruptorShotsDue, dodgeStage, dropsFragment, linedUpShot, orbExpired, orbVelocity, shadowPosition,
   sombraWorldX, splitCount, startSombra, stepSombra, type EnemyType, type SombraMotion,
@@ -959,9 +959,9 @@ export class RouteScene extends Phaser.Scene {
     const active = loopActive(this.loop, now);
     this.loopNode.setVisible(active);
     if (!active) return;
-    const p = nodePosition(now), half = LOOP.node.body / 2;
+    const p = nodePosition(now);
     this.loopNode.setPosition(p.x, p.y).setTexture(eyeTextureKey(eyeFrameFor({ hp: this.loop.hp, anim: this.anim, hitUntil: this.loopHitUntil, reduced: motion.reduced })));
-    const node = { x: p.x - half, y: p.y - half, width: LOOP.node.body, height: LOOP.node.body };
+    const node = nodeHitbox(now);
     for (const shot of this.alive(this.shots)) {
       const body = shot.body as Body;
       if (!overlaps({ x: body.x - cameraX, y: body.y, width: body.width, height: body.height }, node)) continue;

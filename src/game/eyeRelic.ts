@@ -27,7 +27,7 @@ export function eyeFrameFor(input: EyeInput): EyeFrameName {
 }
 
 // Sprite origin (0..1) that puts the eye disc's centre (the measured anchor, the same for all seven frames) on the node
-// position, so the cables hang below it. The display image is never scaled: its size is independent of the 12x12 hitbox.
+// position, so the cables hang below it. The display image is never scaled: its size is independent of the manual hitbox.
 export function eyeOrigin(): { x: number; y: number } {
   return { x: EYE.anchor[0] / EYE.cell[0], y: EYE.anchor[1] / EYE.cell[1] };
 }

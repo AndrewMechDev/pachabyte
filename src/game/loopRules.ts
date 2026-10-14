@@ -1,5 +1,5 @@
 import { GAME } from './rules';
-import { ROUTE, segmentStart } from './routeRules';
+import { ROUTE, segmentStart, type Rect } from './routeRules';
 
 // Bucle / Infinite Loop (A2, 2026-10-13; GDD obstacle library: "sección que se repite hasta cambiar regla"). A short
 // stretch repeats: a loop marker sweeps the screen once per iteration and, when it reaches the left edge, the stretch
@@ -12,7 +12,7 @@ export const LOOP = Object.freeze({
   // Breaking it debugs a bug worth 250 (scored like a bug, at the racha multiplier).
   score: 250,
   // Screen-space node on the right side, bobbing gently once per iteration.
-  node: { x: 262, y: 97, bob: 14, size: 13, body: 12 },
+  node: { x: 262, y: 97, bob: 14, size: 13, body: { width: 18, height: 20 } },
   // The repeated stretch: three Glitchlings entering at the same moments of every iteration.
   formation: Object.freeze([{ dt: 200, y: 56 }, { dt: 200, y: 138 }, { dt: 900, y: 97 }]) as ReadonlyArray<{ dt: number; y: number }>,
   cueMs: 1400,
@@ -47,6 +47,12 @@ export function hitLoopNode(s: LoopState, now: number): { state: LoopState; brok
 export function nodePosition(now: number): { x: number; y: number } {
   const n = LOOP.node;
   return { x: n.x, y: Math.round(n.y + n.bob * Math.sin(2 * Math.PI * (now - LOOP.start) / LOOP.iterationMs)) };
+}
+
+// Manual screen-space shot target, centered independently of the rendered eye frame and its visual anchor.
+export function nodeHitbox(now: number): Rect {
+  const p = nodePosition(now), { width, height } = LOOP.node.body;
+  return { x: p.x - width / 2, y: p.y - height / 2, width, height };
 }
 
 // Formation entries whose time falls in (prev, now], for every iteration up to the break.

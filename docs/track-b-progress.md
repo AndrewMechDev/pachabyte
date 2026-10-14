@@ -1,5 +1,57 @@
 # Track B continuation progress
 
+## Current worktree scope — Task 0 / Checkpoint 2 (2026-10-14)
+
+Current baseline is `759461a` on `feat/track-b-ui-map` in the Track B worktree. B1–B5 are already integrated. The PRINCIPAL (Claude) owns release documentation, main merges and deployment; this worktree owns authorized game code/tests. No main access, synchronization, installs, release-file edits or remote operations are part of this bounded Task 0.
+
+Task 0 is implemented and writer-verified; parent independent verification/commit is pending. Feature/recovery locator: `odd/tasks/checkpoint-2-story-sharing.md`. Stop before S1 for parent routing, without another product approval. Canvas eye capture remains pending Checkpoint 2 after the one bounded pilot attempt lost; no capture retry or pilot rewrite is part of Task 0.
+
+### Task 0 acceptance and changes
+
+- `index.html`: eyebrow is `PROTOTIPO · RUTA 01`; art disclosure is `Arte generado con IA y elementos procedurales.` Existing focus, pause and achievement guidance is unchanged. Provenance was checked against the worktree's credits (AI art plus procedural placeholders); no final-art or license claim is made.
+- `loopRules.ts`: manual collision is exactly centered 18x20, offset -9/-10, through pure `nodeHitbox(now)`. `RouteScene.ts` consumes that same helper for its existing screen-space shot-overlap check. This is NOT an Arcade body setter.
+- Eye frames, texture/origin, visual size, bob, HP 5, two-repeat timeout, formation, score and drop logic are unchanged. `eyeRelic.ts` changes only the stale 12x12 comment. The legacy eye test intentionally accepts the authorized rectangular target while retaining HP/location/bob and all other art/animation assertions.
+- Tests prove newly admitted 6x3 shots on all four edges miss the old 12x12 square but overlap the new rectangle; shots that merely touch the four outside edges still miss. Center and dimensions are checked across the complete loop window.
+
+### Task 0 exact checks and observed outcomes
+
+All commands use explicit Track B cwd, `login:false`, and this same-invocation prefix for tests/build/preview/browser:
+
+```powershell
+$env:TEMP="$PWD\node_modules\.tmp"; $env:TMP=$env:TEMP; New-Item -ItemType Directory -Force $env:TEMP | Out-Null
+```
+
+| Command / phase | Observed result |
+|---|---|
+| `npx.cmd vitest run tests/loopRules.test.ts tests/eyeRelic.test.ts` RED | Exit 1: 10 failed / 29 passed; old body 12 differs from 18x20, helper missing |
+| Same focused command GREEN and final rerun | Exit 0: two files / 39 tests, including nine new geometry cases |
+| `npx.cmd tsc --noEmit` | Passed before the full test run (the guarded command continued) |
+| `npm.cmd test` | Exit 0: 35 files / 394 tests (historical baseline 385 + nine geometry tests) |
+| `npm.cmd run build` | Final retained receipt exit 0, 69 modules; existing nonfatal large-chunk/npm-config warnings |
+| `node tests/page-ui-check.mjs` RED against built old copy | Exit 1: exactly two new copy failures, all original 14 assertions passed |
+| Same page command GREEN after copy/build | Exit 0: 16/16 assertions; original assertions unchanged |
+| `git diff --check` | Exit 0; only informational Git line-ending warnings |
+
+The geometry-stage build also exited 0 before page-copy RED. A combined typecheck/test/build invocation returned during its final build, but its session identity was not retained by the output wrapper; that build's completion is NOT counted as evidence. A separate final `npm.cmd run build` retained exit 0 and the complete output. No mutating normalizer was needed; final source writes preceded final functional checks.
+
+Page checks used `$env:PACHA_URL='http://127.0.0.1:4190'` against own approved elevated `npx.cmd vite preview --host 127.0.0.1 --port 4190 --strictPort`, session 76660. Native permission requests were scoped to this server and focused Edge commands, based on previously observed sandbox launch/connectivity limitations. No settings, firewall, installation or external-server controls changed.
+
+### Task 0 visual evidence and limits
+
+One bounded capture invocation drove real keyboard input and read only `pachaDebug()` snapshots, serially WebGL then Canvas; it did not fast-forward clocks or write debug/game state. It wrote only new `docs/design/checkpoint-2-captures/task0-*.png` evidence. Reviewed with `view_image`:
+
+- `task0-page-webgl.png`: current eyebrow/disclosure, unchanged layout and controls.
+- `task0-page-canvas.png`: same current HTML shell with Canvas renderer.
+- `task0-eye-webgl.png`: active seven-frame eye at clock 82017.89 ms, node `(262,98)`, texture `loop-eye-idle3`, player HP 2; no page errors. The visible disc/cables remain unchanged. Screenshot cannot prove invisible collision geometry; shared pure-helper tests are the collision proof.
+
+Canvas pilot ended in defeat at clock 75362.75 ms, before the eye segment, with zero page errors. Its eye screenshot is unavailable after exactly one attempt and remains pending CP2; no retry, full smoke or pilot/assertion weakening occurred. Full long smoke is deliberately deferred to CP2 after S4, not falsely reported as passed for Task 0.
+
+The capture browser closed in its `finally`. Only own preview 76660 was then interrupted, exit 1 on Ctrl+C. No preview is intentionally left running. No tracked `docs/ruta01-*.png` was generated/changed, so no restoration was needed. Final forbidden-surface readback is clean for principal README/CREDITS/VERIFICATION, capture-social tool and art assets. No commit, main read/edit, merge/sync/push, release documentation or S1 implementation was performed. Rollback is the Task 0 copy, rectangle/helper, tests and corresponding worktree tracking/evidence only.
+
+## Historical B1–B5 and environment records
+
+The opening statuses and task ownership below describe earlier snapshots, not the current integrated baseline. They are retained as evidence; current roles/order come from `docs/CONTINUATION_PLAN.md` sections 9 and 10.
+
 Status: task 1 environment is committed and verified. B1 preparation is independently verified and committed locally as `fc3036a27a376ff4cb9f3b31141ecaf2a1139289`. Unchanged smoke passes in WebGL and Canvas after one recorded WebGL pilot-failure classification rerun. Prepared assets are not integrated. No B2 work has started.
 
 ## Authority and current scope

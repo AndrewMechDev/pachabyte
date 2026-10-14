@@ -137,9 +137,9 @@ describe('Bucle node as an eye relic (prepared LOOP_NODE_EYE sheet)', () => {
     expect(frame(1, 700, 0, true)).toBe('break');
     expect(frame(5, 0, 90, true)).toBe('hit');
   });
-  it('keeps the node HP and hitbox rules untouched', () => {
+  it('keeps node HP, position and bob unchanged while expanding only manual collision to 18x20', () => {
     expect(LOOP.hp).toBe(5);
-    expect(LOOP.node).toMatchObject({ x: 262, y: 97, bob: 14, body: 12 });
+    expect(LOOP.node).toMatchObject({ x: 262, y: 97, bob: 14, body: { width: 18, height: 20 } });
     expect(EYE.lowHp).toBeLessThan(LOOP.hp);
   });
   it('anchors the eye disc on the node position, the same for every frame so the relic never jitters', () => {

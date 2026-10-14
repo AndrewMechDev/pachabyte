@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  LOOP, cueVisible, formationDue, hitLoopNode, initialLoop, loopActive, loopEnd, loopMarkerX, nodePosition, sceneryRewind, stepLoop, type LoopState,
+  LOOP, cueVisible, formationDue, hitLoopNode, initialLoop, loopActive, loopEnd, loopMarkerX, nodeHitbox, nodePosition, sceneryRewind, stepLoop, type LoopState,
 } from '../src/game/loopRules';
-import { ROUTE, SEGMENTS } from '../src/game/routeRules';
+import { ROUTE, SEGMENTS, overlaps, type Rect } from '../src/game/routeRules';
 import { GAME } from '../src/game/rules';
 
 const segment = (name: string) => SEGMENTS.find(s => s.name === name)!;
@@ -11,6 +11,34 @@ const run = (state: LoopState, from: number, to: number, step = 16) => {
   for (let t = from; t <= to; t += step) { const r = stepLoop(s, t); s = r.state; resets += Number(r.reset); broke ||= r.broke; }
   return { state: s, resets, broke };
 };
+
+describe('Bucle node manual collision', () => {
+  it('uses an 18x20 rectangle centered on the unchanged bobbing node throughout every iteration', () => {
+    expect(LOOP.node.body).toEqual({ width: 18, height: 20 });
+    for (let t = LOOP.start; t < loopEnd(); t += 100) {
+      const p = nodePosition(t), rect = nodeHitbox(t);
+      expect(rect).toEqual({ x: p.x - 9, y: p.y - 10, width: 18, height: 20 });
+      expect(rect.x + rect.width / 2).toBe(p.x);
+      expect(rect.y + rect.height / 2).toBe(p.y);
+    }
+  });
+  const edgeShots: Array<[string, number, number]> = [
+    ['left', -13, -1], ['right', 7, -1], ['top', -3, -9], ['bottom', -3, 7],
+  ];
+  it.each(edgeShots)('admits a normal shot at the newly expanded %s edge, outside the old 12x12 box', (_edge, dx, dy) => {
+    const p = nodePosition(LOOP.start + 650);
+    const shot: Rect = { x: p.x + dx, y: p.y + dy, width: 6, height: 3 };
+    expect(overlaps(shot, { x: p.x - 6, y: p.y - 6, width: 12, height: 12 })).toBe(false);
+    expect(overlaps(shot, nodeHitbox(LOOP.start + 650))).toBe(true);
+  });
+  const outsideShots: Array<[string, number, number]> = [
+    ['left', -15, -1], ['right', 9, -1], ['top', -3, -13], ['bottom', -3, 10],
+  ];
+  it.each(outsideShots)('still rejects a shot touching but not overlapping the %s edge', (_edge, dx, dy) => {
+    const p = nodePosition(LOOP.start + 650);
+    expect(overlaps({ x: p.x + dx, y: p.y + dy, width: 6, height: 3 }, nodeHitbox(LOOP.start + 650))).toBe(false);
+  });
+});
 
 describe('Bucle (Infinite Loop): a stretch that repeats until its node breaks', () => {
   it('starts with the loop segment and ends by itself after at most 2 repeats, before the threshold', () => {

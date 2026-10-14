@@ -40,6 +40,23 @@ try {
   await page.goto(`${baseURL}/`, { waitUntil: 'networkidle' });
   const button = name => page.getByRole('button', { name, exact: true });
 
+  await check('a0) prototype eyebrow is current without claiming a local-only build', async () => {
+    const copy = await page.locator('.eyebrow').innerText();
+    expect(copy.trim() === 'PROTOTIPO · RUTA 01', `outdated eyebrow: ${JSON.stringify(copy)}`);
+  });
+
+  await check('a1) art disclosure is current and preserves pause, focus and achievement guidance', async () => {
+    const copy = await page.locator('main > p.note').last().innerText();
+    expect(copy.includes('Arte generado con IA y elementos procedurales.'), 'current AI/procedural art disclosure missing');
+    expect(!copy.includes('Arte provisional original') && !copy.includes('no son spritesheets finales'), 'obsolete art disclaimer remains');
+    for (const guidance of [
+      'Haz clic o usa Tab sobre el juego para jugar.',
+      'Al enfocar la navegación el juego se pausa; vuelve a enfocarlo para continuar.',
+      'Esc también pausa.',
+      'Los logros se reinician al recargar; Amaru siempre está disponible desde el mapa.',
+    ]) expect(copy.includes(guidance), `missing guidance: ${guidance}`);
+  });
+
   await check('a) one h1 whose only content is the logo image with alt "PachaByte"', async () => {
     const info = await page.evaluate(() => ({
       count: document.querySelectorAll('h1').length,
