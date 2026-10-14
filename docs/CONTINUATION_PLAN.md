@@ -104,3 +104,55 @@ You never merge into `main` and never push. At each checkpoint: (1) in your work
 
 ### 9.7 Anything else a release needs (already in section 3, listed for completeness)
 Pulso de la Trama (P3), neon route backdrop (B6), HUD shield icon overlap, optional bigger Corruptor, stabilize the smoke pilots, README with screenshots and "En español", CREDITS, VERIFICATION, final QA in 1000/600/470 px, backup hosting and delivery package (user), and the art license decision (user).
+
+## 10. Roles and workflow from 2026-10-14 (second handoff, supersedes the Track A/Track B wording)
+
+The previous Claude session (Track A) is **retired**. Two agents now work, each in its own folder, and the user relays reports between them.
+
+### 10.1 Roles and folders
+| Role | Agent | Folder | Branch | Owns |
+|---|---|---|---|---|
+| **PRINCIPAL** (integrator, reviewer, releaser) | Claude Code desktop, new account | `C:\Users\dark_\Documents\hack-the-andes-game` | `main` for merges; its own work on `feat/release-docs` | Independent review of every checkpoint, fast-forward merges into `main`, deploy to GitHub Pages (only with the user's go-ahead), live verification, `README.md`, `CREDITS.md`, `docs/VERIFICATION.md`, delivery package, LinkedIn kit, hosting backup guide, final QA, v1.0 release |
+| **WORKTREE AGENT** (developer) | Codex desktop | `C:\Users\dark_\Documents\hack-the-andes-game-worktrees\track-b` | `feat/track-b-ui-map` | All game code and its tests, `tests/*`, `src/*`, `index.html`, `public/`, `docs/track-b-progress.md`, `docs/design/*`, `odd/tasks/*` |
+Neither agent edits the other's files. Neither pushes except the principal, and only after an explicit user go-ahead in its own session.
+
+**Codex warning:** the Codex desktop app also keeps its own automatic worktrees under `C:\Users\dark_\.codex\worktrees\<id>\hack-the-andes-game` in *detached HEAD* state. Do **not** work there: commits made on a detached HEAD are easy to lose and a branch cannot be checked out in two worktrees. Open and work only in the `track-b` folder above, on the branch `feat/track-b-ui-map` (verify with `git branch --show-current`).
+
+### 10.2 Git rules (keep history linear)
+1. `main` only moves by fast-forward, performed by the principal after a review. No one commits directly on `main`.
+2. Before every checkpoint the worktree agent rebases its branch onto `main` (`git rebase main`); the principal rebases `feat/release-docs` onto `main` before merging it. If `main` moved, rebase first, then re-run the checks.
+3. Principal merge routine (from the main folder, clean tree): `git checkout main && git merge --ff-only feat/track-b-ui-map` then `git checkout feat/release-docs && git rebase main`. If `--ff-only` refuses, the worktree agent must rebase.
+4. Commits: Conventional Commits, one per work unit, **no `Co-Authored-By` and no AI attribution** (verify with `git log --format=%B | grep -ciE "co-authored|generated with|claude|anthropic|codex"`, expected 0). Never force-push.
+
+### 10.3 State at the handoff (verified 2026-10-14)
+- **Live (GitHub Pages): v0.7** = game code of `21cf517`, docs up to `4c96538` (https://andrewmechdev.github.io/pachabyte/).
+- **Local `main` = `9ed1846` = v0.8 candidate**, NOT pushed: B1 (art prepared), B2 (new map), B3 (themed page, logo, background, "Ajustes"), B4 (user bolts and impact bursts), B5 (eye relic from the user's sheet). Independently reviewed: 0 AI attribution lines, typecheck OK, 35 files / 385 tests OK, build OK, `tests/page-ui-check.mjs` 14/14, WebGL smoke OK, captures of the page at 1280 and 470 px, of bolts and of the eye reviewed. **Pending user decision: push v0.8 to production or wait for Checkpoint 2.**
+- `feat/track-b-ui-map` is at `9ed1846` (same as `main`), clean tree.
+- Stale things to clean at the end (not now): worktree `...\hack-the-andes-game-worktrees\playtest-b1` (detached at `530296e`), local branches `feat/polish-phases` and `feat/release-polish` (already merged), the Codex automatic worktrees. Ports `4173` and `4181` belong to the user: never use or stop them; use `4190-4199`.
+- Known flaky smoke checks (pilot-dependent, not game defects): "REVERSE at least twice", "solid Packet Loss block must cost a heart", Marea, Firewall. Always rerun to classify and report every run.
+
+### 10.4 Work split
+**WORKTREE AGENT (Codex), in this order, one commit per task, no waiting for approval between tasks:**
+0. Two small fixes first, in one commit: change the page eyebrow text "PROTOTIPO LOCAL · RUTA 01" to "PROTOTIPO · RUTA 01" and replace the stale sentence "Arte provisional original, no son spritesheets finales..." with a short current one; raise the Bucle eye hitbox to about 18x20 px with a test first (the node breaks by itself after 2 repeats, so balance is unaffected) and report it explicitly.
+1. S1 intro cards, S2 narrative captions, S3 tighter pacing, S4 sharing and device readiness: exactly as specified in section 9.3 to 9.6.
+2. **CHECKPOINT 2** (after S4): rebase on `main`, run typecheck, unit tests, build, `tests/page-ui-check.mjs` and the smoke (2 runs WebGL, 1 Canvas; report every run), capture screenshots in both renderers (intro cards, a narrative caption, the pacing change, the mobile notice at 470 px, the share preview tags in `dist/index.html`), and STOP with the report of sections 9.2 and 10.7.
+3. After Checkpoint 2 is merged: P3 Pulso de la Trama, B6 neon route backdrop, UX fixes (HUD shield icon vs "ENERGÍA"), optional bigger Corruptor, smoke pilot stabilization, then Checkpoint 3, final QA fixes and Checkpoint 4.
+
+**PRINCIPAL, while Codex works (no overlap with Codex files):**
+1. First action with the user: decide whether to push v0.8 now (steps in 10.5) or wait for Checkpoint 2.
+2. Create `feat/release-docs` from `main`. Refresh `README.md` (English + "En español") for v0.8 and later: current features (map, logo, Ajustes, user art, Packet Loss/eruption/Memory Leak/Bucle, Corruptor, Sombra, racha, pickups), controls table, honest limits (desktop keyboard only, Edge-tested only), real screenshots under `docs/` (reuse `C:\Users\dark_\Documents\hack-the-andes-game-social\LinkedIn\` captures, or regenerate with `tools/capture-social.mjs`). Update `CREDITS.md` for every user-generated asset (sources preserved in `assets/incoming/`, prepared with `tools/prepare_sprite.py`). Append observed results only to `docs/VERIFICATION.md`.
+3. Prepare the delivery package drafts in `docs/delivery/`: one-paragraph description (Spanish and English), a 30 to 60 s screen-recording script, screenshot list, honest limits, and the LinkedIn post draft with the AI-art disclosure. Prepare the backup hosting guide (Cloudflare Pages: build `npm run build`, output `dist`, env `NODE_VERSION=22`; the Vite base is relative so any path works); the user connects their own account.
+4. Review every checkpoint of the worktree agent with the routine in 10.6 and merge approved ones.
+
+### 10.5 Deploy routine (principal, only after the user's explicit go-ahead)
+`git checkout main` (clean tree) → `npm.cmd test` and `npm.cmd run build` → `git push origin main` → poll `gh run list --repo AndrewMechDev/pachabyte --limit 1` until `completed success` → compare the live bundle (`curl -s https://andrewmechdev.github.io/pachabyte/ | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js'`) with `dist/assets/index-*.js` → run the smoke against `PACHA_URL=https://andrewmechdev.github.io/pachabyte` and report. Never force-push.
+
+### 10.6 Independent review routine (principal, per checkpoint; never touch the worktree)
+1. `git log --oneline main..feat/track-b-ui-map`; attribution grep (expected 0); `git diff --stat main..feat/track-b-ui-map`.
+2. Export a clean copy: `git archive feat/track-b-ui-map | tar -x -C <scratch>`; give it dependencies with a junction to the main folder's `node_modules` (PowerShell `New-Item -ItemType Junction`). **Remove the junction only with PowerShell `[System.IO.Directory]::Delete('<path>')` (removes the link only).** Never `rm -rf` it and avoid `Remove-Item` on it. Afterwards confirm the main folder still has `node_modules\phaser`, `vite`, `vitest`, `typescript`, `playwright`.
+3. In the copy run `npx.cmd tsc --noEmit`, `npm.cmd test`, `npm.cmd run build`, then `npx.cmd vite preview --host 127.0.0.1 --port 4196 --strictPort` and `PACHA_URL=http://127.0.0.1:4196 npm.cmd run test:browser` (WebGL; add `PACHA_RENDERER=canvas` for Canvas), plus `node tests/page-ui-check.mjs`. Stop only your own port.
+4. Look at screenshots yourself in both renderers (page at 1280/600/470 px, map, route, fight, the new feature). Tap-shorter-than-a-frame inputs from Playwright (`press` with no delay) are lost by design in some scenes: use `{ delay: 80 }` when testing keys.
+5. If good, merge per 10.2.3 and tell the user; if not, return a numbered list of findings to the worktree agent. Never claim a check passed that you did not run.
+
+### 10.7 What each side must hand back to the user
+Every report: what was built; files changed; every command with its observed result; RED evidence; screenshots reviewed (both renderers); commit hashes; anything partial; open questions. The user pastes each agent's report to the other when cross-checking is needed.

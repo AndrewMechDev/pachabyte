@@ -1,3 +1,5 @@
+> **ROLES CHANGED on 2026-10-14: read section 10 of `docs/CONTINUATION_PLAN.md` first.** There is now a PRINCIPAL agent (main folder, review/merge/deploy/docs) and a WORKTREE agent (Codex, `track-b` folder, all code). The older Track A/Track B wording is superseded.
+
 # Handoff: continue PachaByte from any AI session
 
 Everything that is left to do is in `docs/CONTINUATION_PLAN.md` (read it first). Then read this file, then `AGENTS.md`, `odd/tasks/polish-phases.md` (the plan and status) and `docs/design/DECISIONS.md` (canon). Do not trust this file over the checkout: verify with `git log`, `npm test` and the live site.
