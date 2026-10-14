@@ -16,7 +16,7 @@ The old parallel split, forbidden gameplay/README/smoke surfaces, deferred Ajust
 |---|---|---|
 | 1 | Branch synchronization and private dependencies | Verified: refs equal, private dependencies and npm ls/typecheck; TEMP/TMP-prefixed full unit run passes 33 files/347 tests. WebGL smoke independently unavailable at browser launch |
 | 2 | B1: prepare six sources, integration notes, statuses and credits | Complete: `fc3036a27a376ff4cb9f3b31141ecaf2a1139289`; self-tests, typecheck, 33 files/347 tests, build; WebGL W2 and Canvas C1 pass 22 groups each. W1 pilot failure retained |
-| 3 | B2: map selection, pure rules, font-safe text and six nodes | Pending; delegated multi-file behavior with tests |
+| 3 | B2: map selection, pure rules, font-safe text and six nodes | Complete locally (see B2 section); unit 368/368, smoke W1+W2 WebGL and C1 Canvas green; restored-node look not yet seen in game |
 | 4 | B3: page logo/background/theme and Ajustes | Pending; Ajustes is now in scope, with precise smoke button-helper updates |
 | 5 | B4: SHOTS integration | Pending; preserve invisible 6x3 bodies, speed, Nokia twins and reduced-motion frame |
 | 6 | B5: LOOP_NODE_EYE integration | Pending; preserve node HP, location, bob and hitbox |
@@ -122,82 +122,17 @@ Local commit: `fc3036a27a376ff4cb9f3b31141ecaf2a1139289`, `feat(assets): prepare
 
 After the B1 review, the 17 `b1-review-*` files (captures, zooms and the manifest) moved from `assets/prepared/` to `docs/review/`; `assets/prepared/` now holds only art the game loads or will load. Paths in `docs/design/INTEGRATION_NOTES.md` and in this tracker were corrected. The manifest stores bare zoom file names, so it needs no edit.
 
-Next source task: B2, the six-node selected-card map. Use the integration notes, preserve shortcuts/progress/debug contracts and apply the local TEMP/TMP test prefix. Ask only about a genuine new product decision; do not infer scene fit from B1 asset-only inspection. Report this B1 boundary before beginning B2.
+## B2 map screen (2026-10-14)
 
-## Recovery evidence (2026-10-14)
+Route: delegated writer (4 new files plus a scene rewrite), parent verification. New `src/game/mapRules.ts` (six nodes, status per progress, wrap-around A/D/arrow selection, card keys), `src/game/mapText.ts` (uppercase Spanish, font-drawable, fits 312 px) and rewritten `src/game/MapScene.ts` (prepared `map-trama-v1-320x180.png`, top title strip, one selected-node card, one key bar, Graphics markers so Canvas needs no tint). Locked routes are RUTA 02 to RUTA 06 with an EN CONSTRUCCIÓN card and PRÓXIMAMENTE; no real-city lore. Reduced motion: no flicker, pulse or bobbing.
 
-All commands used the literal Track B working directory and non-login PowerShell. The only mutation surface was private `node_modules/`, followed by this tracker update.
+Socket centers measured on 12x crops of the 320x180 art: RUTA 02 (70,34), RUTA 03 (84,74), Arequipa (161,128), RUTA 04 (191,87), RUTA 05 (246,43), RUTA 06 (251,126). Selection order is left to right. Held keys do not skip nodes (auto-repeat ignored). The debug contract keeps `scene`, `audio`, `progress`, `node`, `otherRoutesLocked` and `selected` (`'route'` on Arequipa, `'locked'` otherwise) and adds `selectedNode`, `nodes`, `reducedMotion`. `TEXT.map*` entries in `text.ts` are now unused and were left untouched.
 
-| Operation | Observed result |
-|---|---|
-| Branch/root/status checks | `feat/track-b-ui-map`; correct Track B root; only this pre-existing untracked tracker |
-| `git rev-parse HEAD main feat/polish-phases` | All three refs equal `cd80afae86d436f24dddd877150f095f26117ad3` |
-| `git rev-list --left-right --count HEAD...main` | `0 0`; no synchronization mutation needed |
-| Dependency-root guard | Ordinary Directory, no ReparsePoint, empty LinkType/Target; exact resolved private path inside Track B |
-| Sandbox CIM process check | Unavailable: CIM access denied |
-| Approved read-only elevated CIM check | Zero npm-cli/vitest/playwright command matches; zero explicit Track B node/browser matches; known own install sessions already stopped; no processes killed |
-| Literal PowerShell `Remove-Item -Recurse -Force` | Exit 0; only the verified ordinary Track B dependency directory removed |
-| Separate absence check | Test-Path false and Get-Item ItemNotFound, including no dangling-link entry |
-| `npm.cmd ci --no-audit --no-fund` | Exactly one retry, uninterrupted; exit 1, `Exit handler never called!` |
-| Raw SHA256 lock comparison | Different hashes; copy paused for a bounded read-only semantic comparison |
-| CRLF/LF-normalized text and sorted parsed-JSON comparison | Both exactly equal; 67 package entries each; no package-field, version, resolved or integrity differences |
-| First read-only copy-endpoint verification | PowerShell parser error (empty pipe after foreach); parsing failed before command execution or mutation |
-| Corrected read-only endpoint check | Exit 0; both literal source and destination are ordinary non-link directories; destination resolves inside Track B |
-| Literal canonical-to-Track-B `robocopy` with `/MIR /NFL /NDL /NJH /NJS` | Exit 1: success under the robocopy 0-7 contract; direction was source canonical, destination Track B only |
-| Post-copy private-directory guard | Ordinary Directory, no ReparsePoint, empty LinkType/Target |
-| `npm.cmd ls --depth=0` | Exit 0; all five expected direct dependencies shown below |
-| `npm.cmd run typecheck` | Exit 0 (`tsc --noEmit`) |
-| `npm.cmd test` | Exit 1: 25 failed suites, 8 passed files (33 files); 47 tests executed and passed; remaining suites failed during import |
+Evidence observed in this checkout (TEMP/TMP prefix): RED `vitest run tests/mapRules.test.ts tests/mapText.test.ts` failed with `Cannot find module '../src/game/mapText'` in both files; GREEN 2 files / 21 tests. Baseline before B2: typecheck exit 0, 33 files / 347 tests. After B2 (parent rerun): typecheck exit 0, 35 files / 368 tests, build exit 0 (large-chunk warning only). Browser: own preview on 4190 (stopped afterwards), unmodified smoke W1 WebGL exit 0, W2 WebGL exit 0, C1 Canvas exit 0, 22 groups each, no page errors. All three runs green, so no flake classification was needed.
 
-The npm configuration warning about `minimum-release-age` appeared during installation and npm checks. It was nonfatal for npm ls and typecheck. Neither install failure nor test failure has a proven root cause.
+Screenshots reviewed (scratchpad, not committed): Arequipa selected and RUTA 04 selected in WebGL and Canvas, plus a 3x magnified comparison of selected/unselected markers. Title, card and key bar are readable over the art; selection brackets are gold corners and legible but subtle. Reduced-motion Canvas run confirmed `reducedMotion: true` and the selection and locked-Enter behavior. Not yet seen: the restored Arequipa node (pulse) in game, because no debug hook sets `progress.guardian`; it is covered by unit tests only. Smoke-rewritten `docs/ruta01-*.png` were restored with an exact-path `git restore` and not committed.
 
-### Lockfile identity and copy boundary
-
-- Canonical package-lock SHA256: `03C5833FA64B76DA26CFABF1C9EFF2BFE272DA68A55A3F7C274AF4BBFF1FBC76`.
-- Track B package-lock SHA256: `D099A20AD77BDFE3B24681593BCD50D3B5841DF3765815A08E8EE523AE8B741E`.
-- Canonical has zero CRLF sequences; Track B has 1168. Normalizing CRLF to LF yields exactly identical text. Recursively sorted parsed JSON is also identical: this is a checkout-line-ending difference, not dependency divergence.
-- Source: `C:\Users\dark_\Documents\hack-the-andes-game\node_modules`.
-- Destination: `C:\Users\dark_\Documents\hack-the-andes-game-worktrees\track-b\node_modules`.
-- Both were verified ordinary and non-link before copying. The source was read only; no canonical repair, deletion, configuration change or process control was performed. Source package-manifest hashes/timestamps were sampled before copying, but whole-source-directory integrity was not independently proven afterward.
-- User-reported canonical health (five dependencies and npm ls success) is user evidence, not a check executed by this session. It does not erase the earlier incident evidence below.
-
-### Verified direct dependency versions
-
-| Package | npm ls version |
-|---|---|
-| phaser | 3.90.0 |
-| playwright | 1.62.1 |
-| typescript | 5.9.3 |
-| vite | 8.3.4 |
-| vitest | 5.0.3 |
-
-### Functional stop
-
-All 25 failing suites reported `ENOENT` while opening generated `ssr` module files under a sandbox temporary directory. They failed during module import, before their assertions could run. The observed result is 47 passing executed tests, NOT 347 passing tests. The documented 347-test count remains historical context.
-
-Stop after this result: no assertion weakening, retry, cache cleanup, source/configuration change, build, browser smoke or server was performed. The filesystem/cache/worker relationship may warrant a bounded future diagnostic; this is a recommendation, not a proven sandbox root cause or authorization to proceed.
-
-## Next step
-
-Parent should mirror and spot-check the now-passing TEMP/TMP unit/build baseline before starting B1. The earlier diagnostic failures below are historical and resolved for the observed unit command by the final temporary-directory recovery. WebGL smoke is unavailable at Edge launch; Canvas, screenshots, asset-tool RED/GREEN and visual acceptance remain pending. No review lifecycle or commit was run by this recovery worker.
-
-## Historical scope and incident (superseded, retained as evidence)
-
-The initial tracker covered only B1-B3 at baseline `81124e9`, reserved gameplay/test/README/odd surfaces for Track A, deferred Ajustes and all delivered-sprite gameplay integration, and proposed a local handoff. Those restrictions are historical and superseded by the current continuation scope above. The original dependency incident record follows unchanged; statements about then-current paths and next steps describe that earlier snapshot, not the recovered state.
-
-## Dependency-isolation incident
-
-The first literal junction-removal attempt failed with Windows exit 123. The delegated executor incorrectly started `npm.cmd ci` without verifying successful removal. The installation ran for the initial 10-second tool interval with only an npm config warning observed, then its own session was interrupted (exit 1). A subsequent nonrecursive removal succeeded; Track B `node_modules` is now absent. No private install was restarted.
-
-This was a sequencing error, not an approved relaxation of isolation. Future installation must be a separate invocation gated by successful unlink AND an independently verified absent/non-junction Track B path.
-
-Parent independently confirmed the absent Track B dependency path and intact sampled canonical Vite/TypeScript manifests with prior timestamps. An independent read-only verifier found no matching Track B npm-ci debug log. Neither the removal/reify phase nor complete canonical dependency integrity can be proven from this evidence. Some canonical checks returned zero in available logs, but their ordering relative to this incident is unknown and they are not acceptance proof for B1.
-
-Track B's tracked diff remains empty; this progress document is untracked. No prepared assets, gameplay changes, forbidden-file changes or commits were made. The worktree-local CodeGraph index was initialized by the writer per repository instructions. Canonical ongoing source changes were observed read-only and are not attributed or modified by Track B.
-
-Required checks remain pending: meaningful RED/GREEN, preparation-tool self-test, typecheck, unit tests, build, both renderer smoke runs and all output visual inspections. No server was started, no remote operation occurred, and B2/B3 were not started. Request for Track A: confirm its environment health through its own verification before Track B resumes; do not reinstall or repair live shared dependencies automatically.
-
-
+Next source task: B3, the page UI (logo, background, themed buttons, Ajustes disclosure).
 ## Ordered test-environment diagnosis (2026-10-14)
 
 Status: diagnostic complete, full baseline blocked; no B1 edits. All commands explicitly use Track B and non-login PowerShell; no source/configuration changes or canonical inspection.

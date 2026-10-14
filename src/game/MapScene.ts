@@ -3,102 +3,121 @@ import { createRetroFonts } from './textures';
 import { CELL_WIDTH, fontKey } from './retroFont';
 import { initialProgress, nodeState, type Progress } from './challengeRules';
 import { RUN_KEY } from './routeRules';
-import { CORRUPTED, convertPixels } from './nokiaPalette';
 import { VIEW_EVENT, type ViewState } from './viewState';
-import { headUrl, arenaUrl } from './demoAssets';
-import { bossAngle, kipuFrame, kipuTextureKey } from './animation';
-import { ensureKipuFrames } from './kipuTextures';
+import {
+  BOTTOM_PANEL_Y, CURSOR_RX, CURSOR_RY, MAP_NODES, START_NODE, TOP_PANEL_HEIGHT, actionFor, cardFor, moveSelection, nodeStatus,
+  type MapNode, type NodeId, type NodeStatus,
+} from './mapRules';
+import { MAP_TEXT } from './mapText';
 import { motion } from './motion';
-import { TEXT } from './text';
 import { clearDebug, exposeDebug } from './debug';
-import kipuUrl from '../../assets/prepared/kipu-v4-32x40.png';
+import mapUrl from '../../assets/prepared/map-trama-v1-320x180.png';
 import { sfx } from './sfx';
 
-const LIGHT = 0xfff1c3, GOLD = 0xedc76c, TEAL = 0x59d3c4, VIOLET = 0xc985ef, DIM = 0x3a6770;
-const LOCKED_NODES = [[296, 44], [304, 70], [292, 96]] as const;
+const LIGHT = 0xfff1c3, GOLD = 0xedc76c, TEAL = 0x59d3c4, VIOLET = 0xc985ef, DIM = 0x3a6770, PANEL = 0x0d1f26;
+const MAP = 'map-trama';
+const STATUS_COLOR: Record<NodeStatus, number> = { corrupted: VIOLET, restored: TEAL, locked: LIGHT };
+type Key = (event?: KeyboardEvent) => void;
 
 export class MapScene extends Phaser.Scene {
-  private head!: Phaser.GameObjects.Image;
+  private selected: NodeId = START_NODE;
+  private markers!: Phaser.GameObjects.Graphics;
   private cursor!: Phaser.GameObjects.Graphics;
-  private kipu!: Phaser.GameObjects.Image;
-  private title!: Phaser.GameObjects.BitmapText;
-  private titleStart = 0;
-  private titleDone = true;
+  private nameText!: Phaser.GameObjects.BitmapText;
+  private statusText!: Phaser.GameObjects.BitmapText;
+  private actionText!: Phaser.GameObjects.BitmapText;
   constructor() { super('MapScene'); }
   preload(): void {
-    if (!this.textures.exists('kipu-evaluation')) this.load.image('kipu-evaluation', kipuUrl);
-    if (!this.textures.exists('amaru-head')) this.load.image('amaru-head', headUrl);
-    if (!this.textures.exists('amaru-arena')) this.load.image('amaru-arena', arenaUrl);
+    // Route and Guardian load their own Kipu/Amaru/arena textures, so the map only needs its background.
+    if (!this.textures.exists(MAP)) this.load.image(MAP, mapUrl);
   }
   create(): void {
     if (!this.registry.has('progress')) this.registry.set('progress', initialProgress());
     createRetroFonts(this);
+    this.selected = START_NODE;
     this.cameras.main.setBackgroundColor(0x122e36);
-    // The title types in once per session; every later visit is instant (keyboard-initiated returns never animate).
-    this.title = this.centered(8, TEXT.mapTitle, GOLD);
-    this.titleDone = motion.reduced || this.registry.get('introSeen') === true;
-    this.titleStart = -1; // anchored to the first update frame
-    if (!this.titleDone) this.title.setText('');
-    this.registry.set('introSeen', true);
-    ensureKipuFrames(this);
-    const state = nodeState(this.progress);
-    this.prepareCorrupted();
-    // The Arequipa node: purple corruption until Amaru is freed, the original colors afterwards.
-    const thumb = this.add.image(80, 66, state === 'restored' ? 'amaru-arena' : 'amaru-arena-corrupt').setDisplaySize(112, 63);
-    const frame = this.add.graphics();
-    frame.fillStyle(state === 'restored' ? TEAL : VIOLET).fillRect(thumb.x - 57, thumb.y - 33, 114, 1).fillRect(thumb.x - 57, thumb.y + 32, 114, 1)
-      .fillRect(thumb.x - 57, thumb.y - 33, 1, 66).fillRect(thumb.x + 56, thumb.y - 33, 1, 66);
-    this.kipu = this.add.image(170, 76, 'kipu-evaluation');
-    this.head = this.add.image(232, 66, 'amaru-head');
-    // Other routes exist but stay locked and unnamed (their order is not approved).
-    for (const [x, y] of LOCKED_NODES) {
-      for (let dx = 268; dx < x - 4; dx += 4) frame.fillStyle(DIM).fillRect(dx, y, 2, 1);
-      frame.fillStyle(DIM).fillRect(x - 3, y - 3, 7, 7).fillStyle(0x122e36).fillRect(x - 2, y - 2, 5, 5).fillStyle(DIM).fillRect(x - 1, y - 1, 3, 3);
-    }
-    this.cursor = this.add.graphics();
-    this.centered(108, TEXT.mapNode);
-    this.centered(120, state === 'restored' ? TEXT.mapRestored : TEXT.mapCorrupted, state === 'restored' ? TEAL : VIOLET);
-    this.text(76, 138, TEXT.mapStart, GOLD);
-    this.text(76, 150, TEXT.mapGuardian);
-    this.centered(168, TEXT.mapLocked, DIM);
+    this.add.image(0, 0, MAP).setOrigin(0).setDepth(0);
+    // Dark strips keep the text readable over the busy art; markers and cursor live between them.
+    const panels = this.add.graphics().setDepth(1);
+    panels.fillStyle(PANEL, 0.85).fillRect(0, 0, 320, TOP_PANEL_HEIGHT).fillRect(0, BOTTOM_PANEL_Y, 320, 180 - BOTTOM_PANEL_Y);
+    panels.fillStyle(DIM).fillRect(0, TOP_PANEL_HEIGHT, 320, 1).fillRect(0, BOTTOM_PANEL_Y, 320, 1).fillRect(8, 168, 304, 1);
+    this.markers = this.add.graphics().setDepth(2);
+    this.cursor = this.add.graphics().setDepth(3);
+    this.text(Math.round((320 - MAP_TEXT.title.length * CELL_WIDTH) / 2), 4, MAP_TEXT.title, GOLD);
+    this.nameText = this.text(8, 147, '', LIGHT);
+    this.statusText = this.text(8, 158, '', LIGHT);
+    this.actionText = this.text(8, 158, '', GOLD);
+    this.text(8, 170, MAP_TEXT.keyBar, TEAL);
+    this.refreshCard();
     const keyboard = this.input.keyboard!;
-    keyboard.on('keydown-ENTER', this.startRoute, this);
-    keyboard.on('keydown-ONE', this.startRoute, this);
-    keyboard.on('keydown-TWO', this.startGuardian, this);
+    // Held keys auto-repeat: only fresh presses move the selection or act, so one tap is one node.
+    const bindings: [string, Key][] = [
+      ['keydown-LEFT', e => this.move('left', e)], ['keydown-A', e => this.move('left', e)],
+      ['keydown-RIGHT', e => this.move('right', e)], ['keydown-D', e => this.move('right', e)],
+      ['keydown-ENTER', e => this.act(e)], ['keydown-ONE', e => { if (!e?.repeat) this.startRoute(); }], ['keydown-TWO', e => { if (!e?.repeat) this.startGuardian(); }],
+    ];
+    for (const [name, handler] of bindings) keyboard.on(name, handler);
     this.game.events.emit(VIEW_EVENT, { view: 'map', outcome: 'playing', progress: { ...this.progress } } satisfies ViewState);
-    exposeDebug(() => ({ scene: 'map', audio: sfx.stats(), selected: 'route', progress: { ...this.progress }, node: nodeState(this.progress), otherRoutesLocked: true }));
+    exposeDebug(() => ({
+      scene: 'map', audio: sfx.stats(), selected: this.node.playable ? 'route' : 'locked', selectedNode: this.selected,
+      progress: { ...this.progress }, node: nodeState(this.progress), otherRoutesLocked: true, reducedMotion: motion.reduced,
+      nodes: MAP_NODES.map(({ id, x, y }) => ({ id, x, y, status: nodeStatus(this.byId(id), this.progress) })),
+    }));
     this.events.once('shutdown', () => {
-      keyboard.off('keydown-ENTER', this.startRoute, this).off('keydown-ONE', this.startRoute, this).off('keydown-TWO', this.startGuardian, this);
+      for (const [name, handler] of bindings) keyboard.off(name, handler);
       keyboard.resetKeys(); clearDebug();
     });
   }
-  // Purely visual: idle sway on the guardian preview, Kipu's hover breath and a bobbing pixel cursor.
+  // Purely visual: corruption static, restored pulse, locked flicker and the bobbing cursor; all frozen under reduced motion.
   update(time: number): void {
-    const reduced = motion.reduced;
-    this.head.setAngle(reduced ? 0 : bossAngle('idle', 0, time));
-    this.kipu.setTexture(kipuTextureKey(reduced ? 'idle' : kipuFrame({ velocityY: 0, now: time }), false));
-    if (!this.titleDone) {
-      if (this.titleStart < 0) this.titleStart = time;
-      const shown = Math.floor((time - this.titleStart) / 30);
-      this.title.setText(TEXT.mapTitle.slice(0, Math.max(0, shown)));
-      this.titleDone = shown >= TEXT.mapTitle.length;
+    const reduced = motion.reduced, tick = reduced ? 0 : Math.floor(time / 110);
+    this.markers.clear();
+    MAP_NODES.forEach((node, index) => this.drawMarker(node, nodeStatus(node, this.progress), tick, index, reduced ? 0.5 : 0.55 + 0.25 * Math.sin(time / 350)));
+    const grow = reduced ? 0 : Math.floor(time / 400) % 2, { x, y } = this.node;
+    this.cursor.clear();
+    for (const [color, shift] of [[PANEL, 1], [GOLD, 0]] as const) {
+      this.cursor.fillStyle(color);
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+        const cx = x + sx * (CURSOR_RX - 1 + grow) + shift, cy = y + sy * (CURSOR_RY - 1 + grow) + shift;
+        this.cursor.fillRect(sx < 0 ? cx : cx - 3, cy, 4, 1).fillRect(cx, sy < 0 ? cy : cy - 3, 1, 4);
+      }
     }
-    const nudge = reduced ? 0 : Math.floor(time / 400) % 2;
-    this.cursor.clear().fillStyle(GOLD);
-    for (let column = 0; column < 4; column++) this.cursor.fillRect(66 + nudge + column, 138 + column, 1, 7 - 2 * column);
   }
   private get progress(): Progress { return this.registry.get('progress'); }
-  private text(x: number, y: number, text: string, color = LIGHT): Phaser.GameObjects.BitmapText { return this.add.bitmapText(x, y, fontKey(color), text, CELL_WIDTH); }
-  private centered(y: number, text: string, color = LIGHT): Phaser.GameObjects.BitmapText { return this.text(Math.round((320 - text.length * CELL_WIDTH) / 2), y, text, color); }
-  // Derived purple texture (Canvas ignores tint): same pixels and alpha, luminance mapped to the corruption ramp.
-  private prepareCorrupted(): void {
-    if (this.textures.exists('amaru-arena-corrupt')) return;
-    const image = this.textures.get('amaru-arena').getSourceImage() as HTMLImageElement;
-    const canvas = this.textures.createCanvas('amaru-arena-corrupt', image.width, image.height)!;
-    canvas.context.drawImage(image, 0, 0);
-    const data = canvas.context.getImageData(0, 0, image.width, image.height);
-    data.data.set(convertPixels(data.data, CORRUPTED));
-    canvas.context.putImageData(data, 0, 0); canvas.refresh();
+  private get node(): MapNode { return this.byId(this.selected); }
+  private byId(id: NodeId): MapNode { return MAP_NODES.find(node => node.id === id)!; }
+  private text(x: number, y: number, text: string, color: number): Phaser.GameObjects.BitmapText { return this.add.bitmapText(x, y, fontKey(color), text, CELL_WIDTH).setDepth(5); }
+  // Canvas ignores tint, so each marker is pixel rects: a dark backing keeps it readable, the socket's dark core carries the state.
+  private drawMarker({ x, y }: MapNode, status: NodeStatus, tick: number, index: number, pulse: number): void {
+    const g = this.markers, hash = (n: number): number => ((n * 2654435761) >>> 0) % 997;
+    g.fillStyle(PANEL, 0.55).fillRect(x - 6, y - 4, 13, 9);
+    if (status === 'corrupted') {
+      g.fillStyle(VIOLET, 0.5).fillRect(x - 4, y - 2, 9, 5);
+      for (let n = 0; n < 6; n++) g.fillStyle(n % 2 ? LIGHT : VIOLET, 0.9).fillRect(x - 4 + hash(tick * 7 + n + index) % 9, y - 2 + hash(tick * 5 + n * 3 + index) % 5, 1, 1);
+    } else if (status === 'restored') {
+      g.fillStyle(TEAL, pulse).fillRect(x - 4, y - 2, 9, 5);
+      g.fillStyle(GOLD).fillRect(x - 2, y, 5, 1).fillRect(x, y - 2, 1, 5);
+    } else {
+      // Scaffold hash mark; the flicker is a brief dropout per node, never a full blackout.
+      g.fillStyle(DIM, 0.85).fillRect(x - 4, y - 2, 9, 5);
+      g.fillStyle(LIGHT, !motion.reduced && hash(tick + index * 13) % 7 === 0 ? 0.25 : 0.7).fillRect(x - 1, y - 2, 1, 5).fillRect(x + 1, y - 2, 1, 5).fillRect(x - 3, y - 1, 7, 1).fillRect(x - 3, y + 1, 7, 1);
+    }
+  }
+  private refreshCard(): void {
+    const node = this.node, status = nodeStatus(node, this.progress), card = cardFor(node, status), action = MAP_TEXT[card.action];
+    this.nameText.setText(MAP_TEXT[card.name]);
+    this.statusText.setFont(fontKey(STATUS_COLOR[status]), CELL_WIDTH).setText(MAP_TEXT[card.status]);
+    this.actionText.setFont(fontKey(status === 'locked' ? LIGHT : GOLD), CELL_WIDTH).setText(action).setX(312 - action.length * CELL_WIDTH);
+  }
+  private move(direction: 'left' | 'right', event?: KeyboardEvent): void {
+    if (event?.repeat) return;
+    this.selected = moveSelection(MAP_NODES, this.selected, direction);
+    sfx.play('blip'); this.refreshCard();
+  }
+  // Locked nodes never change scene: a dull tick and the card's "PRÓXIMAMENTE" are the whole feedback.
+  private act(event?: KeyboardEvent): void {
+    if (event?.repeat) return;
+    if (actionFor(this.node) === 'startRoute') this.startRoute(); else sfx.play('deflect');
   }
   private startRoute(): void { sfx.play('select'); this.input.keyboard?.resetKeys(); this.scene.start('RouteScene'); }
   // Direct entry from the map: a fresh 4 HP, empty-meter run state.
