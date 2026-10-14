@@ -1,6 +1,6 @@
 # Handoff: continue PachaByte from any AI session
 
-Read this first, then `AGENTS.md`, `odd/tasks/polish-phases.md` (the plan and status) and `docs/design/DECISIONS.md` (canon). Do not trust this file over the checkout: verify with `git log`, `npm test` and the live site.
+Everything that is left to do is in `docs/CONTINUATION_PLAN.md` (read it first). Then read this file, then `AGENTS.md`, `odd/tasks/polish-phases.md` (the plan and status) and `docs/design/DECISIONS.md` (canon). Do not trust this file over the checkout: verify with `git log`, `npm test` and the live site.
 
 ## Where things stand (2026-10-13)
 - Live game: https://andrewmechdev.github.io/pachabyte/ (GitHub Pages, workflow `.github/workflows/pages.yml`, built from `main`). Repo: https://github.com/AndrewMechDev/pachabyte (public).

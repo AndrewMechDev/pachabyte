@@ -1,6 +1,6 @@
 # Parallel brief: Track B (map, page UI, art preparation)
 
-> **UPDATE 2026-10-14: read section 7 (at the end) first. It supersedes sections 0.1, 2 (scope additions) and 3 (ownership list) wherever they differ.**
+> **UPDATE 2026-10-14: Track A is frozen. `docs/CONTINUATION_PLAN.md` is now the single source of truth for everything that is left and it overrides this file where they differ; this file keeps the detailed specs of B1 to B5. Read section 7 (at the end) next. It supersedes sections 0.1, 2 (scope additions) and 3 (ownership list) wherever they differ.**
 
 You are the second AI working on PachaByte at the same time as Track A (another session that owns all gameplay code). Read this whole file, then `docs/HANDOFF.md`, `AGENTS.md` (repo root), `odd/tasks/polish-phases.md` and `docs/design/ASSET_REQUESTS_V2.md`. If anything here contradicts the checkout, trust the checkout and report the difference.
 

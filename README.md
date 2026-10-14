@@ -4,7 +4,7 @@ When El Desfase corrupts the Trama de Pacha, an ancestral-digital network of a f
 
 **[Play in your browser](https://andrewmechdev.github.io/pachabyte/)** · keyboard only · desktop
 
-> The link still serves the earlier Phase 3 demo. Publishing this Ruta 01 build is pending (task F4); until then, run it locally with the steps below.
+> This is an early, keyboard-only prototype for desktop browsers; new versions deploy to the same link automatically. Art was generated with an image AI (see [CREDITS.md](CREDITS.md)).
 
 ![Amaru-01 freed after the fight](docs/ruta01-liberation.png)
 
