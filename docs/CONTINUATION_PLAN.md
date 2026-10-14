@@ -68,3 +68,39 @@ Yes, the build at the live URL is playable and stable enough to share as an earl
 
 ## 8. Report format when you finish a task
 What you built; files changed; every command run with its observed result; RED evidence; screenshots reviewed (both renderers); commit hashes; anything partial; open questions for the user. Never claim a check passed unless you ran it in this checkout.
+
+## 9. Addendum (2026-10-14): story, pacing, sharing and merge checkpoints
+
+Approved by the user in the Track A session. These tasks are added to section 3 and keep the same rules (tests first, one commit per task, no AI attribution, no push or merge by you).
+
+### 9.1 New order of work
+B3 page UI + "Ajustes" → B4 integrate SHOTS → B5 integrate LOOP_NODE_EYE → **CHECKPOINT 1** → S1 → S2 → S3 → S4 → **CHECKPOINT 2** → P3 Pulso de la Trama → B6 neon route backdrop → UX fixes → smoke pilot stabilization → docs → **CHECKPOINT 3** → final QA → **CHECKPOINT 4 (release candidate)**. Deploy v1.0, backup hosting and the delivery package still need the user (tasks 14 to 16).
+
+### 9.2 Merge protocol (checkpoints)
+You never merge into `main` and never push. At each checkpoint: (1) in your worktree run `git merge --ff-only main` or rebase onto `main` so the diff is minimal; (2) run typecheck, unit tests, build and the smoke (2 runs WebGL, 1 Canvas) and report every run; (3) deliver the checkpoint report (commits, commands with observed results, screenshots in both renderers, integration risks) and STOP. The reviewer (Track A, read-only) verifies independently, fast-forwards `main` locally, and, only with the user's go-ahead, pushes to deploy. After that, sync again with `git merge --ff-only main` before continuing. Keep branches linear so fast-forward always works.
+
+### 9.3 S1 Intro cards (once per session, skippable)
+- New scene `IntroScene` between the map and the route; shown when the route is started from the map (Enter on Arequipa, or key 1), only the first time in the session (registry flag), never when going straight to Amaru with key 2.
+- Four cards, typed text (30 ms per character, static when `motion.reduced`), 3 s each or Enter/Space to advance, Esc skips all; total at most about 12 s. Dimmed route backdrop, small Kipu, one blip sound per card, focus pause respected. Spanish, canon-only (no origin of El Desfase, no origin of Kipu, no secrets):
+  1. "EN EL PERÚ DE LA TRAMA, TODO ESTÁ CONECTADO."
+  2. "EL DESFASE APAGA LAS RUTAS Y CORROMPE A SUS GUARDIANES."
+  3. "UNA CHISPA TURQUESA DESPIERTA: KIPU."
+  4. "REPARA LAS RUTAS. LIBERA, NO DESTRUYAS."
+- Pure rules (`introRules.ts`: card timing, skip, once-per-session) with tests first; strings in a font-covered module with a glyph test.
+- The browser smoke starts the route with Enter and waits for scene `route`: update ONLY that start helper to skip the intro (wait for scene `intro`, press Enter or Esc, then wait for `route`) and add one group asserting the intro appears once, is skippable and does not reappear in the same session. This is an intentional flow change: do not weaken any other assertion.
+
+### 9.4 S2 Narrative captions during the route (non-blocking)
+- Short ambient lines (at most 38 characters, 2.5 to 3 s, no pause) at segment starts, as environmental storytelling. A small queue guarantees they never overlap the instructional hazard captions already shown and never cover the HUD. At most 6 lines, canon-safe, Spanish. Suggested set (adjust wording, keep the intent): arrival "AREQUIPA PIERDE SU BRILLO..."; first bugs "LOS ERRORES DE LA TRAMA TE BUSCAN."; Packet Loss "LOS DATOS SE PIERDEN Y VUELVEN."; Misti "EL MISTI TAMBIÉN SIENTE EL DESFASE."; Memory Leak "LA ENERGÍA SE ESCAPA DE LA TRAMA."; Bucle "TODO SE REPITE... HASTA QUE ALGO CAMBIE."
+- Data-driven schedule in a pure module with tests: every line inside its segment, none overlapping instructional captions, count and length limits, glyph coverage.
+
+### 9.5 S3 Tighter pacing (the user feels a long wait before Amaru)
+- Measure dead time in the scripted timeline (seconds with no enemy, hazard, pickup or fragment line on screen). Add a test that no gap exceeds 5 s outside the threshold, then fix the opening first: populate the first 8 s (first Glitchling at about 3 s, a second at about 5 s, hints first) WITHOUT shifting segment boundaries.
+- Only if gaps remain, compress other segments, updating every test, constant and pilot expectation that hard-codes times, and report the old and new total length (target 80 to 90 s). Never remove a hazard approved in the canon.
+
+### 9.6 S4 Sharing and device readiness (index.html, public assets, small helpers)
+- Touch/mobile notice: when the device is touch-first (`(pointer: coarse)`) or the viewport is too small, show a clear Spanish banner above the game: "PachaByte se juega con teclado: ábrelo en una computadora." (the game stays available). Pure helper with unit tests; no horizontal overflow at 470 px.
+- Open Graph and Twitter card tags (`og:title`, `og:description`, `og:type`, `og:url`, `og:image`, `twitter:card`) and a `<meta name="description">`, in Spanish. The preview image must be served by Pages: place a 1200x630 image in `public/` (for example `public/social-preview.png`) cropped from one of the 1920x1080 captures in `C:\Users\dark_\Documents\hack-the-andes-game-social\LinkedIn\` (for instance `01_rafaga_de_la_trama.png`), and reference its absolute URL `https://andrewmechdev.github.io/pachabyte/social-preview.png`. Verify the built `dist/index.html` contains the tags and the image is copied to `dist/`.
+- Browser check: run the smoke also with `PACHA_BROWSER_CHANNEL=chrome` if Chrome is installed, and report; Firefox and Safari remain unverified (say so in the README limits).
+
+### 9.7 Anything else a release needs (already in section 3, listed for completeness)
+Pulso de la Trama (P3), neon route backdrop (B6), HUD shield icon overlap, optional bigger Corruptor, stabilize the smoke pilots, README with screenshots and "En español", CREDITS, VERIFICATION, final QA in 1000/600/470 px, backup hosting and delivery package (user), and the art license decision (user).
