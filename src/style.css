@@ -82,3 +82,8 @@ button[hidden] { display: none; }
   button, #settings summary, #settings .chevron, button::before, #settings summary::before, button::after, #settings summary::after { transition: none; }
   button:active, #settings summary:active { transform: none; }
 }
+
+/* In-flow keyboard advisory: no overlay, no input interception and no fixed minimum width. */
+.device-notice { margin: 0 0 16px; padding: 12px; border: 1px solid #edc76c; background: #122e36;
+  color: #f4ecc8; line-height: 1.5; overflow-wrap: anywhere; }
+.device-notice[hidden] { display: none; }

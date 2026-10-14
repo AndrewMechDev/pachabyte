@@ -1,10 +1,10 @@
 # Track B continuation progress
 
-## Current worktree scope — S3 / Checkpoint 2 (2026-10-14)
+## Current worktree scope — S4 / Checkpoint 2 (2026-10-14)
 
 Current baseline is `759461a` on `feat/track-b-ui-map` in the Track B worktree. B1–B5 are already integrated. The PRINCIPAL (Claude) owns release documentation, main merges and deployment; this worktree owns authorized game code/tests. No main access, synchronization, installs, release-file edits or remote operations are part of these bounded Checkpoint 2 units.
 
-Task 0 is verified and committed locally as `9e33b9a1c190f396d46f00677a3c5d3862082901`. Parent reran typecheck and all 35 files/394 tests, inspected the WebGL eye, and applied the medium ordinary verification tier with RDD OFF. Precommit cached whitespace caught an extra EOF blank line in the feature document; parent removed that blank line only before the commit. S1 parent delivery is recorded below; S3 is the current bounded writer unit, stopping before S4. Feature/recovery locator: `odd/tasks/checkpoint-2-story-sharing.md`. Canvas eye capture remains pending Checkpoint 2 after the one bounded pilot attempt lost; no Task 0 retry is needed.
+Task 0 is verified and committed locally as `9e33b9a1c190f396d46f00677a3c5d3862082901`. Parent reran typecheck and all 35 files/394 tests, inspected the WebGL eye, and applied the medium ordinary verification tier with RDD OFF. Precommit cached whitespace caught an extra EOF blank line in the feature document; parent removed that blank line only before the commit. S1 parent delivery is recorded below; S4 is the current bounded writer unit, now verified with the user-authorized programmatic crop and returning before parent commit/CP2. Feature/recovery locator: `odd/tasks/checkpoint-2-story-sharing.md`. Canvas eye capture remains pending Checkpoint 2 after the one bounded pilot attempt lost; no Task 0 retry is needed.
 
 ### S1 parent delivery / S2 start
 
@@ -14,7 +14,135 @@ S1 is committed as `2dd0b629960ac8c13c9ac1470663919c1ef10c35`. Parent repeated t
 
 S2 committed as `0ff541d6b9e2505172d08adc39823d5b39d52640`. Parent repeated typecheck/39 files/418 tests and inspected Canvas story. Native read-only assessment was medium, 278 authored lines; global RDD OFF ordinary tier satisfied. Recorded BEFORE S3 source edits. Current bounded unit S3 stops before S4; no compression decision until measured residual gaps.
 
-### S3 bounded harness correction — verified (2026-10-14)
+### S3 parent delivery / S4 start
+
+S3 committed as `8cf3059809cf975cc183097077b0412faf53b85c`. Parent independently repeated typecheck/40 files/426 tests and inspected the corrected Canvas capture. Staged native assessment medium376lines, global RDD OFF ordinary tier. Recorded BEFORE S4 source writes. Current bounded unit is S4; no rebase, full smoke, checkpoint commit or principal release-file work yet.
+
+### S4 parent and independent verification — verified, commit pending
+
+Parent reported fresh typecheck and42files441unit PASS plus final crop inspection PASS. Read-only native assessment was unavailable because the preserved untracked user original prevented assessment; ordinary policy treats this as high/unassessable. Do NOT label medium or invent a receipt; RDD remains OFF and no native lifecycle was started.
+
+Independent `verify_s3` reported focused15 and built share8 PASS, exact Pillow source-rectangle pixel comparison, source/output SHA256 and public/dist byte equality PASS; structural notice/lifecycle/readback and representative WebGL/Canvas captures showed no blockers. Original user file remains preserved/untracked/unstaged. Exact center crop clips Amaru's right-edge body/part of face; this documented composition caveat is unchanged, not a silently altered crop.
+
+S4 is verified, parent commit pending. CP2 rebase/full smoke remains pending and was NOT run in this docs-only update. Only task/progress were edited; no source/image/test/server/commit operations. Writer handoff authored count375 predates this parent-proof documentation addition. Full recovery mirror622 updated/read back.
+
+### S4 final asset completion — all required task checks PASS, parent commit pending
+
+User explicitly authorized programmatic cropping ("dale, ajustalo") and selected `public/02_amaru_escudo_roto.png`; this supersedes the historical rafaga-source choice and inaccessible `/mnt/data` report. Original untracked user file remains untouched and unstaged. No imagegen retry, resize, redraw, source deletion or principal-folder access.
+
+- Source:1920x1080 RGB,110169bytes, SHA256 `421d1cb136f8657233079296c2b8dec3aae822253571f46d3027f568cb9bdca7` before/after.
+- Reproducible exact command body: `from PIL import Image; Image.open('public/02_amaru_escudo_roto.png').crop((360,225,1560,855)).save('public/social-preview.png', format='PNG', optimize=True)`; actual interpreter `C:\Users\dark_\AppData\Local\Programs\Python\Python311\python.exe -I -` via PowerShell stdin. No resampling or pixel conversion.
+- Output:1200x630 opaque RGB/non-interlaced PNG,48466bytes; SHA256 `7ac44e1d9f3886872a4196a92c8837bdee09ad90bf8876725126f839b3e27c0b`; RGB SHA256 `f315768f02e72c939d83f829d9ee968bc56425a3f3597b3b5908eda1ebb844df`. Saved pixels compared byte-for-byte to the source rectangle; original hash unchanged. Strict share test updates only source provenance/digest, not dimensional/opacity/copy assertions.
+- Native final crop reviewed with `view_image(original)`: Kipu and "¡ESCUDO ROTO! ¡DISPARA!" caption readable; EXACT centered rectangle clips Amaru's right-edge body and part of face. Framing caveat reported to parent without silently reframing. This is the specified crop, not proof that every original composition element fits.
+
+Same-call private TEMP/TMP prefix, Track B cwd and login:false throughout. Existing missing-image RED observed again: receipt529aaf, focused14pass/1missingPNG exit1. Crop3f4e3b → focused15/15 GREEN f7aba3. Guarded session94185 terminal87c465 exit0: `npx.cmd tsc --noEmit` PASS, `npm.cmd test`42files441tests PASS, `npm.cmd run build`75modules PASS, `PACHA_CHECK_DIST=1 npx.cmd vitest run tests/shareMetadata.test.ts`8/8 PASS (all seven built tags plus exact pixel/dimensions/opaque/build-byte-copy). Existing nonfatal npm config and chunk warnings remain.
+
+Approved direct owned preview4197: `node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4197 --strictPort`, session36056/43e0e8. Approved serial browser session32698/4c3bc7 → d4847b exit0: unchanged `node tests/page-ui-check.mjs`17/17; `PACHA_URL=http://127.0.0.1:4197 node tests/device-share-check.mjs` Edge PASS; same with `PACHA_BROWSER_CHANNEL=chrome` Chrome PASS. Final statuses page=0/edge=0/chrome=0. Each channel completes WebGL and Canvas, asserts PNG response instead of HTML and1200x630 served dimensions. Notice native-fit/small-width/small-height/fine-pointer/coarse-pointer, real80ms keyboard map/intro/route, no470px overflow and all metadata preserved. No game/source notice changes needed, no full route pilot or checkpoint smoke.
+
+Four regenerated viewport captures viewed at original470x900 detail: `s4-notice-470-webgl-msedge-viewport.png`, `s4-notice-470-canvas-msedge-viewport.png`, `s4-notice-470-webgl-chrome-viewport.png`, `s4-notice-470-canvas-chrome-viewport.png`, under `docs/design/checkpoint-2-captures/`. Exact banner visibly above complete game/nav/HUD; lower footer ends at viewport, not a fabricated full-page image. Historical failed full-page captures and all earlier failed command receipts remain preserved below.
+
+ONLY after all browsers reached terminal exit0, owned preview36056 stopped via Ctrl+C, receipt580e5f exit1. No other listener/process was touched. `git diff --check` PASS; candidate count recorded in the feature document, PNG/generated data and user source excluded. Parent independently assesses/spot-checks and owns S4 commit; no rebase/CP2/main/push/merge/review-mode changes. Skill resolution:paths-injected.
+
+### Historical S4 resumed notice proof — resolved, social asset then blocked
+
+Current terminal outcome remains PARTIAL only because the exact social PNG is not accessible. User reports `/mnt/data/social-preview.png`; coordinator verified this path is unavailable in the Windows session and public output remains absent. No guessed download/access, image operation/fallback, changed image assertions, commit/rebase/CP2. Parent will request the actual attachment. Prior rejected imagegen output/source-preserved facts remain history below.
+
+Actual task file/full mirror622 were read and reconciled before this bounded continuation; S3 remains8cf3059. CodeGraph now finds `refreshDeviceNotice` and its pure helper. No product source or fixture mobile-mode change was needed. Changed implementation is ONLY the browser capture harness plus evidence/tracking.
+
+#### Observed RED and verified cause
+
+Instrumented Edge RED command (a43785, exit1) records actual pointer/hidden/rect state around every boundary:
+
+- Initial470 map, game focus, ArrowRight/Left, active Intro, real80ms Esc→Route: coarse AND anyCoarse=true, notice.hidden=false/display=block, notice height74px, host438x246.375, viewport470x900. This disproves the earlier suspicion that keyboard input caused disappearance.
+- Immediately AFTER `page.screenshot({fullPage:true})`: coarse AND anyCoarse=false, notice.hidden=true/display=none, height0; host/viewport dimensions unchanged. Following resize1000 retained false;5000ms visible wait failed.
+- Installed local Chromium screenshot delegate at `node_modules/playwright-core/lib/coreBundle.js:37199` sends `Page.captureScreenshot` with `captureBeyondViewport: !fitsViewport`. The observed mutation belongs to this full-page emulated capture boundary. No claim about universal browser behavior or an upstream root cause is made.
+
+The application setter correctly followed its live coarse-query value. Minimal fix: `fullPage:false` viewport capture, with stronger coarse/hidden assertions BEFORE and AFTER capture. Banner and full game fit inside470x900; cropping off lower footer from the browser viewport is honest viewport evidence, not a source-image edit. All existing fit/input/metadata/visibility assertions and5000ms waits remain; no sticky warning, UA guessing, forced mobile emulation or increased timeout.
+
+#### Corrected runtime GREEN independent of image
+
+Edge command `PACHA_URL=http://127.0.0.1:4197 node tests/device-share-check.mjs`, corrected session4024 (7d5196→dcf0b2), completed both WebGL/Canvas groups with `ok:true`. Chrome installed-channel run `PACHA_BROWSER_CHANNEL=chrome`, session39541 (9730e7→bd4a9a), also completed both groups with `ok:true`. Each command overall exit1/PARTIAL solely because `/social-preview.png` returns HTML instead of PNG; this remaining asset failure is NOT ignored.
+
+For all four corrected renderer/channel cases: coarse/anyCoarse remained true, hidden=false through keyboard, Intro/Route, viewport screenshot and resize1000; notice height74 at470 and50 at1000. Exact Spanish text, no470px overflow, native-fitting438x246.375 game, non-overlap, real map arrows and Route input work. Fresh fine-pointer desktop hides advisory;320px width/native fit and179px viewport height show it; restoring1000x900 hides it again. No page/console errors in the checked coarse contexts. No full-route pilot or long smoke was run; full Chrome/WebGL/Canvas smoke remains CP2 and Firefox/Safari unverified.
+
+Four NEW470x900 viewport images reviewed at original detail; all visibly show the exact two-line advisory ABOVE the complete game, readable nav/HUD and no horizontal overflow:
+
+- `docs/design/checkpoint-2-captures/s4-notice-470-webgl-msedge-viewport.png`
+- `docs/design/checkpoint-2-captures/s4-notice-470-canvas-msedge-viewport.png`
+- `docs/design/checkpoint-2-captures/s4-notice-470-webgl-chrome-viewport.png`
+- `docs/design/checkpoint-2-captures/s4-notice-470-canvas-chrome-viewport.png`
+
+The diagnostic `s4-notice-470-webgl-msedge-diagnosed.png` and two older failed full-page images are preserved as FAILED temporal/notice evidence; they are not silently overwritten or promoted to PASS. New filenames explicitly distinguish viewport proof.
+
+#### Final verification and owned cleanup
+
+Same-call private TEMP/TMP prefix and explicit Track B cwd/login:false used for all commands. Final guarded check session73315 (0f6e79→c54293) retained every status:
+
+- Focused `npx.cmd vitest run tests/deviceRules.test.ts tests/shareMetadata.test.ts`:14pass/1missing public crop, exit1.
+- `npx.cmd tsc --noEmit`:passed (`typecheck=0`).
+- `npm.cmd test`:42files,440pass/1missing crop out441, exit1. No unrelated failures or environment rerun.
+- `npm.cmd run build`:passed75modules,1.04s; existing nonfatal chunk/npm-config warnings (`build=0`).
+- `PACHA_CHECK_DIST=1 npx.cmd vitest run tests/shareMetadata.test.ts`:7built-tag passes/1missing dist PNG, exit1. Exact dimensions/pixel-origin/copy proof remain blocked and strict.
+- Unmodified `node tests/page-ui-check.mjs` rerun on4197:17/17 passed, exit0 (a70643).
+- `git diff --check`:passed after final tracking writes.
+
+Scoped owned preview was exact direct installed CLI `node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4197 --strictPort`, session23116/f86874. Diagnostic browser reached exit1/a43785; corrected Edge exit1/dcf0b2; Chrome exit1/bd4a9a; page UI exit0/a70643; all own browsers closed in `finally`. ONLY after these terminal browser exits, own preview23116 stopped Ctrl+C exit1/124d48. Protected/principal4196 and other listeners, settings/firewall/dependencies/main/history/review mode untouched.
+
+Next action: obtain actual accessible social-preview attachment, verify existing strict1200x630/source-digest/copy assertions, then parent assesses/spot-checks/commits S4. Do not request or perform another crop/image operation without separate explicit authorization. Principal may independently integrate the committed through-S3 range; no history rewrite was performed.
+
+### Historical S4 partial writer handoff — image blocked, notice runtime unresolved
+
+S4 independent code/metadata is implemented, but delivery is PARTIAL: exact social asset is absent and notice browser proof failed. No commit/rebase/CP2/full smoke. S3 hash/parent426-test/typecheck/Canvas evidence and medium376line ordinary tier were recorded above and mirrored as full feature observation622 BEFORE source writes; mirror was read back. Skills paths injected; imagegen skill additionally loaded for the required edit policy.
+
+#### Code and deterministic intent
+
+`deviceRules.ts` uses pointer:coarse OR actual responsive host width<320/height<180 OR viewport height<180, directly from native GAME dimensions—not user-agent guessing or arbitrary phone width. The exact advisory is `PachaByte se juega con teclado: ábrelo en una computadora.` Main subscribes to media changes, host ResizeObserver and viewport resize, cleans them on destroy, and refreshes Phaser bounds if a visible banner moves the canvas. Canvas existence is guarded before boot. Advisory sits in normal flow above game; it never disables navigation/input or covers gameplay. CSS permits wrapping without a fixed minimum width. Gameplay/HP/timing/art/settings are untouched.
+
+Index adds seven Spanish/Pages fields: description, og:title/description/type/url/image and twitter:card. Title is `PachaByte — Ruta 01`; description is `Arcade retroandino: guía a Kipu por Arequipa, repara las rutas y libera a Amaru.` URL is `https://andrewmechdev.github.io/pachabyte/`, image URL is exactly `https://andrewmechdev.github.io/pachabyte/social-preview.png`. Tags are implemented, but the referenced image is currently MISSING and not claimed ready for publication.
+
+Tests preserve asset existence,1200x630 dimensions, opaque RGB/RGBA pixels, exact source-crop RGB digest and dist/public byte equality. Nothing is skipped or weakened to hide missing artwork. Project has DOM-only TypeScript types/no Node typings: initial native test imports caused TS2307/2580; corrected with a tiny explicitly typed read-only filesystem/runtime bridge and existing web decompression/crypto APIs, without dependencies or config edits. Per-pixel alpha verification is aggregated to avoid millions of assertion calls; requirement unchanged.
+
+#### Social source / rejected image edit
+
+Read-only approved source: `C:\Users\dark_\Documents\hack-the-andes-game-social\LinkedIn\01_rafaga_de_la_trama.png`. It is actually1920x1082 RGB, not the plan's assumed1080. Before/after SHA256 is unchanged: `6623CC84B82F092D8FF44BE7A7F42CC07991F22E7A2473AE47FD2D5D633E662B`.
+
+One policy-required built-in imagegen edit was attempted after viewing the exact source: prompt requested only a source-preserving mechanical1200x630 center rectangle, no rescale/redraw/new content. Its first prompt used the plan's1080 assumption (top225); read-only measurement subsequently corrected true center to `[360,226,1560,856]`. Output `C:\Users\dark_\.codex\generated_images\01a137fa-4a9d-7962-a23a-9709915f76a3\exec-8999f41d-cadc-4489-ab3e-238cfc93e794.png` is1731x909/1584351bytes and visibly reconstructed/reframed art. Rejected after inspection; NOT copied to public, no image retries and no unauthorized Pillow/programmatic edit fallback.
+
+Read-only pixel analysis (no saved/cropped output) measured the exact true-center RGB SHA256 `91f499f682ac160e026e51da31e2b0bcc320d2b93926163fae7dfcfde95a9042`; this strict digest is asserted by the pending asset test. `public/social-preview.png` and `dist/social-preview.png` remain absent. Parent will ask the user for explicit programmatic crop authorization after terminal handoff. Source and principal files remain untouched.
+
+#### Exact checks and failures
+
+All commands run explicit Track B cwd, `login:false`; same-invocation TEMP/TMP prefix to private node_modules\.tmp. No source normalizer was needed; final source bytes preceded functional checks.
+
+| Command / phase | Observed outcome |
+|---|---|
+| `npx.cmd vitest run tests/deviceRules.test.ts tests/shareMetadata.test.ts` RED | Exit1,e2f85e:missing device module;8metadata/image assertions failed (seven absent tags, missing public crop) |
+| First source iteration / typecheck | Focused14pass/1missingasset (799bb1); `npx.cmd tsc --noEmit` exit2,135a78:Node test imports/Buffer/process lacked types. No dependency installed. |
+| Corrected `npx.cmd tsc --noEmit` | Passed; guard continued (b21932/84201). Subsequent build typecheck also passed. |
+| Focused corrected tests | Exit1,8d8147:14pass/1missing public crop. Device7 and metadata7 pass; asset remains RED. |
+| `npm.cmd test` | Exit1,df796f:42files,440pass/1missing crop out441. No unrelated failures, no rerun hides this required failure. |
+| `npm.cmd run build` | Passed75modules,dd1ab4; existing nonfatal chunk/npm-config warnings. Shell retained `build=0`. |
+| `PACHA_CHECK_DIST=1 npx.cmd vitest run tests/shareMetadata.test.ts` | Exit1,dd1ab4:7built tags pass,1missing dist crop. Copy/dimensions/pixel assertion unfulfilled, NOT passed. |
+| Unmodified `node tests/page-ui-check.mjs`, PACHA_URL4197 | Passed17/17,69825d. Existing layout/input/settings assertions preserved; no page-ui source edit required. |
+| `node tests/device-share-check.mjs` initial Edge attempt | Exit1,518103/session72323:initial470px coarse-media/text/nooverflow/normal-flow and real keyboard Route availability assertions passed; after capture/resize1000 advisory unexpectedly hidden, coarse-width assertion failed. Cause unconfirmed. Canvas/asset-fetch stages not reached. |
+| One bounded harness-settle correction / same Edge command | Exit1,2d7461:retained same assertion and added5000ms wait for viewport/media observer settling; timed out after resize. No further retries or speculative source change. |
+| Chrome / full smoke | Chrome installed at Program Files\Google\Chrome\Application\chrome.exe. Focused Chrome and Canvas device proof NOT run after Edge failure; full Chrome/WebGL/Canvas smoke remains CP2. Firefox/Safari unverified. |
+| `git diff --check` | Passed after final tracking writes; line-ending warnings only |
+
+#### Inspected captures / pending runtime proof
+
+Both new470x967 WebGL-target page captures were reviewed at original detail:
+
+- `docs/design/checkpoint-2-captures/s4-notice-470-webgl-msedge.png`,255226bytes, initial failed attempt.
+- `docs/design/checkpoint-2-captures/s4-notice-470-webgl-msedge-settled.png`,255210bytes, bounded retry.
+
+IMPORTANT: despite initial exact-text/layout assertions, NO advisory is visible by actual screenshot time in either image. The filenames are historical failed notice attempts, NOT successful banner evidence. Images show available route/nav and no horizontal overflow, but cannot prove the requested notice. Disappearance may precede resize; current media/input/layout cause remains unconfirmed. No successful notice/social image or Canvas470 capture is claimed. Preserve both failures and request fresh bounded diagnosis rather than changing assertions or fabricating proof.
+
+Own scoped elevated direct preview `node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4197 --strictPort` ran session53293 (06994c). Page/device command72323 reached terminal exit1, then retry2d7461 reached terminal exit1 and closed browser in `finally`; ONLY afterward own preview53293 stopped Ctrl+C exit1 (81e9d0). No protected4196/4173/4181 process, settings/firewall/global review mode/install or principal writes. No classic ruta screenshots generated/restored.
+
+Rollback scope is device helper/main observer wiring/banner CSS+HTML, new device/share tests and S4 tracking/failed captures only. Existing T0–S3 unchanged. Parent must resolve exact source-preserving crop authorization and notice runtime diagnosis before commit/CP2. Requests for PRINCIPAL: no deploy-ready sharing claim yet; after completion document keyboard-only and Firefox/Safari limits in principal-owned release material. No writer commit, rebase, remote operation or subsequent task.
+
+### Historical S3 bounded harness correction — verified (2026-10-14)
 
 Current outcome: S3 corrected runtime proof passed WebGL and Canvas in ONE controlled sequence; final focused/typecheck/full/build checks passed. Parent assessment/spot-check/commit remains pending; no S4. Correction edits are ONLY `tests/pacing-flow-check.mjs`, these two tracking documents and new s3 PNGs. No gameplay correction was established or made. Before/after tracked gameplay/test diff identity is unchanged: `78f7ac7c53ec3f2a1e4ca89fbbe9572221224462` for `RouteScene.ts`, `routeRules.ts`, `routeRules.test.ts`.
 

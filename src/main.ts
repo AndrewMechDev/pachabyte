@@ -6,6 +6,7 @@ import { GuardianScene } from './game/GuardianScene';
 import { IntroScene } from './game/IntroScene';
 import { entryScene, INTRO_SEEN_KEY } from './game/introRules';
 import { GAME } from './game/rules';
+import { DEVICE_NOTICE, needsKeyboardNotice } from './game/deviceRules';
 import { sfx } from './game/sfx';
 import { motion } from './game/motion';
 import { initialProgress } from './game/challengeRules';
@@ -41,6 +42,23 @@ const game = new Phaser.Game({
   scene: [MapScene,IntroScene,RouteScene,GuardianScene],
 });
 game.events.on(VIEW_EVENT,render);
+const deviceNotice = document.getElementById('device-notice')!;
+const coarsePointer = window.matchMedia('(pointer: coarse)');
+deviceNotice.textContent = DEVICE_NOTICE;
+function refreshDeviceNotice(): void {
+  const rect = host!.getBoundingClientRect();
+  const visible = needsKeyboardNotice({ coarsePointer: coarsePointer.matches,
+    canvasWidth: rect.width, canvasHeight: rect.height, viewportHeight: window.innerHeight });
+  if (deviceNotice.hidden !== !visible) {
+    deviceNotice.hidden = !visible;
+    if (game.canvas) game.scale.updateBounds(); // Before boot the banner is already in flow; afterward refresh hit-test bounds.
+  }
+}
+const deviceObserver = new ResizeObserver(refreshDeviceNotice);
+deviceObserver.observe(host);
+coarsePointer.addEventListener('change',refreshDeviceNotice);
+window.addEventListener('resize',refreshDeviceNotice);
+refreshDeviceNotice();
 function focusState(): void {
   const active = document.hasFocus() && document.activeElement===host;
   if(game.input.keyboard) { game.input.keyboard.enabled=active; game.input.keyboard.preventDefault=active; }
@@ -106,6 +124,7 @@ window.addEventListener('focus',focusState);
 game.events.once('ready',()=>{ host.focus(); focusState(); });
 game.events.on(VIEW_EVENT,focusState);
 game.events.once('destroy',()=>{
+  deviceObserver.disconnect(); coarsePointer.removeEventListener('change',refreshDeviceNotice); window.removeEventListener('resize',refreshDeviceNotice);
   window.removeEventListener('keydown',rememberKey,true); window.removeEventListener('keyup',releaseKey,true); window.removeEventListener('blur',forgetKeys);
   settings?.removeEventListener('toggle',refreshBounds); window.removeEventListener('scroll',refreshBounds);
   nav.removeEventListener('click',clickNav); host.removeEventListener('pointerdown',pointerFocus);
