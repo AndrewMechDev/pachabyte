@@ -18,7 +18,7 @@ import { umbralRestore } from './balanceRules';
 import { FloaterPool, floaterView, hitStopActive, initialHitStop, triggerHitStop, worldStep, type FloaterSlot, type HitStop } from './effectsRules';
 import { completeRoute, initialProgress, type Progress } from './challengeRules';
 import { BUG_TEXTURES, HAZARD_TEXTURES, PICKUP_TEXTURES, createBugTextures, createHazardTextures, createTextures, createRetroFonts, createRouteTextures } from './textures';
-import { createEyeTextures, createShotTextures } from './fxTextures';
+import { createEyeTextures, createShotTextures, loadShotSheets } from './fxTextures';
 import { ImpactPool, drawImpacts, shotFrame, shotKindFor, shotOrigin, shotTextureKey, type ShotKind } from './shotFx';
 import { EYE, drawShatter, eyeFrameFor, eyeOrigin, eyeTextureKey, shatterPieces } from './eyeRelic';
 import { createSheetTextures, loadSpriteSheets } from './sheetTextures';
@@ -169,6 +169,7 @@ export class RouteScene extends Phaser.Scene {
     if (!this.textures.exists('kipu-evaluation')) this.load.image('kipu-evaluation', kipuUrl);
     if (!this.textures.exists('amaru-arena')) this.load.image('amaru-arena', arenaUrl);
     loadSpriteSheets(this, ROUTE_SHEETS);
+    loadShotSheets(this);
   }
 
   create(): void {

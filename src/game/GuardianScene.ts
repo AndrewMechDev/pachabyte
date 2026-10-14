@@ -18,7 +18,7 @@ import { advanceLiberation, resultLines, stageProgress, startLiberation, tickLib
 import { ARENA, ARENA_DIM, BODY_TEXTURES, BOLT_TEXTURES, HEAD, HEAD_FLASH, createAmaruTextures, derive } from './amaruTextures';
 import { NOKIA, convertPixels } from './nokiaPalette';
 import { PICKUP_TEXTURES, createGlitchlingTextures, createTextures, createRetroFonts } from './textures';
-import { createShotTextures } from './fxTextures';
+import { createShotTextures, loadShotSheets } from './fxTextures';
 import { ImpactPool, drawImpacts, shotFrame, shotKindFor, shotOrigin, shotTextureKey, type ShotKind } from './shotFx';
 import { FREED, FREED_SHEETS, freedSparks, freedView, type FreedStage } from './liberationFx';
 import { createSheetTextures, loadSpriteSheets } from './sheetTextures';
@@ -195,6 +195,7 @@ export class GuardianScene extends Phaser.Scene {
     if (!this.textures.exists(HEAD)) this.load.image(HEAD, headUrl);
     if (!this.textures.exists(ARENA)) this.load.image(ARENA, arenaUrl);
     loadSpriteSheets(this, ['pickups', ...FREED_SHEETS]);
+    loadShotSheets(this);
   }
 
   create(): void {

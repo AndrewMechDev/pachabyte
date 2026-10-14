@@ -18,7 +18,7 @@ The old parallel split, forbidden gameplay/README/smoke surfaces, deferred Ajust
 | 2 | B1: prepare six sources, integration notes, statuses and credits | Complete: `fc3036a27a376ff4cb9f3b31141ecaf2a1139289`; self-tests, typecheck, 33 files/347 tests, build; WebGL W2 and Canvas C1 pass 22 groups each. W1 pilot failure retained |
 | 3 | B2: map selection, pure rules, font-safe text and six nodes | Complete locally (see B2 section); unit 368/368, smoke W1+W2 WebGL and C1 Canvas green; restored-node look not yet seen in game |
 | 4 | B3: page logo/background/theme and Ajustes | Complete locally (see B3 section); page check 14/14, smoke W2+W3 WebGL and C2 Canvas green after recorded flakes |
-| 5 | B4: SHOTS integration | Pending; preserve invisible 6x3 bodies, speed, Nokia twins and reduced-motion frame |
+| 5 | B4: SHOTS integration | Complete locally (see B4 section); 378 tests, smoke W1+W2 WebGL and C1 Canvas green |
 | 6 | B5: LOOP_NODE_EYE integration | Pending; preserve node HP, location, bob and hitbox |
 | 7 | P3: Pulso de la Trama | Pending; record Spanish design decision first, then pure-rule tests and gameplay/UI/sound/smoke |
 | 8 | B6: neon route backdrop and readable accents | Pending; gameplay integration now belongs to this session |
@@ -144,7 +144,13 @@ Smoke hunks in `tests/browser-smoke.mjs`: `openSettings` helper after the `butto
 
 Observed: typecheck exit 0, 35 files / 372 tests, build exit 0, page check PASS 14/14. Smoke on own preview 4190, unmodified apart from the hunks: W1 exit 1 (`touching a solid Packet Loss block must cost a heart`, known pilot flake), W2 exit 0, W3 exit 0, C1 exit 1 (`a Packet Loss hit only while touching a solid block`, known pilot flake), C2 exit 0. Runs that failed because of B3 itself (Nokia stray row; hidden-button lookup) were fixed before these. Screenshots reviewed at 1000x800 and 470x800 (closed, Ajustes open, focused): logo, buttons and panel read well; the background art is mostly covered by the panel at 1000 px and shows at wider windows. Honest verdict: good, not epic; a larger logo or decorative frame would need new art. Smoke screenshots under `docs/` were restored with an exact-path `git restore`.
 
-Next source task: B4 (SHOTS).
+## B4 SHOTS integration (2026-10-14)
+
+Delegated writer, parent-verified. `src/game/shotSheets.ts` (pure slicing, alpha bounds and head anchors) and `shotFx.ts`/`fxTextures.ts` now build every bolt frame from `shots-v1-normal-16x12.png`, `shots-v1-rafaga-24x20.png` and `shots-v1-impact-16x16.png` (4 frames each) under the unchanged keys `shot-<kind>-<frame>` and `-nokia` twins. The impact burst decodes each 16x16 frame once into opaque pixels (with exact Nokia greens) painted by the unchanged `drawImpacts`; pool capacity 12, timing, reduced-motion frame, the invisible 6x3 bodies, speeds and damage did not change. Scene hunks: `loadShotSheets(this)` in `RouteScene` and `GuardianScene` `preload` plus their imports (4 lines). Anchors are computed from real alpha (normal (9, 6.5) in 16x12, Ráfaga (15, 11) in 24x20; the tip sits at the physics body's front edge, matching the old placeholder). Visible behavior change: Ráfaga hits now share the single prepared burst (the procedural one grew for Ráfaga). No reduced sheets were made: occupied sizes (~11x5 and ~16x11) do not cover Kipu, enemies or enemy bolts in the captures; the reduced-sheet command is documented in `INTEGRATION_NOTES.md` if needed. Removed exports: `SHOT_ART`, `impactPixels`, `IMPACT.arm` (no other users found).
+
+Evidence: RED `vitest run tests/shotFx.test.ts` failed on the missing module `../src/game/shotSheets` (module-missing failure, not an assertion failure); GREEN 20 tests in that file, full suite 35 files / 378 tests, typecheck exit 0, build exit 0. The new tests decode the real PNGs (grid, binary alpha, margins, anchors, every REVERSE pixel is a Nokia green). Smoke on own preview 4190, unmodified: W1 exit 0, W2 exit 0, C1 exit 0 (22 groups each; the REVERSE frame check passed in all three). Captures reviewed: normal bolts and impacts in WebGL and Canvas (writer and parent), Ráfaga volley in WebGL (turquoise arrows with gold tips, fan reads as a volley but is dense at launch; no human sign-off), REVERSE frame in Canvas. Not seen: a Ráfaga volley in Canvas and a REVERSE impact burst in a browser frame (unit-tested only). `docs/ruta01-*.png` rewritten by the smoke were restored and not committed.
+
+Next source task: B5 (LOOP_NODE_EYE), then CHECKPOINT 1.
 ## Ordered test-environment diagnosis (2026-10-14)
 
 Status: diagnostic complete, full baseline blocked; no B1 edits. All commands explicitly use Track B and non-login PowerShell; no source/configuration changes or canonical inspection.
