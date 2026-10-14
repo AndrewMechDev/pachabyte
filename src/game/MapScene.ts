@@ -13,6 +13,7 @@ import { motion } from './motion';
 import { clearDebug, exposeDebug } from './debug';
 import mapUrl from '../../assets/prepared/map-trama-v1-320x180.png';
 import { sfx } from './sfx';
+import { entryScene, INTRO_SEEN_KEY } from './introRules';
 
 const LIGHT = 0xfff1c3, GOLD = 0xedc76c, TEAL = 0x59d3c4, VIOLET = 0xc985ef, DIM = 0x3a6770, PANEL = 0x0d1f26;
 const MAP = 'map-trama';
@@ -54,7 +55,7 @@ export class MapScene extends Phaser.Scene {
     const bindings: [string, Key][] = [
       ['keydown-LEFT', e => this.move('left', e)], ['keydown-A', e => this.move('left', e)],
       ['keydown-RIGHT', e => this.move('right', e)], ['keydown-D', e => this.move('right', e)],
-      ['keydown-ENTER', e => this.act(e)], ['keydown-ONE', e => { if (!e?.repeat) this.startRoute(); }], ['keydown-TWO', e => { if (!e?.repeat) this.startGuardian(); }],
+      ['keydown-ENTER', e => this.act(e)], ['keydown-ONE', e => { if (!e?.repeat) this.startRoute(e); }], ['keydown-TWO', e => { if (!e?.repeat) this.startGuardian(); }],
     ];
     for (const [name, handler] of bindings) keyboard.on(name, handler);
     // Touch and mouse use the 'down' event (not 'up'), so a tap responds immediately.
@@ -64,6 +65,7 @@ export class MapScene extends Phaser.Scene {
     exposeDebug(() => ({
       scene: 'map', audio: sfx.stats(), selected: this.node.playable ? 'route' : 'locked', selectedNode: this.selected,
       progress: { ...this.progress }, node: nodeState(this.progress), otherRoutesLocked: true, reducedMotion: motion.reduced,
+      introSeen: this.registry.get(INTRO_SEEN_KEY) === true,
       nodes: MAP_NODES.map(({ id, x, y }) => ({ id, x, y, status: nodeStatus(this.byId(id), this.progress) })),
     }));
     this.events.once('shutdown', () => {
@@ -121,14 +123,17 @@ export class MapScene extends Phaser.Scene {
   // Locked nodes never change scene: a dull tick and the card's "PRÓXIMAMENTE" are the whole feedback.
   private act(event?: KeyboardEvent): void {
     if (event?.repeat) return;
-    if (actionFor(this.node) === 'startRoute') this.startRoute(); else sfx.play('deflect');
+    if (actionFor(this.node) === 'startRoute') this.startRoute(event); else sfx.play('deflect');
   }
   private tap(x: number, y: number): void {
     const { selected, act } = tapOutcome(MAP_NODES, this.selected, x, y);
     if (act) { this.startRoute(); return; }
     if (selected !== this.selected) { this.selected = selected; sfx.play('blip'); this.refreshCard(); }
   }
-  private startRoute(): void { sfx.play('select'); this.input.keyboard?.resetKeys(); this.scene.start('RouteScene'); }
+  private startRoute(event?: KeyboardEvent): void {
+    sfx.play('select'); this.input.keyboard?.resetKeys();
+    this.scene.start(entryScene('route', this.registry.get(INTRO_SEEN_KEY) === true), { entryKeys: event ? [event.code] : [], entryEvent: event });
+  }
   // Direct entry from the map: a fresh 4 HP, empty-meter run state.
   private startGuardian(): void { sfx.play('select'); this.registry.remove(RUN_KEY); this.input.keyboard?.resetKeys(); this.scene.start('GuardianScene'); }
 }

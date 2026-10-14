@@ -2,14 +2,19 @@ import { nodeState, type Progress } from './challengeRules';
 
 export const VIEW_EVENT = 'pacha:view';
 export const FOCUS_EVENT = 'pacha:focus';
-export type View = 'map' | 'route' | 'guardian';
+export type View = 'map' | 'intro' | 'route' | 'guardian';
 export type ViewOutcome = 'playing' | 'victory' | 'defeat';
 // checkpoint: the phase a guardian defeat can resume from (2 or 3); absent otherwise.
 export interface ViewState { view: View; outcome: ViewOutcome; progress: Progress; checkpoint?: number }
-export const sceneForView = (view: View): string => ({ map: 'MapScene', route: 'RouteScene', guardian: 'GuardianScene' })[view];
+export const sceneForView = (view: View): string => ({ map: 'MapScene', intro: 'IntroScene', route: 'RouteScene', guardian: 'GuardianScene' })[view];
 
 // Page copy (Spanish) for the DOM bridge around the canvas.
 export function viewCopy({ view, outcome, progress, checkpoint }: ViewState) {
+  if (view === 'intro') return {
+    title: 'La Trama de Pacha — Introducción',
+    help: 'Enter o Espacio: continuar · Esc: omitir',
+    result: 'Repara las rutas. Libera, no destruyas.',
+  };
   if (view === 'map') return {
     title: 'Mapa de la Trama',
     help: 'Enter: iniciar ruta · 2: ir a Amaru',

@@ -3,6 +3,8 @@ import './style.css';
 import { RouteScene } from './game/RouteScene';
 import { MapScene } from './game/MapScene';
 import { GuardianScene } from './game/GuardianScene';
+import { IntroScene } from './game/IntroScene';
+import { entryScene, INTRO_SEEN_KEY } from './game/introRules';
 import { GAME } from './game/rules';
 import { sfx } from './game/sfx';
 import { motion } from './game/motion';
@@ -24,8 +26,8 @@ function render(state: ViewState): void {
   host!.setAttribute('aria-label', copy.title + '. Juego controlado con teclado.');
   achievements.textContent = `Logros de la sesión: Ruta ${state.progress.route?'completada':'pendiente'} · Amaru ${state.progress.guardian?'liberado':'pendiente'}`;
   document.getElementById('choose')!.hidden = state.view==='map';
-  document.getElementById('retry')!.hidden = state.view==='map';
-  for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'))) button.setAttribute('aria-pressed',String(button.dataset.view===state.view));
+  document.getElementById('retry')!.hidden = state.view==='map' || state.view==='intro';
+  for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'))) button.setAttribute('aria-pressed',String(button.dataset.view===(state.view==='intro'?'route':state.view)));
 }
 render(current);
 // Private instance: the DOM bridge receives state events, never debug snapshots.
@@ -36,7 +38,7 @@ const game = new Phaser.Game({
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   // Free flight: no gravity anywhere.
   physics: { default:'arcade', arcade:{ gravity:{x:0,y:0}, debug:false } },
-  scene: [MapScene,RouteScene,GuardianScene],
+  scene: [MapScene,IntroScene,RouteScene,GuardianScene],
 });
 game.events.on(VIEW_EVENT,render);
 function focusState(): void {
@@ -61,13 +63,22 @@ function toggleSound():void {
   host!.focus(); focusState();
 }
 // fresh: a page button entry. "Ir a Amaru" then starts with 4 HP and an empty meter; Retry keeps the carried run.
+const navigationHeld = new Set<string>();
+let navigationEvent: KeyboardEvent | undefined;
+const rememberKey = (event: KeyboardEvent): void => { navigationHeld.add(event.code); navigationEvent=event; };
+const releaseKey = (event: KeyboardEvent): void => { navigationHeld.delete(event.code); };
+const forgetKeys = (): void => { navigationHeld.clear(); navigationEvent=undefined; };
+window.addEventListener('keydown',rememberKey,true);
+window.addEventListener('keyup',releaseKey,true);
+window.addEventListener('blur',forgetKeys);
 function navigate(view:View,fresh=false):void {
+  const target = view==='route' && current.view==='map' ? entryScene('route',game.registry.get(INTRO_SEEN_KEY)===true) : sceneForView(view);
   if(fresh && view==='guardian') game.registry.remove(RUN_KEY);
   for(const scene of game.scene.getScenes(true)) {
     scene.input.keyboard?.resetKeys();
     game.scene.stop(scene.scene.key);
   }
-  game.scene.start(sceneForView(view));
+  game.scene.start(target,{entryKeys:[...navigationHeld],entryEvent:navigationEvent});
   host!.focus(); focusState();
 }
 const pointerFocus=()=>host.focus();
@@ -95,6 +106,7 @@ window.addEventListener('focus',focusState);
 game.events.once('ready',()=>{ host.focus(); focusState(); });
 game.events.on(VIEW_EVENT,focusState);
 game.events.once('destroy',()=>{
+  window.removeEventListener('keydown',rememberKey,true); window.removeEventListener('keyup',releaseKey,true); window.removeEventListener('blur',forgetKeys);
   settings?.removeEventListener('toggle',refreshBounds); window.removeEventListener('scroll',refreshBounds);
   nav.removeEventListener('click',clickNav); host.removeEventListener('pointerdown',pointerFocus);
   document.removeEventListener('focusin',focusState);

@@ -3,9 +3,17 @@ import { sceneForView, viewCopy, type ViewState } from '../src/game/viewState';
 import { initialProgress } from '../src/game/challengeRules';
 const state = (view: ViewState['view'], outcome: ViewState['outcome'] = 'playing', progress = initialProgress()): ViewState => ({view,outcome,progress});
 it('maps every public choice to its actual scene', () => {
+  expect(sceneForView('intro')).toBe('IntroScene');
   expect(sceneForView('guardian')).toBe('GuardianScene');
   expect(sceneForView('route')).toBe('RouteScene');
   expect(sceneForView('map')).toBe('MapScene');
+});
+it('gives the intro contextual controls without pretending gameplay is already running', () => {
+  const copy = viewCopy(state('intro'));
+  expect(copy.title).toContain('Introducción');
+  expect(copy.help).toContain('Enter o Espacio');
+  expect(copy.help).toContain('Esc: omitir');
+  expect(copy.help).not.toContain('Disparar');
 });
 it('offers the route by default, direct Amaru access and contextual Spanish controls', () => {
   expect(viewCopy(state('map')).help).toContain('Enter: iniciar ruta');

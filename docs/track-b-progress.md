@@ -1,10 +1,48 @@
 # Track B continuation progress
 
-## Current worktree scope — Task 0 / Checkpoint 2 (2026-10-14)
+## Current worktree scope — S1 / Checkpoint 2 (2026-10-14)
 
-Current baseline is `759461a` on `feat/track-b-ui-map` in the Track B worktree. B1–B5 are already integrated. The PRINCIPAL (Claude) owns release documentation, main merges and deployment; this worktree owns authorized game code/tests. No main access, synchronization, installs, release-file edits or remote operations are part of this bounded Task 0.
+Current baseline is `759461a` on `feat/track-b-ui-map` in the Track B worktree. B1–B5 are already integrated. The PRINCIPAL (Claude) owns release documentation, main merges and deployment; this worktree owns authorized game code/tests. No main access, synchronization, installs, release-file edits or remote operations are part of these bounded Checkpoint 2 units.
 
-Task 0 is implemented and writer-verified; parent independent verification/commit is pending. Feature/recovery locator: `odd/tasks/checkpoint-2-story-sharing.md`. Stop before S1 for parent routing, without another product approval. Canvas eye capture remains pending Checkpoint 2 after the one bounded pilot attempt lost; no capture retry or pilot rewrite is part of Task 0.
+Task 0 is verified and committed locally as `9e33b9a1c190f396d46f00677a3c5d3862082901`. Parent reran typecheck and all 35 files/394 tests, inspected the WebGL eye, and applied the medium ordinary verification tier with RDD OFF. Precommit cached whitespace caught an extra EOF blank line in the feature document; parent removed that blank line only before the commit. S1 writer verification is complete; parent assessment/commit is next, and no S2 work is authorized to this writer yet. Feature/recovery locator: `odd/tasks/checkpoint-2-story-sharing.md`. Canvas eye capture remains pending Checkpoint 2 after the one bounded pilot attempt lost; no Task 0 retry is needed.
+
+### S1 acceptance and implementation
+
+S1 writer verification is complete; parent assessment, spot-check and commit remain pending. Route is delegated direct because scene/rules/text, map/page entry, view state and browser helpers form one coherent multi-file behavior. No S2 work was started. T0's parent-owned commit and precommit EOF cleanup were recorded above and in the feature document BEFORE S1 source edits.
+
+- `IntroScene.ts` renders the four EXACT approved Spanish cards over the existing dimmed arena with native-size Kipu. `introText.ts` wraps at 288 logical pixels (48 six-pixel glyphs), preserving words and accents; card 2 fits two lines with padding.
+- Pure `introRules.ts` owns four cards, 3000 ms/card, 30 ms/character, advance/skip and once-entry routing. The scene advances only its own active clock: focus loss freezes typing/auto-advance, and the first resumed delta is discarded instead of catching up. Reduced motion displays the whole card immediately. One blip is requested per presented card; muted settings still win.
+- `MapScene.ts` and the native page route button choose the intro on first map-to-route entry only. The registry flag is set in intro `create`, not on a routing request. Direct key 2 still enters Amaru and leaves the flag false. Subsequent map route entries bypass the intro; no HP, score, route clocks, settings or achievement meanings change.
+- Entry-event deduplication, held-key seeding and repeat rejection prevent the map/native Enter event from advancing the first card or cascading. Manual final advance/Esc waits for its key release before Route starts, so Esc cannot pause Route and Space cannot fire through the transition. Keyboard, native keyup/focus/visibility and page-focus listeners are removed on shutdown. There are no intro timer events to leak.
+- `viewState.ts` gains a coherent intro view/copy. Main hides retry during intro and retains the route button's pressed meaning. Read-only intro debug adds timing/card/text/focus/session fields without removing existing scene fields. `debug.ts` needed no edit.
+- Deterministic tests cover timing boundaries, a delayed frame, paused actions, terminal state, once routing, reduced motion, exact text, glyph coverage and native wrapping. The long smoke changes ONLY route entry handling plus one once/skippable group; unrelated pilot/assertion logic is unchanged.
+
+### S1 exact checks and observed outcomes
+
+All commands use the explicit Track B root, `login:false`, and the same-invocation private TEMP/TMP prefix documented below. Source changes preceded final functional checks; no mutating normalizer was needed.
+
+| Command / phase | Observed result |
+|---|---|
+| `npx.cmd vitest run tests/introRules.test.ts tests/introText.test.ts tests/viewState.test.ts` RED | Exit 1: two suites failed because intro modules did not exist; two view-state assertions failed, three passed. Timing/text tests were written first; no separate timing failure is claimed. |
+| Same focused command GREEN | Exit 0: three files / 15 tests |
+| `npx.cmd tsc --noEmit` | Passed; guarded invocation continued to full tests |
+| `npm.cmd test` | Exit 0: 37 files / 405 tests (T0 394 + 11) |
+| `npm.cmd run build` | Exit 0: 72 modules; existing nonfatal chunk/npm-config warnings |
+| `node tests/intro-flow-check.mjs` with `PACHA_URL=http://127.0.0.1:4190` | Exit 0: one serial WebGL + Canvas sequence, real keyboard/read-only debug. Key 2 bypass, typing, repeat/held entry, focus pause/resume, Esc release, once flag, native page entry, all four automatic cards/blips and reduced motion passed. |
+| `node tests/page-ui-check.mjs` with same URL | Exit 0: 17/17; original 16 retained plus native settings Enter during intro does not advance its card and preserves mute/focus |
+| Full `tests/browser-smoke.mjs` | Not run in S1; three full renderer runs remain required at CP2 after S4 |
+| `git diff --check` | Exit 0 after final tracking writes; informational line-ending warnings only |
+
+Preview and the two focused Edge commands received scoped native elevated approval because sandbox Edge/localhost limitations were already observed. Own server was exactly `npx.cmd vite preview --host 127.0.0.1 --port 4190 --strictPort` with the private TEMP prefix, session 90601. No software install, settings/firewall change or protected process control occurred. Both browser scripts closed their own browsers in `finally`; own preview 90601 then stopped via Ctrl+C, observed exit 1. No server is intentionally left running and no tracked `docs/ruta01-*.png` was generated, so no restoration was needed.
+
+### S1 visual evidence and remaining boundary
+
+All ten new 960x540 captures (320x180 logical canvas at 3x) were inspected with `view_image` at original resolution:
+
+- `docs/design/checkpoint-2-captures/s1-card-1-webgl.png`, `s1-card-2-webgl.png`, `s1-card-3-webgl.png`, `s1-card-4-webgl.png`, `s1-reduced-webgl.png`.
+- `docs/design/checkpoint-2-captures/s1-card-1-canvas.png`, `s1-card-2-canvas.png`, `s1-card-3-canvas.png`, `s1-card-4-canvas.png`, `s1-reduced-canvas.png`.
+
+Observed readable glyphs/accents, centered native lines, card 2's unclipped two-line wrap, small Kipu, dark backdrop and clear control bar in both renderers. Reduced captures show static complete first-card text. No route pilot was needed; only one capture/check sequence per renderer occurred. This is S1 evidence, not the principal's independent CP2 review. Parent owns commit/hash recording; next writer unit is S2 only after parent verification. Requests for PRINCIPAL: release/checkpoint summaries should reflect the once-per-session intro and retain pending full CP2 smoke/Canvas eye evidence. No principal-owned file was edited.
 
 ### Task 0 acceptance and changes
 

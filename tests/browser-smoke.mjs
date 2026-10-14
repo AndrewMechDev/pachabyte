@@ -71,6 +71,15 @@ try {
   const frames = count => page.evaluate(n => new Promise(resolve => { let i = 0; const step = () => (++i >= n ? resolve() : requestAnimationFrame(step)); requestAnimationFrame(step); }), count);
   const canvas = page.locator('canvas');
   const button = name => page.getByRole('button', { name, exact: true });
+  // Route entry may first show the session-only intro. Skip with real input, never mutate the registry.
+  const enterRoute = async start => {
+    await start();
+    await wait(() => ['intro', 'route'].includes(window.pachaDebug?.().scene));
+    const intro = (await snap()).scene === 'intro';
+    if (intro) await page.keyboard.press('Escape', { delay: 80 });
+    await wait(() => window.pachaDebug?.().scene === 'route');
+    return intro;
+  };
   // "Sonido" and "Reducir movimiento" live in the closed-by-default "Ajustes" disclosure; open it with the keyboard.
   const openSettings = async () => { if (!(await page.locator('#settings').evaluate(d => d.open))) { await page.locator('#settings > summary').focus(); await page.keyboard.press('Enter'); } };
   const activeId = () => page.evaluate(() => document.activeElement?.id ?? '');
@@ -137,12 +146,18 @@ try {
   for (const name of ['Mapa', 'Reintentar']) assert.equal(await button(name).isVisible(), false, `${name} stays hidden on the map`);
   await canvas.screenshot({ path: 'docs/ruta01-map.png' });
   // Native button activation: Enter and Space on focused buttons, focus always returns to the game.
-  await button('Jugar ruta').focus(); await page.keyboard.press('Enter');
-  await wait(() => window.pachaDebug?.().scene === 'route');
+  await button('Jugar ruta').focus();
+  const firstIntro = await enterRoute(() => page.keyboard.press('Enter', { delay: 80 }));
+  assert.equal(firstIntro, true, 'first map route entry must show the intro');
   assert.equal(await activeId(), 'game');
   assert.match(await page.locator('#view-title').innerText(), /Ruta 01/);
   await button('Mapa').focus(); await page.keyboard.press('Space');
   await wait(() => window.pachaDebug?.().scene === 'map');
+  const secondIntro = await enterRoute(() => page.keyboard.press('Enter', { delay: 80 }));
+  assert.equal(secondIntro, false, 'the intro must not reappear in the same session');
+  await button('Mapa').focus(); await page.keyboard.press('Space', { delay: 80 });
+  await wait(() => window.pachaDebug?.().scene === 'map');
+  passed.push('1 intro: first route entry shows the session-only intro, Esc skips it, next entry bypasses it');
   await button('Ir a Amaru').focus(); await page.keyboard.press('Space');
   await wait(() => window.pachaDebug?.().scene === 'guardian');
   assert.match(await page.locator('#view-title').innerText(), /Amaru-01/);
@@ -157,7 +172,7 @@ try {
 
   // ================================================================== 2. route
   stage = '2 route: arrival copy, no gravity, Esc pause and focus pause';
-  await page.keyboard.press('Enter'); // canvas Enter on the map starts the route
+  await enterRoute(() => page.keyboard.press('Enter', { delay: 80 })); // canvas Enter on the map starts the route
   await wait(() => window.pachaDebug?.().scene === 'route' && window.pachaDebug().clock > 200);
   await startSampler('route', s => {
     if (s.scene !== 'route') return { scene: s.scene };

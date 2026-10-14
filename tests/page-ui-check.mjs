@@ -239,6 +239,23 @@ try {
     expect(state.scene === 'map' && state.selected === 'arequipa', `tap on empty map after opening Ajustes changed state: ${JSON.stringify(state)}`);
   });
 
+  await check('m) native settings Enter returns focus without advancing the intro card', async () => {
+    const story = await browser.newPage({ viewport: { width: 1000, height: 800 } });
+    try {
+      await story.goto(`${baseURL}/?debug=1`, { waitUntil: 'networkidle' });
+      await story.waitForFunction(() => window.pachaDebug?.().scene === 'map');
+      await story.getByRole('button', { name: 'Jugar ruta', exact: true }).click();
+      await story.waitForFunction(() => window.pachaDebug?.().scene === 'intro');
+      const card = await story.evaluate(() => window.pachaDebug().card);
+      await story.locator('#settings > summary').focus(); await story.keyboard.press('Enter', { delay: 80 });
+      await story.getByRole('button', { name: 'Sonido: sí', exact: true }).focus();
+      await story.keyboard.press('Enter', { delay: 80 });
+      const state = await story.evaluate(() => window.pachaDebug());
+      expect(state.scene === 'intro' && state.card === card, `settings activation leaked into story: ${JSON.stringify({ scene: state.scene, card: state.card })}`);
+      expect(state.audio.muted && state.focused, 'settings must be preserved and game focus restored');
+    } finally { await story.close(); }
+  });
+
   await check('k) no page or console errors were reported', async () => {
     expect(errors.length === 0, errors.join(' | '));
   });
