@@ -390,7 +390,7 @@ export class RouteScene extends Phaser.Scene {
     sprite.enableBody(true, cameraX + GAME.width + 10, spawn.y, true, true);
     sprite.setVelocity(0, 0).setAlpha(1);
     switch (spawn.kind) {
-      case 'glitchling': sprite.setTexture('glitchling').setData({ type: 'glitchling', hp: BUG_STATS.glitchling.hp, hitUntil: 0, graceUntil: 0, loop: false }); break;
+      case 'glitchling': sprite.setTexture('glitchling').setData({ type: 'glitchling', hp: BUG_STATS.glitchling.hp, hitUntil: 0, graceUntil: 0, loop: false, born: now }); break;
       case 'fragment': sprite.setTexture('fragment').setData({ dropped: false, leak: -1 }); (sprite.body as Body).setSize(7, 7, true); break;
       case 'corruptor': {
         const p = corruptorScreen(0, spawn.y);
@@ -1080,7 +1080,7 @@ export class RouteScene extends Phaser.Scene {
     const enemy = (e: Sprite) => {
       const type = e.getData('type') as EnemyType, age = this.clock - Number(e.getData('born') ?? 0);
       return {
-        type, x: e.x, y: e.y, screenX: e.x - cameraX, hp: Number(e.getData('hp')), texture: e.texture.key,
+        type, x: e.x, y: e.y, screenX: e.x - cameraX, spawnedAt: Number(e.getData('born') ?? 0), displayWidth: e.displayWidth, hp: Number(e.getData('hp')), texture: e.texture.key,
         charging: type === 'corruptor' ? corruptorCharge(age) > 0 : false,
         dodge: type === 'sombra' ? dodgeStage(e.getData('motion') as SombraMotion, this.clock) : 'none',
       };

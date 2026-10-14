@@ -34,7 +34,7 @@ describe('route timeline', () => {
   });
   it('captions every teaching step in Spanish at its segment', () => {
     expect(captionAt(500)).toBe(TEXT.intro);
-    expect([captionAt(4000), captionAt(7000)]).toEqual([TEXT.moveHint, TEXT.fireHint]);
+    expect([captionAt(1500), captionAt(2500)]).toEqual([TEXT.moveHint, TEXT.fireHint]);
     expect(captionAt(16500)).toBe(TEXT.fragments);
     expect(captionAt(26500)).toBe(TEXT.firewall);
     expect(captionAt(37500)).toBe(TEXT.packetLoss);
@@ -63,8 +63,8 @@ describe('scripted spawns', () => {
   });
   it('introduce one bug first, then fragments, a swarm, and tempting fragments during the Marea', () => {
     const inSegment = (name: string, kind: string) => SPAWNS.filter(s => segmentAt(s.at) === name && s.kind === kind).length;
-    expect(SPAWNS.filter(s => s.at < 8000)).toHaveLength(0);
-    expect(SPAWNS.find(s => s.kind === 'glitchling')!.at).toBeGreaterThanOrEqual(8000);
+    expect(SPAWNS.filter(s => s.at < 8000).map(s => [s.kind, s.at, s.y])).toEqual([['glitchling', 3000, 96], ['glitchling', 5000, 60]]);
+    expect(SPAWNS.find(s => s.kind === 'glitchling')!.at).toBe(3000);
     expect(inSegment('firstBug', 'fragment')).toBe(0);
     expect(inSegment('fragments', 'fragment')).toBeGreaterThanOrEqual(6);
     expect(inSegment('swarm', 'glitchling')).toBeGreaterThan(inSegment('firstBug', 'glitchling'));
@@ -260,5 +260,5 @@ describe('run state carried into the guardian', () => {
 it('exposes unchanged instructional windows for instruction-first narrative scheduling', () => {
   expect(CAPTIONS).toHaveLength(12);
   for (const c of CAPTIONS) { expect(captionAt(c.start)).toBe(c.text); expect(c.end).toBeGreaterThan(c.start); }
-  expect(CAPTIONS.slice(0, 3).map(c => [c.start, c.end])).toEqual([[0, 3500], [3500, 5800], [5800, 8000]]);
+  expect(CAPTIONS.slice(0, 3).map(c => [c.start, c.end])).toEqual([[0, 1000], [1000, 2000], [2000, 8000]]);
 });

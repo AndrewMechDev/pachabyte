@@ -54,9 +54,9 @@ export function cameraScroll(ms: number): number {
 // Each hazard is captioned once, the first time it appears (A2: the Packet Loss line waits for the last wall to go).
 export interface Caption { readonly start: number; readonly end: number; readonly text: string }
 export const CAPTIONS: readonly Caption[] = [
-  { start: 0, end: 3500, text: TEXT.intro },
-  { start: 3500, end: 5800, text: TEXT.moveHint },
-  { start: 5800, end: 8000, text: TEXT.fireHint },
+  { start: 0, end: 1000, text: TEXT.intro },
+  { start: 1000, end: 2000, text: TEXT.moveHint },
+  { start: 2000, end: 8000, text: TEXT.fireHint },
   { start: 16000, end: 19500, text: TEXT.fragments },
   { start: 26000, end: 29500, text: TEXT.firewall },
   { start: 37000, end: 40500, text: TEXT.packetLoss },
@@ -91,8 +91,8 @@ export const quietSegment = (name: SegmentName | 'transition'): boolean => (QUIE
 // A2 re-placed everything after the fragments for the 98 s route; the Memory Leak fragments and the Bucle formation
 // belong to their hazard modules (memoryLeakRules.ts, loopRules.ts).
 export const SPAWNS: readonly Spawn[] = Object.freeze([
-  // First bug: one Glitchling at a time teaches dodge and shoot; then one Sombra de Error dodges a lined-up shot.
-  bug(9000, 96), bug(12000, 60), sombra(12500, 104), bug(14500, 132),
+  // Opening: hints first, then unchanged Glitchlings at3s/5s; the first Sombra still arrives at12.5s.
+  bug(3000, 96), bug(5000, 60), sombra(12500, 104), bug(14500, 132),
   // Fragments: a safe middle line, then risky lines hugging the edges and guarded by bugs and one Corruptor.
   knot(16500, 97), corruptor(17000, 70), knot(17200, 97), knot(17900, 97),
   bug(19600, 40), knot(20000, 28), knot(20700, 28), knot(21400, 28),

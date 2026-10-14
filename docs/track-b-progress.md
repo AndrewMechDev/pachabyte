@@ -1,18 +1,94 @@
 # Track B continuation progress
 
-## Current worktree scope — S2 / Checkpoint 2 (2026-10-14)
+## Current worktree scope — S3 / Checkpoint 2 (2026-10-14)
 
 Current baseline is `759461a` on `feat/track-b-ui-map` in the Track B worktree. B1–B5 are already integrated. The PRINCIPAL (Claude) owns release documentation, main merges and deployment; this worktree owns authorized game code/tests. No main access, synchronization, installs, release-file edits or remote operations are part of these bounded Checkpoint 2 units.
 
-Task 0 is verified and committed locally as `9e33b9a1c190f396d46f00677a3c5d3862082901`. Parent reran typecheck and all 35 files/394 tests, inspected the WebGL eye, and applied the medium ordinary verification tier with RDD OFF. Precommit cached whitespace caught an extra EOF blank line in the feature document; parent removed that blank line only before the commit. S1 parent delivery is recorded below; S2 is the current bounded writer unit, stopping before S3. Feature/recovery locator: `odd/tasks/checkpoint-2-story-sharing.md`. Canvas eye capture remains pending Checkpoint 2 after the one bounded pilot attempt lost; no Task 0 retry is needed.
+Task 0 is verified and committed locally as `9e33b9a1c190f396d46f00677a3c5d3862082901`. Parent reran typecheck and all 35 files/394 tests, inspected the WebGL eye, and applied the medium ordinary verification tier with RDD OFF. Precommit cached whitespace caught an extra EOF blank line in the feature document; parent removed that blank line only before the commit. S1 parent delivery is recorded below; S3 is the current bounded writer unit, stopping before S4. Feature/recovery locator: `odd/tasks/checkpoint-2-story-sharing.md`. Canvas eye capture remains pending Checkpoint 2 after the one bounded pilot attempt lost; no Task 0 retry is needed.
 
 ### S1 parent delivery / S2 start
 
 S1 is committed as `2dd0b629960ac8c13c9ac1470663919c1ef10c35`. Parent repeated typecheck/37 files/405 tests and inspected card 2 Canvas; native read-only risk was medium, 473 authored lines, with global RDD OFF and ordinary verification. Initial staging was rejected against an obsolete smoke veto; parent re-read current 9.3/10.1 authorization and the exact helper/one-group diff, then scoped retry was approved. This was an authorization reconciliation, not a code failure. These facts and the S1 hash are recorded BEFORE S2 source writes. S2 only is now authorized; no S3 work.
 
+### S2 parent delivery / S3 start
+
+S2 committed as `0ff541d6b9e2505172d08adc39823d5b39d52640`. Parent repeated typecheck/39 files/418 tests and inspected Canvas story. Native read-only assessment was medium, 278 authored lines; global RDD OFF ordinary tier satisfied. Recorded BEFORE S3 source edits. Current bounded unit S3 stops before S4; no compression decision until measured residual gaps.
+
+### S3 bounded harness correction — verified (2026-10-14)
+
+Current outcome: S3 corrected runtime proof passed WebGL and Canvas in ONE controlled sequence; final focused/typecheck/full/build checks passed. Parent assessment/spot-check/commit remains pending; no S4. Correction edits are ONLY `tests/pacing-flow-check.mjs`, these two tracking documents and new s3 PNGs. No gameplay correction was established or made. Before/after tracked gameplay/test diff identity is unchanged: `78f7ac7c53ec3f2a1e4ca89fbbe9572221224462` for `RouteScene.ts`, `routeRules.ts`, `routeRules.test.ts`.
+
+Failure history is preserved below. Fresh parent verifier additionally reported: an initial `npm run` preview wrapper stripped `--port`/`--strictPort`, treating4196 as a positional Vite root, with connection refused; corrected direct installed Vite CLI strict4197 worked. No raw verifier command/receipt was supplied to this writer, so none is invented. Verifier then reproduced a real HARNESS failure at line30:92: expected shooting hint, actual firstBug story after8s. Blocking screenshot IO between3400/5500ms samples took about2300ms and let the world clock advance beyond the sample window. Diagnostic real-input snapshots separately confirmed movement1107ms, shooting2127ms, first enemy born3004.217 at3415.887/x311.935, second born5004.717 at5845.567; duration98s. No transition/pacing bug was established.
+
+Legacy `s3-opening-1-webgl.png` is preserved as a late/mislabeled image (two enemies and story, not3400ms first-enemy proof). `s3-diagnostic-webgl.png` is also preserved. Their precise image game clocks were not captured/stabilized and must NOT be inferred from earlier debug snapshots. Parent inspected both; Canvas was unseen in that diagnostic attempt. Original writer's intro-to-route timeout/premature preview cleanup, all hypotheses, and untouched full-suite timeout/recovery remain in the historical section below.
+
+The corrected harness collects1100/2100/3400/5500ms snapshots inside browser `requestAnimationFrame` callbacks BEFORE Node-side screenshot IO. Every original hint, zero/one/two-enemy, birth/position/size/HP,98s and narrative-priority assertion is retained. Added strict `[target,target+200ms)` sample bounds; each stage retains the original5000ms wait budget. Entry focuses the game, waits an active intro frame after the real80ms Enter release, then skips using real80ms Escape. No timeout was raised and no state/clock cheat API added. After all samples, real Esc pause stabilizes a separately labeled later capture; frozen clock is asserted before/after slow IO.
+
+| Renderer | Movement / shooting samples (ms) | First / second enemy samples (ms) | Actual enemy births (ms) |
+|---|---|---|---|
+| WebGL | 1101.416667 /2101.206667, zero enemies | 3404.196667 (one) /5500.856667 (two) | 3004.156667 /5003.996667 |
+| Canvas | 1102.960000 /2102.780000, zero enemies | 3405.610000 (one) /5502.310000 (two) | 3005.620000 /5005.410000 |
+
+First/second sampled screen x: WebGL312.933 at3404ms, then217.633/307.628 at5501ms; Canvas312.980 then217.680/307.673. All retained assertions passed, including native12px width, HP2 enemies/HP4 Kipu, screen intersection/drift, shooting hint and no S2 displacement. These snapshots—not slow screenshots—are temporal/count proof.
+
+Two NEW paused960x540 PNGs (native320x180 at3x) reviewed with `view_image` original detail:
+
+- `docs/design/checkpoint-2-captures/s3-corrected-paused-5507ms-webgl.png`: exact frozen world clock5506.906667ms,114098bytes.
+- `docs/design/checkpoint-2-captures/s3-corrected-paused-5502ms-canvas.png`: exact frozen world clock5502.310000ms,114235bytes.
+
+Both show unoccluded HUD/shooting caption, native purple enemy at right and the normal PAUSA panel. The panel partly obscures the earlier enemy; do NOT claim either image alone visually proves two unobstructed enemies or depicts the3400ms sample. This is honestly labeled paused-state visual evidence, while all four timing samples are read-only real-time data. No additional capture attempt or full-route pilot occurred.
+
+All exact commands use Track B cwd, `login:false` and private TEMP/TMP prefix. Native scoped elevated preview was `node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4197 --strictPort`, own session93239 (eb8d8e). Corrected browser `PACHA_URL=http://127.0.0.1:4197 node tests/pacing-flow-check.mjs`, session20808 (bd9c83), printed both PASS groups in bf3374; terminal exit0 was observed in bce128 BEFORE stopping own preview93239 via Ctrl+C, exit1/0e271d. Browser closed in `finally`. Principal4196 and protected listeners were untouched; no settings/firewall/install/global review changes.
+
+Final post-correction checks, guarded session2599/fa6dfa→c6b11a exit0:
+
+- `npx.cmd vitest run tests/pacingRules.test.ts tests/routeRules.test.ts`:2files/41tests passed (49886f).
+- `npx.cmd tsc --noEmit`:passed, guard continued.
+- `npm.cmd test`:40files/426tests passed on first correction run,4.79s (ec50f2); no correction rerun needed. Earlier full-suite eyeRelic5000ms timeout and426pass rerun remain historical evidence, not erased.
+- `npm.cmd run build`:passed74modules,13.11s; existing chunk/npm-config and nonfatal plugin-timing warnings (c6b11a).
+- `git diff --check`:passed after final tracking writes. Full long smoke remains CP2 only.
+
+Conditional compression remains untriggered:98s retained, nominal maxgap3.088889s outside threshold. Parent reconciles actual feature document/mirror622 (stale S2 at correction start), assesses/spot-checks and commits S3; no writer commit or S4 work. Human fit/full checkpoint remains the principal's later review.
+
+### Historical initial S3 partial writer outcome: opening fixed, runtime proof unavailable
+
+S3 source/deterministic proof is complete, but required early browser/capture proof is unavailable after one attempt. Parent verification/commit remains pending; S4 was not started. Delegated direct because the actual screen-occupancy model, intentional timing expectations, minimal debug additions and runtime harness belong to one bounded behavior. S2 hash/tier/checks were recorded BEFORE source edits.
+
+The first two existing Glitchlings move from 9000/12000 to 3000/5000 ms, preserving their y96/y60, HP2, native12x10 art, hitbox, drift, chase, score and all later spawns. Unchanged arrival copy now occupies intro0–1000, movement1000–2000, fire2000–8000 ms. Both teaching cues appear before the first shootable enemy; arrival remains fully instructional through8s, so S2's firstBug narrative at8s and other slots remain unchanged. Segment bounds, hazards, pickups, score rules and route duration stay fixed. Route adds only birth-time metadata and read-only enemy spawn/display-width fields for proof; no clock, focus, reduced-motion, input or physics behavior changes.
+
+#### Measured nominal screen occupancy
+
+`pacingRules.ts` derives native frame-screen intersections, not just timestamps or arbitrary residence windows. Glitchling centre330, frame12 and screen drift45px/s yield first visible entry at spawn+88.888889ms. Fragments use9px/scroll32, Sombra uses actual20px cell/drift38, pickups16px/scroll32. Corruptor entry/exit use the actual eased/hover/exit function with24px cell and fractional-ms bisection; ranged residence clips at actual quiet-segment purges. Fragment/pickup intervals clip at their first actual Marea swallow. Native cells are visual bounds, not physics hitboxes; padded art can shift first occupied pixels within those cells.
+
+The plan includes every scripted spawn/pickup, three Firewall telegraphs/columns, three Packet Loss columns (lost outlines remain visible), fourteen ember marker/impact intervals, three Memory Leak zones/four carried fragments, Marea's visible front, the real shootable loop eye82–89.8s, and nine loop-formation intervals clipped at actual resets/threshold. Decorative sky/plume/clouds, HUD, captions, player projectiles and player-dependent drops/orbs do NOT count. This is nominal un-killed/uncollected occupancy; player kills, collection, collision removals or early loop breaks may create emptiness. It is not a promise about arbitrary player actions.
+
+Observed actual-plan output:91 intervals (38enemy,23fragment,5pickup,24hazard,1target). Original first-entry dead time/max gap9088.888889ms; after the opening fix, the ONLY gap outside threshold is0–3088.888889ms. All subsequent nominal intervals join/overlap through90s. No residual gap exceeds5s, so conditional segment compression is NOT triggered: old/new total is98000→98000ms. No extra rules/test/pilot surfaces were needed; all approved hazards and S2 narrative slots are retained. Threshold90–98s is the explicit excluded quiet phase.
+
+#### Commands and failures (all retained)
+
+Every invocation uses explicit Track B cwd, `login:false`; test/build/preview/browser commands use the same-invocation private TEMP/TMP prefix documented below. No normalizer needed; final source writes preceded functional checks.
+
+| Command / phase | Observed result |
+|---|---|
+| `npx.cmd vitest run tests/pacingRules.test.ts tests/routeRules.test.ts` initial RED | Exit1,438534:3new failures/33existing route passes; actual9088.89ms>5000, old9/12s timing, old hint windows |
+| `npx.cmd vitest run tests/pacingRules.test.ts` complete-plan RED | Exit1,08ec42:4failures, including actual-plan maxgap9088.89ms>5000 before source timing change |
+| Focused pacing+route GREEN | Exit0,cd6895:2files/41tests; intentional old opening/hint expectations updated, unrelated assertions retained |
+| `npx.cmd vitest run tests/pacingRules.test.ts --silent=false` | Exit0,f05e57:8tests; printed actual plan98s, only3.088889s opening gap and category counts above |
+| `npx.cmd tsc --noEmit` | Passed; guarded invocation continued to full suite |
+| `npm.cmd test` attempt1 | Exit1,2c54b8/session39304:425passed/1failed. UNTOUCHED eyeRelic binary-alpha/margin test exceeded its5000ms timeout (5765ms). Transform93.56s acrossworkers. Build was not reached. No assertion or timeout changed. |
+| Same full suite bounded rerun | Passed40files/426tests,a10dc0/session97372,3.82s. Transform8.78s; timeout is load-sensitive evidence, not erased or proven root cause. No further unit retries. |
+| `npm.cmd run build` after rerun | Exit0,120287:74modules; existing nonfatal chunk/npm-config warnings |
+| `node tests/pacing-flow-check.mjs`, `PACHA_URL=http://127.0.0.1:4190` | Exit1,c67a4e/session62058:wait for Route after real intro Escape timed out30000ms at line22, BEFORE early timing checks/captures. No s3 images produced; Canvas was not reached. Cause unconfirmed, no retry/code workaround. |
+| Full smoke | Deferred CP2 only; no route pilot or smoke/pilot edits |
+| `git diff --check` | Passed after tracking write; line-ending warnings only |
+
+Scoped elevated preview and local Edge command were approved based on existing sandbox limitations. Own preview `npx.cmd vite preview --host 127.0.0.1 --port 4190 --strictPort`, session85648, was stopped via Ctrl+C (exit1,0a3dcf) while the browser wait was STILL pending: this is an owned cleanup-order error and is recorded, not claimed as the timeout cause. Browser subsequently timed out and closed in its `finally`. Exact browser invocation: `$env:TEMP="$PWD\node_modules\.tmp"; $env:TMP=$env:TEMP; New-Item -ItemType Directory -Force $env:TEMP | Out-Null; $env:PACHA_URL='http://127.0.0.1:4190'; node tests/pacing-flow-check.mjs`, explicit Track B workdir, `login:false`, default PowerShell, native `require_escalated`. Initial exec receipt4b95a5 yielded session62058 after10.089264s; poll03434b yielded it STILL running after5.064153s; preview stop0a3dcf exited1 after0.148687s; subsequent browser completionc67a4e exited1 with the30000ms wait timeout. No absolute launch timestamp was captured. No own server/browser intentionally remains. No protected process control, settings/firewall/install/main access or RDD toggle occurred. No `docs/ruta01-*.png` or s3 capture generated, no restoration needed.
+
+The browser attempt is INCONCLUSIVE, not proof of broken pacing or a transition bug: owned preview was stopped before the pending wait completed. Fresh bounded parent verification must distinguish harness/cleanup from a real transition issue. Early first/two-enemy visual/timing proof in both renderers remains pending parent/CP2; do NOT claim those browser assertions or images passed. Required source tests passed after the retained timeout rerun, but writer delivery is partial until runtime evidence is supplied independently. Rollback is opening/hint data, pure pacing model/tests, additive birth/debug fields and S3 harness/tracking only. Requests for PRINCIPAL: report98s retained by measurement, nominal-vs-player-action caveat, and pending early capture/full-checkpoint evidence. Parent owns assessment/spot-check/commit; stop before S4.
+
 ### S2 acceptance, schedule and invariants
 
-S2 writer verification is complete; parent assessment/spot-check/commit remains pending. Delegated direct: pure schedule/queue/text, small route integration and deterministic/browser proof form one behavior. No S3 work started. The S1 commit/ordinary tier and obsolete staging-veto reconciliation were recorded above and in the feature document BEFORE S2 source edits.
+S2 writer proof below is historical; parent delivery is recorded above. Delegated direct: pure schedule/queue/text, small route integration and deterministic/browser proof form one behavior. No S3 work started. The S1 commit/ordinary tier and obsolete staging-veto reconciliation were recorded above and in the feature document BEFORE S2 source edits.
 
 The four compatible suggested intents retain exact wording and existing lore. Duration is 2800 ms each, derived from unchanged `SEGMENTS` and newly exported read-only `CAPTIONS`:
 
