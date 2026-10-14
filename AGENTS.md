@@ -33,7 +33,7 @@ Follow [the Art Bible](docs/ART_BIBLE.md). Placeholder dimensions are not produc
 
 ## Repository and deployment boundaries
 
-The canonical folder currently has Git metadata but no initial history (no HEAD). Do not bootstrap an initial commit, mass-stage files, create delivery branches, publish, push, deploy, use ambient credentials, or transfer files remotely without separate explicit authorization for the exact operation and destination. Conventional commit messages are appropriate after a repository is deliberately authorized and initialized; never add AI attribution or `Co-Authored-By` lines.
+The repository has history on `main` and a public remote `origin` (https://github.com/AndrewMechDev/pachabyte). `main` deploys to GitHub Pages through `.github/workflows/pages.yml` (live: https://andrewmechdev.github.io/pachabyte/). Work on a feature branch or git worktree and commit per work unit with Conventional Commits; never add AI attribution or `Co-Authored-By` lines. **Pushing to `main` (which deploys) needs the user's explicit go-ahead in the current session.** Never force-push, never use ambient credentials, and never transfer files to other destinations without separate explicit authorization. Never delete a `node_modules` that may be a junction with `rm -rf`. Everything that is left to do, with the exact order and rules, is in `docs/CONTINUATION_PLAN.md`.
 
 ## Methodology
 
