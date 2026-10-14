@@ -82,6 +82,11 @@ const clickNav=(event:Event)=>{
   else if(button.id==='retry') navigate(current.view);
 };
 const nav=document.getElementById('navigation')!;
+// Phaser caches the canvas bounds: opening Ajustes or scrolling moves the canvas without a resize event, so map taps would land on the wrong game pixel.
+const refreshBounds=()=>game.scale.updateBounds();
+const settings=document.getElementById('settings');
+settings?.addEventListener('toggle',refreshBounds);
+window.addEventListener('scroll',refreshBounds,{passive:true});
 nav.addEventListener('click',clickNav);
 host.addEventListener('pointerdown',pointerFocus);
 document.addEventListener('focusin',focusState);
@@ -90,6 +95,7 @@ window.addEventListener('focus',focusState);
 game.events.once('ready',()=>{ host.focus(); focusState(); });
 game.events.on(VIEW_EVENT,focusState);
 game.events.once('destroy',()=>{
+  settings?.removeEventListener('toggle',refreshBounds); window.removeEventListener('scroll',refreshBounds);
   nav.removeEventListener('click',clickNav); host.removeEventListener('pointerdown',pointerFocus);
   document.removeEventListener('focusin',focusState);
   window.removeEventListener('blur',focusState); window.removeEventListener('focus',focusState);

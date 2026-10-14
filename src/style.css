@@ -1,29 +1,84 @@
-:root { color-scheme: dark; font-family: system-ui, sans-serif; color: #e7e6cf; background: #122e36; }
+/* Page shell: Andean night (prepared art) behind a calm dark panel; controls are neon edges with stepped chakana corners. */
+:root { color-scheme: dark; font-family: system-ui, sans-serif; color: #e7e6cf; background: #0a121a; }
 * { box-sizing: border-box; }
-body { margin: 0; min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: 24px 16px; }
-main { width: min(100%, 960px); min-width: 0; text-align: center; }
+body { margin: 0; min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: 24px 16px;
+  /* Pixel art stays crisp when stretched; the fallback colour shows while the image loads. */
+  background: #0a121a url('../assets/prepared/page-bg-v1-640x360.webp') center / cover no-repeat; image-rendering: pixelated; }
+/* Fixed art only where it is cheap; phones keep it scrolling with the page. */
+@media (hover: hover) and (pointer: fine) { body { background-attachment: fixed; } }
+/* Flat dark veil: the art shows at the sides while the game surround stays quiet. */
+/* The column stays 960 px wide (an integer 16:9 canvas at 1000 px viewports: a fractional height would blend a stray row of the page
+   colour into the canvas); the panel is a pseudo-layer that reaches into the body padding, so it never changes the layout or overflows. */
+main { position: relative; isolation: isolate; width: min(100%, 960px); min-width: 0; text-align: center; }
+main::before { content: ''; position: absolute; inset: -16px; z-index: -1; background: rgba(8, 16, 24, 0.8); border: 2px solid #2b2a6b; pointer-events: none; }
 header { margin-bottom: 20px; }
-h1 { margin: 0; color: #edc76c; font-size: clamp(28px, 5vw, 44px); letter-spacing: .06em; }
+h1 { margin: 0; line-height: 0; }
+h1 img { display: block; width: 320px; max-width: 100%; height: auto; margin: 6px auto 0; image-rendering: pixelated; }
 p { margin: 10px 0; }
 .eyebrow { color: #64d6c7; font-size: 12px; letter-spacing: .16em; }
-#game { width: 100%; aspect-ratio: 16 / 9; overflow: hidden; outline: 2px solid #3a6770; background: #213f4b; }
+#game { width: 100%; aspect-ratio: 16 / 9; overflow: hidden; outline: 2px solid #5a55c8; background: #213f4b; }
 #game:focus-visible { outline: 3px solid #edc76c; }
 canvas { display: block; image-rendering: pixelated; }
 .controls { line-height: 1.8; margin-top: 20px; }
 .controls strong { color: #edc76c; }
 .note { color: #b4c4c4; font-size: 13px; line-height: 1.6; }
-@media (max-height: 540px) { body { padding: 8px; } header { margin-bottom: 8px; } h1 { font-size: 24px; } .eyebrow, .note { display: none; } main { max-width: 720px; } }
+@media (max-height: 540px) { body { padding: 16px; } header { margin-bottom: 8px; } h1 img { width: 160px; margin-top: 0; } .eyebrow, .note { display: none; } main { max-width: 720px; } }
 
 h2 { margin: 10px 0; font-size: clamp(18px, 3vw, 24px); }
-#navigation { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 12px 0 18px; }
-button { font: inherit; font-weight: 600; padding: 10px 14px; border: 1px solid #64d6c7; border-radius: 6px; background: #213f4b; color: #e7e6cf; cursor: pointer;
+#navigation { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 10px 12px; margin: 12px 0 18px; }
+
+/* Controls. The neon edge is the ::before layer and the face the ::after layer, both cut with the same stepped polygon,
+   so the edge follows the corners. clip-path would also clip an outline, so it lives on the pseudo-layers and the element
+   itself stays unclipped: the focus ring below is a plain outline. */
+button, #settings summary {
+  --accent: #64d6c7; --face: #1d1b4a; --face-hover: #2b2870; --edge: 2px;
+  --o: 10px; --o2: 5px; --i: calc(var(--o) - var(--edge)); --i2: calc(var(--i) / 2);
+  position: relative; isolation: isolate; min-height: 44px; padding: 10px 20px; border: 0; background: transparent; color: #e7e6cf;
+  font: inherit; font-weight: 600; letter-spacing: .02em; cursor: pointer; user-select: none;
+  /* Static glow that follows the stepped shape (drop-shadow reads the clipped alpha, box-shadow would be a rectangle). */
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 45%, transparent));
   /* Named properties only, ease-out so feedback starts immediately; nothing animates on keyboard-driven game actions. */
-  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), background-color 120ms ease, border-color 120ms ease; }
-@media (hover: hover) { button:hover { background: #2a4c59; } }
-button:active { transform: scale(0.97); }
-button[aria-pressed="true"] { background: #345b60; border-color: #edc76c; }
-button:focus-visible { outline: 3px solid #edc76c; outline-offset: 3px; }
+  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1); }
+button::before, #settings summary::before, button::after, #settings summary::after { content: ''; position: absolute; z-index: -1;
+  transition: background-color 120ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 120ms cubic-bezier(0.23, 1, 0.32, 1); }
+button::before, #settings summary::before { inset: 0; background: var(--accent);
+  clip-path: polygon(var(--o) 0, calc(100% - var(--o)) 0, calc(100% - var(--o)) var(--o2), calc(100% - var(--o2)) var(--o2), calc(100% - var(--o2)) var(--o), 100% var(--o),
+    100% calc(100% - var(--o)), calc(100% - var(--o2)) calc(100% - var(--o)), calc(100% - var(--o2)) calc(100% - var(--o2)), calc(100% - var(--o)) calc(100% - var(--o2)), calc(100% - var(--o)) 100%,
+    var(--o) 100%, var(--o) calc(100% - var(--o2)), var(--o2) calc(100% - var(--o2)), var(--o2) calc(100% - var(--o)), 0 calc(100% - var(--o)),
+    0 var(--o), var(--o2) var(--o), var(--o2) var(--o2), var(--o) var(--o2)); }
+button::after, #settings summary::after { inset: var(--edge); background: var(--face);
+  clip-path: polygon(var(--i) 0, calc(100% - var(--i)) 0, calc(100% - var(--i)) var(--i2), calc(100% - var(--i2)) var(--i2), calc(100% - var(--i2)) var(--i), 100% var(--i),
+    100% calc(100% - var(--i)), calc(100% - var(--i2)) calc(100% - var(--i)), calc(100% - var(--i2)) calc(100% - var(--i2)), calc(100% - var(--i)) calc(100% - var(--i2)), calc(100% - var(--i)) 100%,
+    var(--i) 100%, var(--i) calc(100% - var(--i2)), var(--i2) calc(100% - var(--i2)), var(--i2) calc(100% - var(--i)), 0 calc(100% - var(--i)),
+    0 var(--i), var(--i2) var(--i), var(--i2) var(--i2), var(--i) var(--i2)); }
+button:active, #settings summary:active { transform: scale(0.97); }
+/* Pressed or open: a thicker edge, a tinted face and a solid bar along the bottom, so the state never relies on colour alone. */
+button[aria-pressed="true"], #settings[open] > summary { --edge: 3px; }
+button[aria-pressed="true"]::after, #settings[open] > summary::after { background: color-mix(in srgb, var(--accent) 24%, var(--face)); box-shadow: inset 0 -5px 0 var(--accent); }
+button:focus-visible, #settings summary:focus-visible { outline: 3px solid #f4ecc8; outline-offset: 4px; }
 button[hidden] { display: none; }
+@media (hover: hover) {
+  button:hover::after, #settings summary:hover::after { background: var(--face-hover); }
+  button[aria-pressed="true"]:hover::after, #settings[open] > summary:hover::after { background: color-mix(in srgb, var(--accent) 32%, var(--face-hover)); }
+}
+
+/* Accents: turquoise route, magenta guardian, orange retry, gold map, calm violet settings. */
+[data-view="route"] { --accent: #3ee8d4; }
+[data-view="guardian"] { --accent: #ff4fb8; }
+#retry { --accent: #ff8f3f; }
+#choose { --accent: #edc76c; }
+#settings summary, #settings button { --accent: #9b8cff; --face: #211e55; --face-hover: #302c7c; }
+
+/* Ajustes disclosure: native <details>, in flow so opening it never overlays the canvas. */
+#settings { max-width: 100%; }
+#settings summary { display: flex; align-items: center; justify-content: center; gap: 10px; list-style: none; }
+#settings summary::-webkit-details-marker { display: none; }
+#settings .chevron { width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-2px) rotate(45deg); transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1); }
+#settings[open] .chevron { transform: translateY(2px) rotate(-135deg); }
+.settings-panel { display: grid; gap: 10px; margin-top: 12px; }
 #view-result { line-height: 1.5; }
 
-@media (prefers-reduced-motion: reduce) { button { transition: none; } button:active { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  button, #settings summary, #settings .chevron, button::before, #settings summary::before, button::after, #settings summary::after { transition: none; }
+  button:active, #settings summary:active { transform: none; }
+}

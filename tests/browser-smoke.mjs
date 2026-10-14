@@ -71,6 +71,8 @@ try {
   const frames = count => page.evaluate(n => new Promise(resolve => { let i = 0; const step = () => (++i >= n ? resolve() : requestAnimationFrame(step)); requestAnimationFrame(step); }), count);
   const canvas = page.locator('canvas');
   const button = name => page.getByRole('button', { name, exact: true });
+  // "Sonido" and "Reducir movimiento" live in the closed-by-default "Ajustes" disclosure; open it with the keyboard.
+  const openSettings = async () => { if (!(await page.locator('#settings').evaluate(d => d.open))) { await page.locator('#settings > summary').focus(); await page.keyboard.press('Enter'); } };
   const activeId = () => page.evaluate(() => document.activeElement?.id ?? '');
   // Per-frame sampler: `project` runs in the page on each snapshot and returns a compact record.
   const startSampler = (name, project) => page.evaluate(([key, source]) => {
@@ -129,7 +131,9 @@ try {
   const fresh = await snap();
   assert.equal(fresh.node, 'corrupted');
   assert.deepEqual(fresh.progress, { route: false, guardian: false });
-  for (const name of ['Jugar ruta', 'Ir a Amaru', 'Sonido: sí', 'Reducir movimiento: no']) assert.ok(await button(name).isVisible(), `${name} must be visible on the map`);
+  for (const name of ['Jugar ruta', 'Ir a Amaru']) assert.ok(await button(name).isVisible(), `${name} must be visible on the map`);
+  await openSettings();
+  for (const name of ['Sonido: sí', 'Reducir movimiento: no']) assert.ok(await button(name).isVisible(), `${name} must be visible on the map`);
   for (const name of ['Mapa', 'Reintentar']) assert.equal(await button(name).isVisible(), false, `${name} stays hidden on the map`);
   await canvas.screenshot({ path: 'docs/ruta01-map.png' });
   // Native button activation: Enter and Space on focused buttons, focus always returns to the game.
@@ -1077,6 +1081,7 @@ try {
 
   // ================================================================== 7. sound
   stage = '7 sound toggle';
+  await openSettings();
   await button('Sonido: sí').click();
   assert.equal(await button('Sonido: no').getAttribute('aria-pressed'), 'false');
   assert.equal(await activeId(), 'game');
@@ -1109,6 +1114,7 @@ try {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(`${baseURL}/${debugQuery}`, { waitUntil: 'networkidle' });
   await wait(() => window.pachaDebug?.().scene === 'map');
+  await openSettings(); // getByRole skips the hidden controls of a closed disclosure
   assert.equal(await button('Reducir movimiento: sí').getAttribute('aria-pressed'), 'true', 'the OS preference initialises the toggle');
   await canvas.click();
   await page.keyboard.press('2');
@@ -1131,6 +1137,7 @@ try {
   assert.ok(calm.every(s => s.fx === 0), 'reduced motion: no particles');
   assert.deepEqual([...new Set(calm.map(s => s.frame))], ['idle'], 'reduced motion: Kipu stays on the neutral frame');
   assert.ok(calm.some(s => s.stage === 'anticipation') && calm.some(s => s.sig === TEXT.pulse), 'telegraphs remain under reduced motion');
+  await openSettings();
   await button('Reducir movimiento: sí').click();
   assert.equal(await activeId(), 'game');
   await startSampler('lively', calmProject);

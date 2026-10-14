@@ -17,7 +17,7 @@ The old parallel split, forbidden gameplay/README/smoke surfaces, deferred Ajust
 | 1 | Branch synchronization and private dependencies | Verified: refs equal, private dependencies and npm ls/typecheck; TEMP/TMP-prefixed full unit run passes 33 files/347 tests. WebGL smoke independently unavailable at browser launch |
 | 2 | B1: prepare six sources, integration notes, statuses and credits | Complete: `fc3036a27a376ff4cb9f3b31141ecaf2a1139289`; self-tests, typecheck, 33 files/347 tests, build; WebGL W2 and Canvas C1 pass 22 groups each. W1 pilot failure retained |
 | 3 | B2: map selection, pure rules, font-safe text and six nodes | Complete locally (see B2 section); unit 368/368, smoke W1+W2 WebGL and C1 Canvas green; restored-node look not yet seen in game |
-| 4 | B3: page logo/background/theme and Ajustes | Pending; Ajustes is now in scope, with precise smoke button-helper updates |
+| 4 | B3: page logo/background/theme and Ajustes | Complete locally (see B3 section); page check 14/14, smoke W2+W3 WebGL and C2 Canvas green after recorded flakes |
 | 5 | B4: SHOTS integration | Pending; preserve invisible 6x3 bodies, speed, Nokia twins and reduced-motion frame |
 | 6 | B5: LOOP_NODE_EYE integration | Pending; preserve node HP, location, bob and hitbox |
 | 7 | P3: Pulso de la Trama | Pending; record Spanish design decision first, then pure-rule tests and gameplay/UI/sound/smoke |
@@ -132,7 +132,19 @@ Evidence observed in this checkout (TEMP/TMP prefix): RED `vitest run tests/mapR
 
 Screenshots reviewed (scratchpad, not committed): Arequipa selected and RUTA 04 selected in WebGL and Canvas, plus a 3x magnified comparison of selected/unselected markers. Title, card and key bar are readable over the art; selection brackets are gold corners and legible but subtle. Reduced-motion Canvas run confirmed `reducedMotion: true` and the selection and locked-Enter behavior. Not yet seen: the restored Arequipa node (pulse) in game, because no debug hook sets `progress.guardian`; it is covered by unit tests only. Smoke-rewritten `docs/ruta01-*.png` were restored with an exact-path `git restore` and not committed.
 
-Next source task: B3, the page UI (logo, background, themed buttons, Ajustes disclosure).
+## B2 follow-up and B3 page UI (2026-10-14)
+
+**B2 follow-up** (`e6b3eb6`): pointer-down taps on the map (`nodeAt`/`tapOutcome` in `mapRules.ts`: the first tap selects, a tap on the selected playable node acts), 2 px selection brackets, unused `TEXT.map*` keys removed. RED: 4 failing tests (`nodeAt is not a function`); GREEN 372 tests.
+
+**B3** (delegated writer, parent-verified): `index.html` logo `<h1><img alt="PachaByte">`; night background from `page-bg-v1-640x360.webp` (Vite bundles it with relative URLs); themed stepped-corner buttons (turquoise, magenta, orange, gold, violet for Ajustes; the neon edge and face are `::before`/`::after` layers so the `outline` focus ring is not clipped); native `<details id="settings"><summary>Ajustes</summary>` holding `#sound` and `#motion` (ids, texts and `aria-pressed` unchanged); 44 px targets; named transitions only; reduced motion honored. New `tests/page-ui-check.mjs` (14 assertions; run with `PACHA_URL=http://127.0.0.1:4190 node tests/page-ui-check.mjs`).
+
+Problems the parent found and fixed: (1) the writer's panel made the column 916 px wide, so the canvas was 916x515.25 and its last row blended the page color into the REVERSE frame (smoke: `unexpected REVERSE colors`); the column is back to 960 px and the dark panel is a `main::before` layer that never changes layout (canvas 960x540 at a 1000 px viewport). (2) `getByRole` skips the hidden buttons of a closed disclosure, so a third `openSettings()` hunk was needed before the OS-preference `getAttribute`. (3) Real bug: Phaser caches the canvas bounds, so opening Ajustes moved the canvas and a tap landed on the wrong game pixel (the first canvas click started the route). RED assertion `l)` in `page-ui-check.mjs` failed (`scene: route`); the fix in `main.ts` calls `game.scale.updateBounds()` on the details `toggle` and on page scroll; GREEN.
+
+Smoke hunks in `tests/browser-smoke.mjs`: `openSettings` helper after the `button` helper (~line 75); the map visibility list split so only the two settings buttons are checked after `await openSettings()` (~135); `openSettings()` before the first Sonido click (~1084), before the OS-preference assertion (~1117) and before the first Reducir movimiento click (~1139). No other line changed.
+
+Observed: typecheck exit 0, 35 files / 372 tests, build exit 0, page check PASS 14/14. Smoke on own preview 4190, unmodified apart from the hunks: W1 exit 1 (`touching a solid Packet Loss block must cost a heart`, known pilot flake), W2 exit 0, W3 exit 0, C1 exit 1 (`a Packet Loss hit only while touching a solid block`, known pilot flake), C2 exit 0. Runs that failed because of B3 itself (Nokia stray row; hidden-button lookup) were fixed before these. Screenshots reviewed at 1000x800 and 470x800 (closed, Ajustes open, focused): logo, buttons and panel read well; the background art is mostly covered by the panel at 1000 px and shows at wider windows. Honest verdict: good, not epic; a larger logo or decorative frame would need new art. Smoke screenshots under `docs/` were restored with an exact-path `git restore`.
+
+Next source task: B4 (SHOTS).
 ## Ordered test-environment diagnosis (2026-10-14)
 
 Status: diagnostic complete, full baseline blocked; no B1 edits. All commands explicitly use Track B and non-login PowerShell; no source/configuration changes or canonical inspection.
