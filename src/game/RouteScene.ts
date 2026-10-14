@@ -18,7 +18,7 @@ import { umbralRestore } from './balanceRules';
 import { FloaterPool, floaterView, hitStopActive, initialHitStop, triggerHitStop, worldStep, type FloaterSlot, type HitStop } from './effectsRules';
 import { completeRoute, initialProgress, type Progress } from './challengeRules';
 import { BUG_TEXTURES, HAZARD_TEXTURES, PICKUP_TEXTURES, createBugTextures, createHazardTextures, createTextures, createRetroFonts, createRouteTextures } from './textures';
-import { createEyeTextures, createShotTextures, loadShotSheets } from './fxTextures';
+import { createEyeTextures, createShotTextures, loadEyeSheet, loadShotSheets } from './fxTextures';
 import { ImpactPool, drawImpacts, shotFrame, shotKindFor, shotOrigin, shotTextureKey, type ShotKind } from './shotFx';
 import { EYE, drawShatter, eyeFrameFor, eyeOrigin, eyeTextureKey, shatterPieces } from './eyeRelic';
 import { createSheetTextures, loadSpriteSheets } from './sheetTextures';
@@ -170,6 +170,7 @@ export class RouteScene extends Phaser.Scene {
     if (!this.textures.exists('amaru-arena')) this.load.image('amaru-arena', arenaUrl);
     loadSpriteSheets(this, ROUTE_SHEETS);
     loadShotSheets(this);
+    loadEyeSheet(this);
   }
 
   create(): void {
@@ -1047,8 +1048,8 @@ export class RouteScene extends Phaser.Scene {
         g.fillRect(dx < 0 ? cx : cx - 2, cy, 3, 1).fillRect(cx, dy < 0 ? cy : cy - 2, 1, 3);
       }
     }
-    // HP pips sit above the eye now: its cables hang below.
-    for (let i = 0; i < LOOP.hp; i++) g.fillStyle(i < this.loop.hp ? GOLD : DIM).fillRect(p.x - 9 + i * 4, p.y - h - 5, 3, 2);
+    // HP pips sit above the eye now: its cables hang below. B5: the prepared eye reaches 14 px above the node (15 in the hit flash), so the pips ride 3 px higher (EYE.pipsAbove) to stay clear of it.
+    for (let i = 0; i < LOOP.hp; i++) g.fillStyle(i < this.loop.hp ? GOLD : DIM).fillRect(p.x - 9 + i * 4, p.y - EYE.pipsAbove, 3, 2);
   }
 
   private hazardSnapshot() {

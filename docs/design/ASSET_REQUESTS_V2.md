@@ -21,7 +21,7 @@ Los seis originales recibidos se conservan sin cambios en `assets/incoming/`, co
 |---|---|---|
 | `MAP_TRAMA.png` | Recibido → preparado; integración B2 pendiente | `map-trama-v1-320x180.png`; comparación `map-trama-v1-640x360.png` |
 | `LOGO_PACHABYTE.png` | Recibido → preparado; integración B3 pendiente | `logo-pachabyte-v1-320x107.png`, alfa binaria y chullo completo |
-| `LOOP_NODE_EYE.png` | Recibido → preparado; integración B5 pendiente | `loop-node-eye-v1-40x56.png`, 7 celdas con margen; orden real confirmado |
+| `LOOP_NODE_EYE.png` | Recibido → preparado → integrado (B5, 2026-10-14); sin aprobación humana registrada | `loop-node-eye-v1-40x56.png`, 7 celdas con margen, mostrada a tamaño nativo (el disco ocupa 26 px) con ancla medida (20,21); solo en la Ruta, WebGL y Canvas |
 | `SHOTS.png` | Recibido → preparado → integrado (B4, 2026-10-14); sin aprobación humana registrada | Normal 16x12, Ráfaga 24x20, impacto 16x16; 4 cuadros por hoja, en Ruta y Amaru, WebGL y Canvas |
 | `BG_ROUTE_NEON.png` | Recibido → preparado; integración B6 pendiente | `bg-route-neon-v1-320x180.png`; contraste jugable todavía no verificado |
 | `PAGE_BG.png` | Recibido → preparado; integración B3 pendiente | `page-bg-v1-640x360.webp`, compresión sin pérdida, 359124 bytes; comparación 320x180 PNG |

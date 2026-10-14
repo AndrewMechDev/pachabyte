@@ -1,14 +1,15 @@
 /// <reference types="vite/client" />
 import Phaser from 'phaser';
-import { paint } from './textures';
 import { derive } from './amaruTextures';
 import { convertPixels } from './nokiaPalette';
 import { SHOT_KINDS, setImpactFrames, shotTextureKey } from './shotFx';
 import { SHOT_SHEETS, frameRect, opaquePixels, type ShotSheetName } from './shotSheets';
-import { EYE_COLORS, EYE_FRAMES, eyeRows, eyeTextureKey } from './eyeRelic';
+import { EYE_FRAMES, eyeTextureKey } from './eyeRelic';
+import { eyeFrameRect } from './eyeSheets';
 import normalUrl from '../../assets/prepared/shots-v1-normal-16x12.png';
 import rafagaUrl from '../../assets/prepared/shots-v1-rafaga-24x20.png';
 import impactUrl from '../../assets/prepared/shots-v1-impact-16x16.png';
+import eyeUrl from '../../assets/prepared/loop-node-eye-v1-40x56.png';
 
 // Phaser side of the SHOTS art (B4, user art prepared in B1): the three prepared sheets are loaded as whole images and every
 // bolt frame is sliced into its own texture key (shot-<kind>-<frame>, plus the exact four-green twin with -nokia), as
@@ -59,7 +60,26 @@ export function createShotTextures(scene: Phaser.Scene, nokia: boolean): void {
   registerImpact(scene);
 }
 
-// The Bucle's eye relic: the seven frames of the future LOOP_NODE_EYE sheet (4 idle, hit, crack, break).
+// The Bucle's eye relic (B5): the prepared LOOP_NODE_EYE sheet (7 cells in one row) is loaded as a whole image and each
+// frame is sliced into its `loop-eye-<frame>` key (4 idle, hit, crack, break). The eye only appears in the Route scene
+// (the Guardian scene has no Bucle), so no four-green twin is needed. Same pattern as the shot sheets: queued in preload,
+// sliced in create, both safe to repeat when a scene restarts.
+const EYE_SHEET_KEY = 'sheet-loop-eye';
+
+// Call from preload(): queues the eye sheet unless a previous run of the game already loaded it.
+export function loadEyeSheet(scene: Phaser.Scene): void {
+  if (!scene.textures.exists(EYE_SHEET_KEY)) scene.load.image(EYE_SHEET_KEY, eyeUrl);
+}
+
 export function createEyeTextures(scene: Phaser.Scene): void {
-  for (const frame of EYE_FRAMES) paint(scene, eyeTextureKey(frame), eyeRows(frame), EYE_COLORS);
+  if (!scene.textures.exists(EYE_SHEET_KEY)) return;
+  const source = scene.textures.get(EYE_SHEET_KEY).getSourceImage() as Source;
+  EYE_FRAMES.forEach((frame, index) => {
+    const key = eyeTextureKey(frame);
+    if (scene.textures.exists(key)) return;
+    const { x, y, w, h } = eyeFrameRect(index);
+    const texture = scene.textures.createCanvas(key, w, h)!;
+    texture.context.drawImage(source, x, y, w, h, 0, 0, w, h);
+    texture.refresh();
+  });
 }

@@ -19,7 +19,7 @@ The old parallel split, forbidden gameplay/README/smoke surfaces, deferred Ajust
 | 3 | B2: map selection, pure rules, font-safe text and six nodes | Complete locally (see B2 section); unit 368/368, smoke W1+W2 WebGL and C1 Canvas green; restored-node look not yet seen in game |
 | 4 | B3: page logo/background/theme and Ajustes | Complete locally (see B3 section); page check 14/14, smoke W2+W3 WebGL and C2 Canvas green after recorded flakes |
 | 5 | B4: SHOTS integration | Complete locally (see B4 section); 378 tests, smoke W1+W2 WebGL and C1 Canvas green |
-| 6 | B5: LOOP_NODE_EYE integration | Pending; preserve node HP, location, bob and hitbox |
+| 6 | B5: LOOP_NODE_EYE integration | Complete locally (see B5 section); 385 tests, smoke W1+W2 WebGL and C2 Canvas green (C1 = Firewall flake) |
 | 7 | P3: Pulso de la Trama | Pending; record Spanish design decision first, then pure-rule tests and gameplay/UI/sound/smoke |
 | 8 | B6: neon route backdrop and readable accents | Pending; gameplay integration now belongs to this session |
 | 9 | UX fixes including shield/ENERGIA overlap | Pending |
@@ -150,7 +150,17 @@ Delegated writer, parent-verified. `src/game/shotSheets.ts` (pure slicing, alpha
 
 Evidence: RED `vitest run tests/shotFx.test.ts` failed on the missing module `../src/game/shotSheets` (module-missing failure, not an assertion failure); GREEN 20 tests in that file, full suite 35 files / 378 tests, typecheck exit 0, build exit 0. The new tests decode the real PNGs (grid, binary alpha, margins, anchors, every REVERSE pixel is a Nokia green). Smoke on own preview 4190, unmodified: W1 exit 0, W2 exit 0, C1 exit 0 (22 groups each; the REVERSE frame check passed in all three). Captures reviewed: normal bolts and impacts in WebGL and Canvas (writer and parent), Ráfaga volley in WebGL (turquoise arrows with gold tips, fan reads as a volley but is dense at launch; no human sign-off), REVERSE frame in Canvas. Not seen: a Ráfaga volley in Canvas and a REVERSE impact burst in a browser frame (unit-tested only). `docs/ruta01-*.png` rewritten by the smoke were restored and not committed.
 
-Next source task: B5 (LOOP_NODE_EYE), then CHECKPOINT 1.
+## B5 LOOP_NODE_EYE integration (2026-10-14)
+
+Delegated writer, parent-verified. New `src/game/eyeSheets.ts` (pure slicing, alpha bounds, disc-center math); `eyeArt.ts` keeps only the frame-name type; `eyeRelic.ts` takes cell and anchor from the sheet; `fxTextures.ts` adds `loadEyeSheet` and slices `loop-eye-idle0..3`, `-hit`, `-crack`, `-break` from `loop-node-eye-v1-40x56.png` under the unchanged keys. `RouteScene.ts`: import plus `loadEyeSheet(this)` in `preload`, and the HP pip row moved from `p.y - h - 5` to `p.y - EYE.pipsAbove` (18) because the new eye's top tab reaches 14 px above the node and overlapped the pips (3 px, slightly beyond a minimal hunk). Node HP (5), position, bob, collision body, depth and `eyeFrameFor` are unchanged; the eye is not drawn in the Guardian scene, so no REVERSE twin was needed.
+
+Decisions: the full 40x56 sheet is used. A 24x32 or 28x40 derivative halves the content (~13x21 occupied) and loses the slit pupil and the stepped chakana, so neither was kept. The display anchor is (20, 21) in the cell (origin 0.5, 0.375), measured from the alpha of the idle gold frame; the JSON origin (20, 28) is 7 px below the visual eye, so it is not used. The programmatic shatter was undersized for the larger relic, so only its geometry was retuned (shard speeds 52/72/92, sizes 3/2/1, loosened cables start at row +14 and x -7/-3/3/7); counts, timings and determinism are unchanged.
+
+Evidence: RED `vitest run tests/eyeRelic.test.ts` failed on the missing module `../src/game/eyeSheets` (a missing-module failure; the pip and shatter changes have no RED of their own). GREEN 22 tests in that file, full suite 35 files / 385 tests, typecheck exit 0, build exit 0. Smoke on own preview 4190, unmodified: W1 exit 0, W2 exit 0, C1 exit 1 (`touching a Firewall column outside its gap must cost a heart`, known pilot flake), C2 exit 0. Captures reviewed: idle eye in the route (WebGL, parent), idle, hit, crack, break and four shatter frames in WebGL and Canvas (writer): the eye reads as the Bucle node, is about Kipu's size and covers neither Kipu nor the bolts. Captures under `docs/` were restored and not committed.
+
+Open risk (for the user): the visible disc is about 26 px while the hitbox is still 12x12 (unchanged by design), so bolts touch the gold frame about 7 px before registering. If this feels off in play the options are a larger hitbox or a smaller eye sheet. Human approval of the eye is not recorded.
+
+Next: CHECKPOINT 1 report (sync with main, full QA, report and stop).
 ## Ordered test-environment diagnosis (2026-10-14)
 
 Status: diagnostic complete, full baseline blocked; no B1 edits. All commands explicitly use Track B and non-login PowerShell; no source/configuration changes or canonical inspection.
