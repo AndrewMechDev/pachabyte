@@ -45,16 +45,33 @@ try {
     expect(copy.trim() === 'PROTOTIPO · RUTA 01', `outdated eyebrow: ${JSON.stringify(copy)}`);
   });
 
-  await check('a1) art disclosure is current and preserves pause, focus and achievement guidance', async () => {
-    const copy = await page.locator('main > p.note').last().innerText();
+  await check('a1) the footnote is one short line with the art disclosure and the two things a player needs', async () => {
+    const notes = await page.locator('main > p.note').allInnerTexts();
+    const copy = notes.at(-1) ?? '';
     expect(copy.includes('Arte generado con IA y elementos procedurales.'), 'current AI/procedural art disclosure missing');
     expect(!copy.includes('Arte provisional original') && !copy.includes('no son spritesheets finales'), 'obsolete art disclaimer remains');
-    for (const guidance of [
-      'Haz clic o usa Tab sobre el juego para jugar.',
-      'Al enfocar la navegación el juego se pausa; vuelve a enfocarlo para continuar.',
-      'Esc también pausa.',
-      'Los logros se reinician al recargar; Amaru siempre está disponible desde el mapa.',
-    ]) expect(copy.includes(guidance), `missing guidance: ${guidance}`);
+    for (const guidance of ['Haz clic en el juego para jugar con el teclado.', 'Los logros se reinician al recargar.']) expect(copy.includes(guidance), `missing guidance: ${guidance}`);
+    expect(!copy.includes('Al enfocar la navegación') && !copy.includes('Amaru siempre está disponible'), 'verbose guidance that the screen already shows is back');
+    expect(copy.length <= 140, `footnote is ${copy.length} characters, keep it to one short line`);
+  });
+
+  await check('m) map and intro hide the help/result lines the canvas already shows, but keep them readable for screen readers; play views show them', async () => {
+    const tab = await browser.newPage({ viewport: { width: 1000, height: 900 } });
+    await tab.goto(`${baseURL}/?debug=1`, { waitUntil: 'networkidle' });
+    await tab.waitForFunction(() => window.pachaDebug?.().scene === 'map');
+    const probe = () => tab.evaluate(() => Object.fromEntries(['view-help', 'view-result'].map(id => { const el = document.getElementById(id), r = el.getBoundingClientRect(); return [id, { text: el.textContent.trim(), w: r.width, h: r.height, role: el.getAttribute('role') }]; })));
+    const map = await probe();
+    for (const id of ['view-help', 'view-result']) expect(map[id].text.length > 0 && map[id].w <= 1 && map[id].h <= 1, `${id} must be visually hidden on the map but keep its text (${JSON.stringify(map[id])})`);
+    expect(map['view-result'].role === 'status', 'the result line stays a status region for screen readers');
+    await tab.getByRole('button', { name: 'Ir a Amaru', exact: true }).click();
+    await tab.waitForFunction(() => window.pachaDebug?.().scene === 'guardian');
+    const play = await probe();
+    for (const id of ['view-help', 'view-result']) expect(play[id].text.length > 0 && play[id].h > 10, `${id} must be visible while playing (${JSON.stringify(play[id])})`);
+    await tab.getByRole('button', { name: 'Mapa', exact: true }).click();
+    await tab.waitForFunction(() => window.pachaDebug?.().scene === 'map');
+    const back = await probe();
+    expect(back['view-help'].h <= 1 && back['view-result'].h <= 1, 'returning to the map hides them again');
+    await tab.close();
   });
 
   await check('a) one h1 whose only content is the logo image with alt "PachaByte"', async () => {

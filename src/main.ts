@@ -24,6 +24,9 @@ function render(state: ViewState): void {
   current = state;
   const copy = viewCopy(state);
   title.textContent = copy.title; help.textContent = copy.help; result.textContent = copy.result;
+  // The canvas already shows the map card, its key bar and the intro help; the DOM lines stay for screen readers only.
+  const canvasCovers = state.view==='map' || state.view==='intro';
+  help.classList.toggle('sr-only',canvasCovers); result.classList.toggle('sr-only',canvasCovers);
   host!.setAttribute('aria-label', copy.title + '. Juego controlado con teclado.');
   achievements.textContent = `Logros de la sesión: Ruta ${state.progress.route?'completada':'pendiente'} · Amaru ${state.progress.guardian?'liberado':'pendiente'}`;
   document.getElementById('choose')!.hidden = state.view==='map';
