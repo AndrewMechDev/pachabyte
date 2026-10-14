@@ -29,14 +29,21 @@ export class IntroScene extends Phaser.Scene {
   private lines: Phaser.GameObjects.BitmapText[] = [];
   private number!: Phaser.GameObjects.BitmapText;
   constructor() { super('IntroScene'); }
+  // Key bookkeeping starts here, before preload(): on a first visit preload downloads two textures, and the key that opened
+  // the intro can be released while they load. A keyup that fires before the listener exists would leave it "held" forever,
+  // and a manual skip would then wait for a release that never comes.
+  init(data: EntryInput = {}): void {
+    this.held = new Set(data.entryKeys ?? []); this.fresh = oncePerEvent(); this.fresh(data.entryEvent);
+    window.addEventListener('keyup', this.keyUp);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
+  }
   preload(): void {
     if (!this.textures.exists('amaru-arena')) this.load.image('amaru-arena', arenaUrl);
     if (!this.textures.exists('kipu-evaluation')) this.load.image('kipu-evaluation', kipuUrl);
   }
-  create(data: EntryInput = {}): void {
+  create(): void {
     this.state = initialIntro(); this.clock = 0; this.focused = true; this.skipDelta = true;
     this.pendingBlip = true; this.waitForRelease = false;
-    this.held = new Set(data.entryKeys ?? []); this.fresh = oncePerEvent(); this.fresh(data.entryEvent);
     // Set only when this scene actually appears; bypassing to Amaru never consumes the intro.
     this.registry.set(INTRO_SEEN_KEY, true);
     createRetroFonts(this);
@@ -49,13 +56,10 @@ export class IntroScene extends Phaser.Scene {
     this.add.bitmapText(Math.round((320 - INTRO_HELP.length * CELL_WIDTH) / 2), 160, fontKey(TEAL), INTRO_HELP, CELL_WIDTH);
     this.showCard();
     this.input.keyboard!.on('keydown', this.keyDown, this);
-    // Native keyup still arrives while the DOM navigation disables Phaser keyboard input.
-    window.addEventListener('keyup', this.keyUp);
     window.addEventListener('blur', this.blur);
     window.addEventListener('focus', this.focus);
     document.addEventListener('visibilitychange', this.visibility);
     this.game.events.on(FOCUS_EVENT, this.pageFocus, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.game.events.emit(VIEW_EVENT, { view: 'intro', outcome: 'playing', progress: { ...(this.registry.get('progress') ?? initialProgress()) } } satisfies ViewState);
     exposeDebug(() => ({
       scene: 'intro', card: this.state.card, elapsed: this.state.elapsed, clock: this.clock, done: this.state.done,
@@ -99,6 +103,7 @@ export class IntroScene extends Phaser.Scene {
     this.state = stepIntro(this.state, 0, false, action);
     if (this.state.done) this.waitForRelease = true; else this.showCard();
   }
+  // Native keyup still arrives while the DOM navigation disables Phaser keyboard input.
   private keyUp = (event: KeyboardEvent): void => { this.held.delete(event.code); };
   private blur = (): void => { this.focused = false; this.held.clear(); };
   private focus = (): void => {
