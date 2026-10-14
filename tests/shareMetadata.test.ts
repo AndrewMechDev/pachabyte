@@ -52,12 +52,14 @@ async function rgbPixels(png: Uint8Array): Promise<Uint8Array> {
   }
   expect(opaque).toBe(true); return rgb;
 }
-it('serves the exact1200x630 center crop of the authorized source, copied unchanged by the build', async () => {
+it('serves the approved 1200x630 composite card, copied unchanged by the build', async () => {
   const path = built ? 'dist/social-preview.png' : 'public/social-preview.png';
   expect(existsSync(path), `missing ${path}`).toBe(true);
   const bytes = readFileSync(path), rgb = await rgbPixels(bytes);
-  // User-selected public/02_amaru_escudo_roto.png is1920x1080. Center rectangle [360,225,1560,855], no redraw/rescale.
+  // User-supplied assets/incoming/SOCIAL_SCENE.png (1733x907) with the prepared logo composited on top, 1200x630 RGB.
+  // Pinned by pixel hash so only an intentional, reviewed change of the card can pass.
+  expect(existsSync('assets/incoming/SOCIAL_SCENE.png'), 'the untouched source scene must stay in assets/incoming').toBe(true);
   const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', rgb as BufferSource))].map(byte => byte.toString(16).padStart(2, '0')).join('');
-  expect(hash).toBe('f315768f02e72c939d83f829d9ee968bc56425a3f3597b3b5908eda1ebb844df');
+  expect(hash).toBe('481204f091161cc885f0e0693cc4a327d2c30f7dffa5804c9873c7a5155820d5');
   if (built) expect(bytes).toEqual(readFileSync('public/social-preview.png'));
-});
+}, 30_000);
