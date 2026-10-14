@@ -1,0 +1,211 @@
+{
+  "sources_before": {
+    "MAP_TRAMA": {
+      "path": "assets/incoming/MAP_TRAMA.png",
+      "size": [
+        1672,
+        941
+      ],
+      "mode": "RGB",
+      "sha256": "7275db0b39423058c563c5a0ee69841effc310b85125056d3a505bc36b59f95b"
+    },
+    "LOGO_PACHABYTE": {
+      "path": "assets/incoming/LOGO_PACHABYTE.png",
+      "size": [
+        2172,
+        724
+      ],
+      "mode": "RGBA",
+      "sha256": "9b8f9940643ae33217994a00e2ea2afd5e2131fd5b28a70acb04a546f457b7b2"
+    },
+    "PAGE_BG": {
+      "path": "assets/incoming/PAGE_BG.png",
+      "size": [
+        1672,
+        941
+      ],
+      "mode": "RGB",
+      "sha256": "7c41af723c5729b792206547800048f5d6416445e7b4be77b299d78299363e7b"
+    },
+    "LOOP_NODE_EYE": {
+      "path": "assets/incoming/LOOP_NODE_EYE.png",
+      "size": [
+        1659,
+        948
+      ],
+      "mode": "RGBA",
+      "sha256": "29c37d865f5d32900bf49fbca213d46e7d9df07df62f0b8b9ed1faea27153c2f"
+    },
+    "SHOTS": {
+      "path": "assets/incoming/SHOTS.png",
+      "size": [
+        1448,
+        1086
+      ],
+      "mode": "RGBA",
+      "sha256": "73eb76a3d23c05a6ee974a5d59cffc17072266a5c69a9d1b136da3bd1bbe3ca5"
+    },
+    "BG_ROUTE_NEON": {
+      "path": "assets/incoming/BG_ROUTE_NEON.png",
+      "size": [
+        1672,
+        941
+      ],
+      "mode": "RGB",
+      "sha256": "1d35097fd60afa688615baab5e69cf0f95c811a005a9fec50be922d1f30422aa"
+    }
+  },
+  "outputs": [
+    {
+      "path": "assets/prepared/map-trama-v1-320x180.png",
+      "size": [
+        320,
+        180
+      ],
+      "bytes": 140774,
+      "sha256": "18299fa3b244313598599414ef92b23ad05337145f51ea4012cbc9488a7aa799",
+      "alpha_extrema": [
+        255,
+        255
+      ],
+      "zoom": "b1-review-map-trama-v1-320x180-zoom.png",
+      "zoom_factor": 4
+    },
+    {
+      "path": "assets/prepared/map-trama-v1-640x360.png",
+      "size": [
+        640,
+        360
+      ],
+      "bytes": 515676,
+      "sha256": "725c0d6faf37753e3a3e08e56a861787072b244ab69802b647ebbb85eb8a0cf0",
+      "alpha_extrema": [
+        255,
+        255
+      ],
+      "zoom": "b1-review-map-trama-v1-640x360-zoom.png",
+      "zoom_factor": 2
+    },
+    {
+      "path": "assets/prepared/page-bg-v1-320x180.png",
+      "size": [
+        320,
+        180
+      ],
+      "bytes": 116819,
+      "sha256": "1dec1e6e1a525c0974205cada0d6a74c69b71320345219bc8bb53ecbe92ca2c2",
+      "alpha_extrema": [
+        255,
+        255
+      ],
+      "zoom": "b1-review-page-bg-v1-320x180-zoom.png",
+      "zoom_factor": 4
+    },
+    {
+      "path": "assets/prepared/page-bg-v1-640x360.webp",
+      "size": [
+        640,
+        360
+      ],
+      "bytes": 359124,
+      "sha256": "c7ec6674d5155ecb74de94ad9349ab48db878435a19acc2ae9373b91116aad58",
+      "alpha_extrema": [
+        255,
+        255
+      ],
+      "zoom": "b1-review-page-bg-v1-640x360-zoom.png",
+      "zoom_factor": 2
+    },
+    {
+      "path": "assets/prepared/bg-route-neon-v1-320x180.png",
+      "size": [
+        320,
+        180
+      ],
+      "bytes": 112050,
+      "sha256": "78539eca8389c0108f2ffdb1889cc782dd9f96b64f8d93b247fbece3480b2130",
+      "alpha_extrema": [
+        255,
+        255
+      ],
+      "zoom": "b1-review-bg-route-neon-v1-320x180-zoom.png",
+      "zoom_factor": 4
+    },
+    {
+      "path": "assets/prepared/logo-pachabyte-v1-320x107.png",
+      "size": [
+        320,
+        107
+      ],
+      "bytes": 32114,
+      "sha256": "acfb02dde05fb7e31e244576c6ac36939222fef7cd4afabaf86c86739afc8c9c",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "zoom": "b1-review-logo-pachabyte-v1-320x107-zoom.png",
+      "zoom_factor": 4
+    },
+    {
+      "path": "assets/prepared/loop-node-eye-v1-40x56.png",
+      "size": [
+        280,
+        56
+      ],
+      "bytes": 4815,
+      "sha256": "a2bb8bc75f8011b78ef5f225cf3000d7370c08fd61097e7843d2067bc8bd1985",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "zoom": "b1-review-loop-node-eye-v1-40x56-zoom.png",
+      "zoom_factor": 4
+    },
+    {
+      "path": "assets/prepared/shots-v1-normal-16x12.png",
+      "size": [
+        64,
+        12
+      ],
+      "bytes": 245,
+      "sha256": "4f635ad3117eb5e121846d4d839fc3dde2b694ec84b8c8a55b79069677b948b5",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "zoom": "b1-review-shots-v1-normal-16x12-zoom.png",
+      "zoom_factor": 4
+    },
+    {
+      "path": "assets/prepared/shots-v1-rafaga-24x20.png",
+      "size": [
+        96,
+        20
+      ],
+      "bytes": 541,
+      "sha256": "a0aeee7d8322b9edb048cc17f853f7e4ba36715a8785affcefa103116256d2bf",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "zoom": "b1-review-shots-v1-rafaga-24x20-zoom.png",
+      "zoom_factor": 4
+    },
+    {
+      "path": "assets/prepared/shots-v1-impact-16x16.png",
+      "size": [
+        64,
+        16
+      ],
+      "bytes": 375,
+      "sha256": "718869f781e060d38429705fd9e926405f87c0516b3f767efa1b51f4650fa2f7",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "zoom": "b1-review-shots-v1-impact-16x16-zoom.png",
+      "zoom_factor": 4
+    }
+  ],
+  "status": "prepared, not integrated; native game-fit pending"
+}

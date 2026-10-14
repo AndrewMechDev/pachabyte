@@ -1,6 +1,6 @@
 # Track B continuation progress
 
-Status: task 1 branch synchronization, private dependencies and full unit baseline are verified: 33 files/347 tests pass with the same-invocation TEMP/TMP prefix. Build passes; one WebGL smoke attempt is unavailable at Edge launch. B1 source and asset work has not started.
+Status: task 1 environment is committed and verified. B1 preparation, asset inspection, tool tests and independent functional verification are complete; unchanged smoke passes in WebGL and Canvas after one recorded WebGL pilot-failure classification rerun. B1 local commit is the next bookkeeping step. Prepared assets are not integrated. No B2 work has started.
 
 ## Authority and current scope
 
@@ -15,7 +15,7 @@ The old parallel split, forbidden gameplay/README/smoke surfaces, deferred Ajust
 | # | Task | State / next evidence |
 |---|---|---|
 | 1 | Branch synchronization and private dependencies | Verified: refs equal, private dependencies and npm ls/typecheck; TEMP/TMP-prefixed full unit run passes 33 files/347 tests. WebGL smoke independently unavailable at browser launch |
-| 2 | B1: prepare six sources, integration notes, statuses and credits | Not started; delegated writer required for preparation/tool/docs work |
+| 2 | B1: prepare six sources, integration notes, statuses and credits | Preparation independently verified: tool self-tests, typecheck, 33 files/347 tests, build; WebGL W2 and Canvas C1 pass 22 groups each. W1 pilot failure retained. Local commit pending |
 | 3 | B2: map selection, pure rules, font-safe text and six nodes | Pending; delegated multi-file behavior with tests |
 | 4 | B3: page logo/background/theme and Ajustes | Pending; Ajustes is now in scope, with precise smoke button-helper updates |
 | 5 | B4: SHOTS integration | Pending; preserve invisible 6x3 bodies, speed, Nokia twins and reduced-motion frame |
@@ -31,7 +31,88 @@ The old parallel split, forbidden gameplay/README/smoke surfaces, deferred Ajust
 | 15 | Backup hosting | Pending user account/destination authorization |
 | 16 | Delivery package | Pending user submission-format decision |
 
-No task commit was created in this recovery. Task 1 environment acceptance is verified by the TEMP/TMP recovery recorded below; its commit remains parent-owned and pending. B1 has no source writes or prepared outputs. Preserve originals under `assets/incoming/`; future preparation outputs belong under `assets/prepared/`.
+Task 1 was committed by the parent as `9d7452401807731caaa3ed35b3e92ea39e5d8727` (`docs: record isolated Track B verification environment`). Its environment acceptance is verified by the TEMP/TMP recovery recorded below. B1 now starts under bounded delegated authorization: prepare six assets and document them, without integration, dependency installation/deletion or a writer-owned commit. Preserve originals under `assets/incoming/`; preparation outputs belong under `assets/prepared/`.
+
+## B1 preparation evidence (2026-10-14)
+
+Route: delegated direct, because source inspection, tool changes, preparation, documentation and command execution form a bounded multi-file work unit. Allowed source changes are `tools/prepare_sprite.py`, prepared B1 outputs, integration notes, asset status, credits and this tracker only. No dependency install/delete/copy, canonical/main access, gameplay/page/test changes, review lifecycle or commit was performed by the resumed B1 writer. RDD is OFF per parent evidence; ordinary checks apply.
+
+### Outputs and rationale
+
+All six received sources were inspected and measured: map/page/neon 1672x941 RGB; logo 2172x724 RGBA; eye 1659x948 RGBA; shots 1448x1086 RGBA. Before/after source SHA256 identities and output metadata are in `assets/prepared/b1-review-manifest.json`; all six source hashes match the initial read.
+
+| Output (under `assets/prepared/`) | Dimensions / bytes | Choice |
+|---|---|---|
+| `map-trama-v1-320x180.png` | 320x180 / 140774 | Provisional game-native map; six sockets readable |
+| `map-trama-v1-640x360.png` | 640x360 / 515676 | Higher-detail comparison; final game fit deferred |
+| `logo-pachabyte-v1-320x107.png` | 320x107 / 32114 | Full word/chullo, binary alpha, no crop |
+| `page-bg-v1-320x180.png` | 320x180 / 116819 | Native comparison |
+| `page-bg-v1-640x360.webp` | 640x360 / 359124 | Selected page background: richer side detail, lossless compression below approximately 600 KB |
+| `bg-route-neon-v1-320x180.png` | 320x180 / 112050 | Full composition; genuine magenta preserved |
+| `loop-node-eye-v1-40x56.png` | 280x56 / 4815 | Seven padded 40x56 frames: idle 0-3, hit 4, crack 5, shatter 6 |
+| `shots-v1-normal-16x12.png` | 64x12 / 245 | Four normal frames |
+| `shots-v1-rafaga-24x20.png` | 96x20 / 541 | Four Ráfaga frames |
+| `shots-v1-impact-16x16.png` | 64x16 / 375 | Four impact frames |
+
+Four corresponding sprite JSON files record measured source boxes, cell bounds, order, center anchor and sampling scale, with no invented duration. Ten `b1-review-*-zoom.png` files record nearest-enlarged inspection pairs over a dark backdrop. New `docs/design/INTEGRATION_NOTES.md` contains exact final reproduction commands and integration caveats. Asset request statuses say prepared, not integrated; credits preserve user-art provenance and all-rights-reserved licensing pending a user decision.
+
+### Observed RED, GREEN and candidate evaluations
+
+- `python -I tools/prepare_sprite.py --self-test`: RED exit 1 after adding opaque tests, `opaque resize: opaque_prepare is not implemented`; GREEN after implementing no-key/no-crop nearest RGB resizing, source preservation and invalid-size/alpha rejection.
+- Same self-test: a second focused RED exit 1, `explicit pitch: auto_prepare does not support a measured grid`; GREEN after adding optional finite positive `--pitch` without changing default estimation. The original uneven-sheet/halo/particle exact round-trip still passes (three 8x16 cells). Final self-test passed again after all tool edits.
+- Final asset commands in integration notes all exited 0. Grid logo reports expected non-integer sampling; original width/height ratio is retained approximately rather than forcing 160x40.
+- Eye automatic estimate 36.61 source px at alignment 0.08 produced unreadable 5-7px shapes. Explicit inspected pitch 8 preserves identity; it is not a claimed exact grid. 32x48 evaluation touched the top/bottom of the shatter cell, so final 40x56 cells add padding. All final sprite bounds are strictly inside their cells and report `cropped: false`.
+- Shots measured three rows of four sprites. Initial normal 24x16/28x16 and impact 24x24 evaluations touched cell edges; final normal/impact factor-2 reductions preserve readable silhouettes and padding. Ráfaga 24x20 uses the existing automatic factor 2. Unselected candidates were removed by exact filenames only.
+- Page 960x540 lossless WebP evaluation was 728960 bytes, over target; removed after selecting 640x360. All retained outputs were inspected natively and at 2x/4x zoom with `view_image`. One zoom read occurred before the metadata-generation command finished and found no file; the completed zoom was then successfully inspected. These are asset-only observations, not in-game approval.
+
+### Functional verification
+
+Python alias resolves to `C:\Users\dark_\AppData\Local\Programs\Python\Python311\python.exe`; used `-I`. Source/output hash and binary-alpha audit passed for all ten retained image outputs. Metadata audit reran the same `auto_prepare` parameters and verified pixel identity, seven/four/four/four frames, no crops and padded bounds.
+
+Every npm/preview/smoke invocation uses this same-shell prefix from Track B, with `login:false`:
+
+```powershell
+$env:TEMP="$PWD\node_modules\.tmp"; $env:TMP=$env:TEMP; New-Item -ItemType Directory -Force $env:TEMP | Out-Null
+```
+
+`npm.cmd run typecheck`: exit 0. `npm.cmd test`: exit 0, 33 files/347 tests passed. `npm.cmd run build`: exit 0, 61 modules transformed; existing large-chunk warning and npm minimum-release-age warning are nonfatal. No mutating normalizer was required; all tool/asset mutation preceded these checks. `git diff --check` passed.
+
+### Browser attempts (all assertions unchanged)
+
+Screenshot status was clean before launch. Sandbox own preview session 28480 started on `npx.cmd vite preview --host 127.0.0.1 --port 4190 --strictPort`. Scoped elevated unchanged smoke command:
+
+```powershell
+$env:TEMP="$PWD\node_modules\.tmp"; $env:TMP=$env:TEMP; New-Item -ItemType Directory -Force $env:TEMP | Out-Null; $env:PACHA_URL='http://127.0.0.1:4190'; $env:PACHA_RENDERER='webgl'; node tests/browser-smoke.mjs
+```
+
+Attempt E1: approved elevated Edge launch, exit 1, zero groups; `page.goto: net::ERR_CONNECTION_TIMED_OUT` to owned localhost preview. Not a gameplay verdict. Sandbox preview 28480 was explicitly terminated (exit 1), then parent authorized a scoped native permission request for the identical elevated owned preview, not firewall/settings changes. Approved elevated preview session 84227 started successfully on 4190.
+
+WebGL W1 against elevated preview: exit 1 after three passed groups, no page errors. Route pilot lost attempts at 75233/73221 ms from bug/Firewall/Marea/Packet Loss/ember damage, ending in defeat; `the route must end in the guardian arena` failed. No B1 asset is wired into this unchanged game.
+
+WebGL W2 was the required second run and the single bounded classification rerun: **exit 0, 22 groups passed**, no page/console errors; route reached the guardian with four hearts and the fight won. This establishes the W1 route-pilot failure was non-reproducible on the one rerun, not that both WebGL runs were green or that pilot instability is fixed.
+
+Canvas C1 used the identical approved elevated command with `$env:PACHA_RENDERER='canvas'`: **exit 0, 22 groups passed**, no page/console errors, route/fight victory. All three renderer runs were serial and unmodified. Both passing runs verified the exact four-green REVERSE frame. The smoke emits a nonfatal Pillow `getdata` deprecation warning; no assertion was weakened and no script was edited.
+
+Approved commands were scoped to the exact own preview/browser work; no approval/settings, firewall, installation or protected-server change occurred. Only own elevated preview session 84227 was stopped after all runs (exit 1 on Ctrl+C), just as only own sandbox session 28480 was stopped earlier. No servers are intentionally left running by B1.
+
+Retained and inspected through `view_image`: `assets/prepared/b1-review-webgl-map.png`, `b1-review-webgl-bolts.png`, `b1-review-webgl-loop.png` and corresponding `b1-review-canvas-*.png`. These show unchanged procedural map/bolt/eye gameplay, not new-asset integration. Smoke-generated tracked screenshots were restored only after inspection, with an exact `git restore --source=HEAD --worktree --` list: `docs/ruta01-bolts.png`, `ruta01-bugs.png`, `ruta01-eruption.png`, `ruta01-eye.png`, `ruta01-freed.png`, `ruta01-liberation.png`, `ruta01-loop.png`, `ruta01-map.png`, `ruta01-memoryleak.png`, `ruta01-nokia.png`, `ruta01-packetloss.png`, `ruta01-pickups.png`, `ruta01-route.png` (all under `docs/`). The first sandbox restore failed at the shared Git worktree `index.lock` with permission denied; the identical exact-path restore was then explicitly approved through native escalation and exited 0. Their final Git status is clean. No preexisting screenshot changes existed, no blanket restore was used, and no screenshots under `docs/` belong in the B1 commit.
+
+Final forbidden-surface readback is empty for `assets/incoming`, `src`, `tests`, `index.html`, package/lock, README and `odd/tasks`. No B1 gameplay integration, responsive new-page acceptance, human art approval or two-successful-run WebGL proof is claimed; final QA remains its own later task.
+
+### Requests for next integrations
+
+- B2/B3: validate map markers, logo and calm page surround at actual native viewport sizes; the asset review does not establish scene fit or responsive acceptance.
+- B4/B5: use measured per-sheet grids and frame order, retain current animation timing/reduced-motion frame 0, physics geometry and four-green twins. Eye's larger padded cell and non-anatomical center anchor require scene alignment review, not collider changes.
+- B6: verify the brighter magenta backdrop against player, bolts and HUD; preserve ambient layers and reduced motion. Skyline matching to the current arena is not proven.
+- Human art license and visual acceptance remain pending. No missing-source regeneration request is needed for B1.
+
+### Independent verification and parent readback
+
+Independent verifier passed the preparation scope: self-test, typecheck, 33 files/347 tests and diff whitespace checks. All six original files are byte-identical to task-1 baseline `9d74524`; all ten prepared outputs match hashes, dimensions, byte counts and alpha bounds; four sprite metadata sets match actual cells. Map and eye native outputs plus original eye were independently inspected. No required correction was found. Native read-only risk assessment was high/unassessable because new files lacked an explicit declaration; this did not lower the verification tier. RDD is globally OFF, so no native review lifecycle was started; independent ordinary verification was used instead.
+
+Parent reran Python self-tests, typecheck and the complete TEMP/TMP-prefixed unit suite: all exit 0, 33 files/347 tests. Parent also inspected the seven-frame eye sheet. An earlier parent tracker patch found no matching stale status line and made no changes; current status already reflected the writer's updated outcome. All browser failure records remain intact. One WebGL and one Canvas passing run do not establish final QA's two passing runs per renderer.
+
+Commit boundary: parent-owned B1 work-unit commit after independent verification. Rollback consists only of the B1 tool extension, prepared outputs and associated docs/status/credits; no gameplay/UI behavior changed. Do not start B2 automatically.
 
 ## Recovery evidence (2026-10-14)
 

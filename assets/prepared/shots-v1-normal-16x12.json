@@ -1,0 +1,117 @@
+{
+  "source": {
+    "path": "assets/incoming/SHOTS.png",
+    "size": [
+      1448,
+      1086
+    ],
+    "mode": "RGBA",
+    "sha256": "73eb76a3d23c05a6ee974a5d59cffc17072266a5c69a9d1b136da3bd1bbe3ca5"
+  },
+  "output": "assets/prepared/shots-v1-normal-16x12.png",
+  "sheet": [
+    64,
+    12
+  ],
+  "cell": [
+    16,
+    12
+  ],
+  "order": [
+    "normal-0",
+    "normal-1",
+    "normal-2",
+    "normal-3"
+  ],
+  "anchor": "largest connected body centered in cell",
+  "origin": [
+    8.0,
+    6.0
+  ],
+  "alpha_threshold": 128,
+  "parameters": {
+    "row": 0,
+    "target": [
+      16,
+      12
+    ],
+    "colors": 6,
+    "factor": 2
+  },
+  "frames": [
+    {
+      "frame": 0,
+      "source": [
+        96,
+        173,
+        290,
+        262
+      ],
+      "bounds": [
+        1,
+        4,
+        11,
+        9
+      ],
+      "colors": 5,
+      "cropped": false,
+      "scale": 19.420000000000012
+    },
+    {
+      "frame": 1,
+      "source": [
+        436,
+        172,
+        660,
+        262
+      ],
+      "bounds": [
+        1,
+        4,
+        12,
+        9
+      ],
+      "colors": 5,
+      "cropped": false,
+      "scale": 19.420000000000012
+    },
+    {
+      "frame": 2,
+      "source": [
+        799,
+        172,
+        1015,
+        262
+      ],
+      "bounds": [
+        1,
+        4,
+        12,
+        9
+      ],
+      "colors": 4,
+      "cropped": false,
+      "scale": 19.420000000000012
+    },
+    {
+      "frame": 3,
+      "source": [
+        1185,
+        172,
+        1364,
+        262
+      ],
+      "bounds": [
+        3,
+        4,
+        12,
+        9
+      ],
+      "colors": 5,
+      "cropped": false,
+      "scale": 19.420000000000012
+    }
+  ],
+  "status": "prepared, not integrated",
+  "timing": null
+}

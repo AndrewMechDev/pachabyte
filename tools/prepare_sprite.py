@@ -5,7 +5,13 @@ Grid mode (sources drawn on an exact grid):
 
 Auto mode (sources whose frames are not on a uniform cell grid):
   python -I tools/prepare_sprite.py INPUT OUTPUT --auto [--row N] [--target WxH] [--factor F] [--colors 8]
-      [--detail 0.3] [--merge PX] [--anchor center|bottom]
+      [--detail 0.3] [--merge PX] [--anchor center|bottom] [--pitch SOURCE_PX]
+  --pitch supplies an inspected sampling pitch when automatic grid alignment is weak;
+  it does not claim the source was drawn on an exact grid.
+
+Opaque mode (full compositions, no chroma key or crop):
+  python -I tools/prepare_sprite.py INPUT OUTPUT --opaque-resize --target 320x180
+  PNG preserves sampled RGB colors; .webp output uses lossless compression.
 
 Self-check of the auto mode:
   python -I tools/prepare_sprite.py --self-test
@@ -81,6 +87,19 @@ def sample(img: Image.Image, width: int, height: int) -> Image.Image:
             r, g, b, a = src[min(img.width - 1, int((x + 0.5) * sx)), min(img.height - 1, int((y + 0.5) * sy))]
             dst[x, y] = (r, g, b, 255) if a >= 128 else (0, 0, 0, 0)
     return out
+
+
+def opaque_prepare(img: Image.Image, target: tuple[int, int]) -> Image.Image:
+    """Resize the complete opaque composition using nearest sampling, without keying magenta.
+
+    The supplied size is explicit: there is no inferred art grid, crop, palette reduction
+    or aspect-ratio adjustment. Reject real alpha instead of silently flattening it.
+    """
+    if len(target) != 2 or any(v <= 0 for v in target):
+        raise ValueError("opaque target dimensions must be positive")
+    if img.convert("RGBA").getchannel("A").getextrema()[0] != 255:
+        raise ValueError("opaque resize requires a fully opaque source")
+    return img.convert("RGB").resize(target, Image.Resampling.NEAREST)
 
 
 def frame_report(sheet: Image.Image, fw: int, fh: int, cols: int, rows: int) -> list[str]:
@@ -474,7 +493,10 @@ def reduce_frame(img: Image.Image, factor: float, outline: tuple | None = None, 
 
 
 def auto_prepare(img: Image.Image, row: int | None = None, target: tuple[int, int] | None = None, colors: int = 8,
-                 merge: float | None = None, anchor: str = "center", factor: float | None = None, detail: float = RARITY, log=print) -> tuple[Image.Image, tuple[int, int], list[dict]]:
+                 merge: float | None = None, anchor: str = "center", factor: float | None = None, detail: float = RARITY, log=print,
+                 pitch_override: float | None = None) -> tuple[Image.Image, tuple[int, int], list[dict]]:
+    if pitch_override is not None and (not math.isfinite(pitch_override) or pitch_override <= 0):
+        raise ValueError("explicit pitch must be finite and positive")
     img = img.convert("RGBA")
     keyed = 0
     if not has_real_alpha(img):
@@ -490,8 +512,12 @@ def auto_prepare(img: Image.Image, row: int | None = None, target: tuple[int, in
     # The pitch is shared, but every large part (a body, not a particle) may sit on its own grid offset.
     largest = max(p["area"] for p in parts)
     bodies = [p for p in parts if p["area"] >= 0.05 * largest]
-    pitch, quality = estimate_pitch([run_boundaries(img, p["box"], threshold) for p in bodies])
-    log(f"estimated art pixel: {pitch:.2f} px from {len(bodies)} bodies (boundary alignment {quality:.2f})")
+    if pitch_override is None:
+        pitch, quality = estimate_pitch([run_boundaries(img, p["box"], threshold) for p in bodies])
+        log(f"estimated art pixel: {pitch:.2f} px from {len(bodies)} bodies (boundary alignment {quality:.2f})")
+    else:
+        pitch = pitch_override
+        log(f"explicit sampling pitch: {pitch:.2f} source px (not an inferred grid)")
     distance = merge if merge is not None else 4 * pitch
     noise = 0.25 * pitch * pitch
     sprites = [s for s in merge_sprites(parts, distance) if s["area"] >= noise]
@@ -618,6 +644,48 @@ def self_test(verbose: bool = False) -> int:
                 s[xx, yy] = (5, 20, 15, rng.randint(1, 18))
     out, cell, report = auto_prepare(sheet, colors=8, log=print if verbose else (lambda *_: None))
     failures = []
+    try:
+        explicit, explicit_cell, explicit_report = auto_prepare(sheet, colors=8, pitch_override=7, log=lambda *_: None)
+    except TypeError:
+        failures.append("explicit pitch: auto_prepare does not support a measured grid")
+    else:
+        if explicit_cell != cell or pixels(explicit) != pixels(out) or len(explicit_report) != 3:
+            failures.append("explicit pitch: measured synthetic grid did not round-trip")
+        for invalid in (0, -1, float("inf"), float("nan")):
+            try:
+                auto_prepare(sheet, pitch_override=invalid, log=lambda *_: None)
+            except ValueError:
+                pass
+            else:
+                failures.append(f"explicit pitch: accepted invalid pitch {invalid}")
+    # Opaque scenes must retain magenta scenery, rather than applying sprite chroma-keying.
+    prepare_opaque = globals().get("opaque_prepare")
+    if prepare_opaque is None:
+        failures.append("opaque resize: opaque_prepare is not implemented")
+    else:
+        scene = Image.new("RGB", (4, 2))
+        scene.putdata([MAGENTA, (1, 2, 3), (4, 5, 6), MAGENTA] * 2)
+        before = scene.tobytes()
+        resized = prepare_opaque(scene, (2, 1))
+        if resized.mode != "RGB" or resized.size != (2, 1):
+            failures.append("opaque resize: wrong mode or target size")
+        if pixels(resized) != [(1, 2, 3), MAGENTA]:
+            failures.append("opaque resize: changed nearest samples or keyed magenta")
+        if scene.tobytes() != before:
+            failures.append("opaque resize: source was modified")
+        for invalid in ((0, 1), (-1, 1), (1, 0)):
+            try:
+                prepare_opaque(scene, invalid)
+            except ValueError:
+                pass
+            else:
+                failures.append(f"opaque resize: accepted invalid target {invalid}")
+        try:
+            prepare_opaque(Image.new("RGBA", (2, 2), (1, 2, 3, 127)), (1, 1))
+        except ValueError:
+            pass
+        else:
+            failures.append("opaque resize: silently discarded source transparency")
     if len(report) != 3:
         failures.append(f"expected 3 frames, got {len(report)}")
     for f, art in enumerate(arts):
@@ -644,6 +712,8 @@ def self_test(verbose: bool = False) -> int:
             print(" ", line)
         return 1
     print(f"self-test passed: 3 frames round-trip exactly in {cell[0]}x{cell[1]} cells (halo dropped, particle merged)")
+    print("self-test passed: opaque resize preserves nearest RGB/magenta samples and source; rejects alpha/invalid sizes")
+    print("self-test passed: explicit pitch round-trips the synthetic grid and rejects invalid values")
     return 0
 
 
@@ -655,11 +725,13 @@ def main() -> int:
     parser.add_argument("--cols", type=int, default=1)
     parser.add_argument("--rows", type=int, default=1)
     parser.add_argument("--auto", action="store_true", help="split by transparent gaps and estimate the art-pixel grid")
+    parser.add_argument("--opaque-resize", action="store_true", help="nearest resize of a full opaque composition, without magenta keying or crop")
     parser.add_argument("--row", type=int, help="auto mode: only this sprite row (0 = top)")
-    parser.add_argument("--target", help="auto mode: native cell WxH; larger natural art is reduced to fit")
+    parser.add_argument("--target", help="auto mode: native cell WxH; opaque mode: full output WxH")
     parser.add_argument("--colors", type=int, default=8, help="auto mode: maximum opaque colors per sprite row")
     parser.add_argument("--merge", type=float, help="auto mode: merge distance in source px (default 4 art pixels)")
     parser.add_argument("--factor", type=float, help="auto mode: explicit reduction factor (default: smallest whole factor that fits --target)")
+    parser.add_argument("--pitch", type=float, help="auto mode: inspected source-pixel sampling pitch instead of automatic estimation")
     parser.add_argument("--detail", type=float, default=RARITY, help="auto mode: rarity exponent of the reduction vote (higher keeps thin bright details)")
     parser.add_argument("--anchor", choices=("center", "bottom"), default="center")
     parser.add_argument("--self-test", action="store_true")
@@ -669,9 +741,24 @@ def main() -> int:
         return self_test()
     if not args.input or not args.output:
         parser.error("INPUT and OUTPUT are required")
+    if args.opaque_resize:
+        if args.auto or args.frame or not args.target:
+            parser.error("--opaque-resize requires --target and cannot be combined with --auto/--frame")
+        try:
+            target = tuple(int(v) for v in args.target.lower().split("x"))
+            source = Image.open(args.input)
+            native = opaque_prepare(source, target)
+        except ValueError as error:
+            parser.error(str(error))
+        options = {"lossless": True} if Path(args.output).suffix.lower() == ".webp" else {}
+        native.save(args.output, **options)
+        print(f"opaque source {source.width}x{source.height} -> {native.width}x{native.height} RGB; nearest, full composition, no chroma key")
+        print(f"saved {Path(args.output).stat().st_size} bytes; aspect ratios {source.width / source.height:.5f} -> {native.width / native.height:.5f}")
+        return 0
     if args.auto:
         target = tuple(int(v) for v in args.target.lower().split("x")) if args.target else None
-        sheet, _, _ = auto_prepare(Image.open(args.input), args.row, target, args.colors, args.merge, args.anchor, args.factor, args.detail)
+        sheet, _, _ = auto_prepare(Image.open(args.input), args.row, target, args.colors, args.merge, args.anchor, args.factor, args.detail,
+                                  pitch_override=args.pitch)
         sheet.save(args.output)
         return 0
     if not args.frame:

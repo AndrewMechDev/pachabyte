@@ -11,6 +11,12 @@ PachaByte is an original project. Nothing here is copied from another game.
 | HUD font | Original 5x7 pixel glyphs, including Spanish accents | `src/game/retroFont.ts`. |
 | Sound effects | Synthesized in the browser with Web Audio | `src/game/sfx.ts`. No audio files or samples. |
 | Palette mode | Four-green palette inspired by classic handheld LCDs | Colors only; no third-party art or code. |
+| Trama map | User-supplied original image-chat art from `ASSET_REQUESTS_V2.md` request `MAP_TRAMA` | Untouched `assets/incoming/MAP_TRAMA.png`; prepared 320x180 and 640x360 PNG copies. Not integrated in B1. |
+| PachaByte chullo wordmark | User-supplied original image-chat art, request `LOGO_PACHABYTE` | Untouched `assets/incoming/LOGO_PACHABYTE.png`; prepared `logo-pachabyte-v1-320x107.png` with binary alpha. Not integrated in B1. |
+| Cyberpunk-Andean page background | User-supplied original image-chat art, request `PAGE_BG` | Untouched `assets/incoming/PAGE_BG.png`; prepared 640x360 lossless WebP and 320x180 evaluation PNG. Not integrated in B1. |
+| Loop eye relic | User-supplied original image-chat art, request `LOOP_NODE_EYE` | Untouched `assets/incoming/LOOP_NODE_EYE.png`; seven prepared 40x56 cells, measured mapping in `docs/design/INTEGRATION_NOTES.md`. Not integrated in B1. |
+| Normal/Ráfaga bolts and impact burst | User-supplied original image-chat art, request `SHOTS` | Untouched `assets/incoming/SHOTS.png`; three separate prepared four-frame sheets. Not integrated in B1. |
+| Corrupted neon route backdrop | User-supplied original image-chat art, request `BG_ROUTE_NEON` | Untouched `assets/incoming/BG_ROUTE_NEON.png`; prepared 320x180 opaque PNG. Not integrated in B1. |
 
 ## Procedural placeholders (Ruta 01)
 

@@ -1,0 +1,174 @@
+{
+  "source": {
+    "path": "assets/incoming/LOOP_NODE_EYE.png",
+    "size": [
+      1659,
+      948
+    ],
+    "mode": "RGBA",
+    "sha256": "29c37d865f5d32900bf49fbca213d46e7d9df07df62f0b8b9ed1faea27153c2f"
+  },
+  "output": "assets/prepared/loop-node-eye-v1-40x56.png",
+  "sheet": [
+    280,
+    56
+  ],
+  "cell": [
+    40,
+    56
+  ],
+  "order": [
+    "idle-0",
+    "idle-1",
+    "idle-2",
+    "idle-3",
+    "hit",
+    "crack",
+    "shatter"
+  ],
+  "anchor": "largest connected body centered in cell",
+  "origin": [
+    20.0,
+    28.0
+  ],
+  "alpha_threshold": 128,
+  "parameters": {
+    "target": [
+      40,
+      56
+    ],
+    "colors": 8,
+    "merge": 0,
+    "pitch_override": 8
+  },
+  "frames": [
+    {
+      "frame": 0,
+      "source": [
+        16,
+        295,
+        225,
+        626
+      ],
+      "bounds": [
+        7,
+        7,
+        33,
+        49
+      ],
+      "colors": 8,
+      "cropped": false,
+      "scale": 8.0
+    },
+    {
+      "frame": 1,
+      "source": [
+        255,
+        295,
+        462,
+        630
+      ],
+      "bounds": [
+        7,
+        7,
+        33,
+        49
+      ],
+      "colors": 8,
+      "cropped": false,
+      "scale": 8.0
+    },
+    {
+      "frame": 2,
+      "source": [
+        489,
+        295,
+        699,
+        633
+      ],
+      "bounds": [
+        7,
+        7,
+        33,
+        49
+      ],
+      "colors": 8,
+      "cropped": false,
+      "scale": 8.0
+    },
+    {
+      "frame": 3,
+      "source": [
+        725,
+        295,
+        932,
+        633
+      ],
+      "bounds": [
+        7,
+        7,
+        33,
+        49
+      ],
+      "colors": 8,
+      "cropped": false,
+      "scale": 8.0
+    },
+    {
+      "frame": 4,
+      "source": [
+        950,
+        261,
+        1172,
+        635
+      ],
+      "bounds": [
+        6,
+        6,
+        34,
+        51
+      ],
+      "colors": 8,
+      "cropped": false,
+      "scale": 8.0
+    },
+    {
+      "frame": 5,
+      "source": [
+        1186,
+        289,
+        1407,
+        644
+      ],
+      "bounds": [
+        6,
+        6,
+        34,
+        50
+      ],
+      "colors": 8,
+      "cropped": false,
+      "scale": 8.0
+    },
+    {
+      "frame": 6,
+      "source": [
+        1422,
+        257,
+        1655,
+        644
+      ],
+      "bounds": [
+        5,
+        3,
+        35,
+        51
+      ],
+      "colors": 8,
+      "cropped": false,
+      "scale": 8.0
+    }
+  ],
+  "status": "prepared, not integrated",
+  "timing": null
+}

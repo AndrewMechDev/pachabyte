@@ -1,0 +1,116 @@
+{
+  "source": {
+    "path": "assets/incoming/SHOTS.png",
+    "size": [
+      1448,
+      1086
+    ],
+    "mode": "RGBA",
+    "sha256": "73eb76a3d23c05a6ee974a5d59cffc17072266a5c69a9d1b136da3bd1bbe3ca5"
+  },
+  "output": "assets/prepared/shots-v1-rafaga-24x20.png",
+  "sheet": [
+    96,
+    20
+  ],
+  "cell": [
+    24,
+    20
+  ],
+  "order": [
+    "rafaga-0",
+    "rafaga-1",
+    "rafaga-2",
+    "rafaga-3"
+  ],
+  "anchor": "largest connected body centered in cell",
+  "origin": [
+    12.0,
+    10.0
+  ],
+  "alpha_threshold": 128,
+  "parameters": {
+    "row": 1,
+    "target": [
+      24,
+      20
+    ],
+    "colors": 6
+  },
+  "frames": [
+    {
+      "frame": 0,
+      "source": [
+        35,
+        457,
+        341,
+        661
+      ],
+      "bounds": [
+        2,
+        5,
+        18,
+        16
+      ],
+      "colors": 6,
+      "cropped": false,
+      "scale": 19.420000000000012
+    },
+    {
+      "frame": 1,
+      "source": [
+        385,
+        457,
+        699,
+        655
+      ],
+      "bounds": [
+        2,
+        6,
+        18,
+        16
+      ],
+      "colors": 6,
+      "cropped": false,
+      "scale": 19.420000000000012
+    },
+    {
+      "frame": 2,
+      "source": [
+        749,
+        459,
+        1063,
+        652
+      ],
+      "bounds": [
+        2,
+        5,
+        18,
+        15
+      ],
+      "colors": 6,
+      "cropped": false,
+      "scale": 19.420000000000012
+    },
+    {
+      "frame": 3,
+      "source": [
+        1118,
+        449,
+        1421,
+        661
+      ],
+      "bounds": [
+        3,
+        6,
+        18,
+        17
+      ],
+      "colors": 4,
+      "cropped": false,
+      "scale": 19.420000000000012
+    }
+  ],
+  "status": "prepared, not integrated",
+  "timing": null
+}

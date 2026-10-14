@@ -13,6 +13,21 @@ Same rules as [ASSET_REQUESTS.md](ASSET_REQUESTS.md): open a new image chat per 
 
 Priority if time is short: 1, 2, 3, then 4 to 6.
 
+## Estado de recepción y preparación — B1 (2026-10-14)
+
+Los seis originales recibidos se conservan sin cambios en `assets/incoming/`, con los nombres en mayúsculas de la tabla siguiente. **Preparado no significa integrado ni aprobado en la escena**. Comandos, grillas medidas, anclas, límites y evidencia visual: [INTEGRATION_NOTES.md](INTEGRATION_NOTES.md).
+
+| ID / original recibido | Estado | Salida preparada |
+|---|---|---|
+| `MAP_TRAMA.png` | Recibido → preparado; integración B2 pendiente | `map-trama-v1-320x180.png`; comparación `map-trama-v1-640x360.png` |
+| `LOGO_PACHABYTE.png` | Recibido → preparado; integración B3 pendiente | `logo-pachabyte-v1-320x107.png`, alfa binaria y chullo completo |
+| `LOOP_NODE_EYE.png` | Recibido → preparado; integración B5 pendiente | `loop-node-eye-v1-40x56.png`, 7 celdas con margen; orden real confirmado |
+| `SHOTS.png` | Recibido → preparado; integración B4 pendiente | Normal 16x12, Ráfaga 24x20, impacto 16x16; 4 cuadros por hoja |
+| `BG_ROUTE_NEON.png` | Recibido → preparado; integración B6 pendiente | `bg-route-neon-v1-320x180.png`; contraste jugable todavía no verificado |
+| `PAGE_BG.png` | Recibido → preparado; integración B3 pendiente | `page-bg-v1-640x360.webp`, compresión sin pérdida, 359124 bytes; comparación 320x180 PNG |
+
+Las dimensiones solicitadas arriba describen el prompt, no los bytes recibidos. El ojo entregado es más alto: la celda 40x56 preserva tentáculos y fragmentos sin cambiar la colisión. La escala final requiere revisión en el juego. La licencia artística continúa pendiente; se mantienen todos los derechos reservados.
+
 ---
 
 ## 1. MAP_TRAMA

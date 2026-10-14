@@ -1,0 +1,117 @@
+{
+  "source": {
+    "path": "assets/incoming/SHOTS.png",
+    "size": [
+      1448,
+      1086
+    ],
+    "mode": "RGBA",
+    "sha256": "73eb76a3d23c05a6ee974a5d59cffc17072266a5c69a9d1b136da3bd1bbe3ca5"
+  },
+  "output": "assets/prepared/shots-v1-impact-16x16.png",
+  "sheet": [
+    64,
+    16
+  ],
+  "cell": [
+    16,
+    16
+  ],
+  "order": [
+    "impact-0",
+    "impact-1",
+    "impact-2",
+    "impact-3"
+  ],
+  "anchor": "largest connected body centered in cell",
+  "origin": [
+    8.0,
+    8.0
+  ],
+  "alpha_threshold": 128,
+  "parameters": {
+    "row": 2,
+    "target": [
+      16,
+      16
+    ],
+    "colors": 6,
+    "factor": 2
+  },
+  "frames": [
+    {
+      "frame": 0,
+      "source": [
+        122,
+        826,
+        238,
+        947
+      ],
+      "bounds": [
+        5,
+        6,
+        11,
+        11
+      ],
+      "colors": 4,
+      "cropped": false,
+      "scale": 19.420000000000012
+    },
+    {
+      "frame": 1,
+      "source": [
+        458,
+        788,
+        641,
+        970
+      ],
+      "bounds": [
+        3,
+        3,
+        12,
+        12
+      ],
+      "colors": 4,
+      "cropped": false,
+      "scale": 19.420000000000012
+    },
+    {
+      "frame": 2,
+      "source": [
+        790,
+        761,
+        1022,
+        1001
+      ],
+      "bounds": [
+        2,
+        2,
+        14,
+        14
+      ],
+      "colors": 6,
+      "cropped": false,
+      "scale": 19.420000000000012
+    },
+    {
+      "frame": 3,
+      "source": [
+        1166,
+        779,
+        1365,
+        991
+      ],
+      "bounds": [
+        4,
+        4,
+        14,
+        15
+      ],
+      "colors": 3,
+      "cropped": false,
+      "scale": 19.420000000000012
+    }
+  ],
+  "status": "prepared, not integrated",
+  "timing": null
+}
