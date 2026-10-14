@@ -15,7 +15,7 @@ All six received sources are prepared, **not integrated**. Originals remain unch
 | `SHOTS.png` (1448x1086 RGBA) | `shots-v1-normal-16x12.png`, `shots-v1-rafaga-24x20.png`, `shots-v1-impact-16x16.png` | Three measured source rows, four frames each; separate output sheets. |
 | `BG_ROUTE_NEON.png` (1672x941 RGB) | `bg-route-neon-v1-320x180.png` | Full opaque composition, 112050 bytes. Neon colors are retained rather than chroma-keyed. |
 
-`b1-review-manifest.json` records exact source SHA256, dimensions, output hashes, bytes and native/zoom review pairs. Every final sprite has binary alpha and padding on every side; metadata reports `cropped: false`. No original was overwritten.
+`docs/review/b1-review-manifest.json` records exact source SHA256, dimensions, output hashes, bytes and native/zoom review pairs. Every final sprite has binary alpha and padding on every side; metadata reports `cropped: false`. No original was overwritten.
 
 ## Reproduce images
 
@@ -74,6 +74,6 @@ Tie any approved cross-fade to route segments, not a new rigid story trigger. Re
 
 ## Visual evidence and pending acceptance
 
-All ten retained prepared image outputs were inspected with `view_image` at native resolution and nearest-enlarged zoom. `b1-review-*-zoom.png` composites transparent art over dark indigo solely for inspection, at 4x (or 2x for 640-wide images). These are review artifacts, not runtime textures. Full backgrounds retain their borders; sprite alpha bounds stay strictly inside every final cell. Logo text/chullo, eye state distinctions and the three shot silhouettes read clearly in this asset-only review.
+All ten retained prepared image outputs were inspected with `view_image` at native resolution and nearest-enlarged zoom. `docs/review/b1-review-*-zoom.png` composites transparent art over dark indigo solely for inspection, at 4x (or 2x for 640-wide images). These are review artifacts, not runtime textures. Full backgrounds retain their borders; sprite alpha bounds stay strictly inside every final cell. Logo text/chullo, eye state distinctions and the three shot silhouettes read clearly in this asset-only review.
 
-Native game fit, human acceptance, both-renderer integration and responsive page acceptance are still pending. B1 browser regression checks exercise the unchanged game, not these unreferenced assets: WebGL W1 lost the route pilot; its single classification rerun W2 and Canvas C1 each passed 22 groups. Six `b1-review-webgl-*.png` / `b1-review-canvas-*.png` captures retain the unchanged map, procedural bolts and procedural eye for renderer inspection. Full run/permission/screenshot-restoration evidence is in `docs/track-b-progress.md`; there is no claim of two green WebGL runs. Art license remains **all rights reserved**, pending the user's decision; preparation does not grant a new license.
+Native game fit, human acceptance, both-renderer integration and responsive page acceptance are still pending. B1 browser regression checks exercise the unchanged game, not these unreferenced assets: WebGL W1 lost the route pilot; its single classification rerun W2 and Canvas C1 each passed 22 groups. Six `docs/review/b1-review-webgl-*.png` / `docs/review/b1-review-canvas-*.png` captures retain the unchanged map, procedural bolts and procedural eye for renderer inspection. Full run/permission/screenshot-restoration evidence is in `docs/track-b-progress.md`; there is no claim of two green WebGL runs. Art license remains **all rights reserved**, pending the user's decision; preparation does not grant a new license.

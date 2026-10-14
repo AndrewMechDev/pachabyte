@@ -1,6 +1,6 @@
 # Track B continuation progress
 
-Status: task 1 environment is committed and verified. B1 preparation, asset inspection, tool tests and independent functional verification are complete; unchanged smoke passes in WebGL and Canvas after one recorded WebGL pilot-failure classification rerun. B1 local commit is the next bookkeeping step. Prepared assets are not integrated. No B2 work has started.
+Status: task 1 environment is committed and verified. B1 preparation is independently verified and committed locally as `fc3036a27a376ff4cb9f3b31141ecaf2a1139289`. Unchanged smoke passes in WebGL and Canvas after one recorded WebGL pilot-failure classification rerun. Prepared assets are not integrated. No B2 work has started.
 
 ## Authority and current scope
 
@@ -15,7 +15,7 @@ The old parallel split, forbidden gameplay/README/smoke surfaces, deferred Ajust
 | # | Task | State / next evidence |
 |---|---|---|
 | 1 | Branch synchronization and private dependencies | Verified: refs equal, private dependencies and npm ls/typecheck; TEMP/TMP-prefixed full unit run passes 33 files/347 tests. WebGL smoke independently unavailable at browser launch |
-| 2 | B1: prepare six sources, integration notes, statuses and credits | Preparation independently verified: tool self-tests, typecheck, 33 files/347 tests, build; WebGL W2 and Canvas C1 pass 22 groups each. W1 pilot failure retained. Local commit pending |
+| 2 | B1: prepare six sources, integration notes, statuses and credits | Complete: `fc3036a27a376ff4cb9f3b31141ecaf2a1139289`; self-tests, typecheck, 33 files/347 tests, build; WebGL W2 and Canvas C1 pass 22 groups each. W1 pilot failure retained |
 | 3 | B2: map selection, pure rules, font-safe text and six nodes | Pending; delegated multi-file behavior with tests |
 | 4 | B3: page logo/background/theme and Ajustes | Pending; Ajustes is now in scope, with precise smoke button-helper updates |
 | 5 | B4: SHOTS integration | Pending; preserve invisible 6x3 bodies, speed, Nokia twins and reduced-motion frame |
@@ -39,7 +39,7 @@ Route: delegated direct, because source inspection, tool changes, preparation, d
 
 ### Outputs and rationale
 
-All six received sources were inspected and measured: map/page/neon 1672x941 RGB; logo 2172x724 RGBA; eye 1659x948 RGBA; shots 1448x1086 RGBA. Before/after source SHA256 identities and output metadata are in `assets/prepared/b1-review-manifest.json`; all six source hashes match the initial read.
+All six received sources were inspected and measured: map/page/neon 1672x941 RGB; logo 2172x724 RGBA; eye 1659x948 RGBA; shots 1448x1086 RGBA. Before/after source SHA256 identities and output metadata are in `docs/review/b1-review-manifest.json`; all six source hashes match the initial read.
 
 | Output (under `assets/prepared/`) | Dimensions / bytes | Choice |
 |---|---|---|
@@ -54,7 +54,7 @@ All six received sources were inspected and measured: map/page/neon 1672x941 RGB
 | `shots-v1-rafaga-24x20.png` | 96x20 / 541 | Four Ráfaga frames |
 | `shots-v1-impact-16x16.png` | 64x16 / 375 | Four impact frames |
 
-Four corresponding sprite JSON files record measured source boxes, cell bounds, order, center anchor and sampling scale, with no invented duration. Ten `b1-review-*-zoom.png` files record nearest-enlarged inspection pairs over a dark backdrop. New `docs/design/INTEGRATION_NOTES.md` contains exact final reproduction commands and integration caveats. Asset request statuses say prepared, not integrated; credits preserve user-art provenance and all-rights-reserved licensing pending a user decision.
+Four corresponding sprite JSON files record measured source boxes, cell bounds, order, center anchor and sampling scale, with no invented duration. Ten `docs/review/b1-review-*-zoom.png` files record nearest-enlarged inspection pairs over a dark backdrop. New `docs/design/INTEGRATION_NOTES.md` contains exact final reproduction commands and integration caveats. Asset request statuses say prepared, not integrated; credits preserve user-art provenance and all-rights-reserved licensing pending a user decision.
 
 ### Observed RED, GREEN and candidate evaluations
 
@@ -95,7 +95,7 @@ Canvas C1 used the identical approved elevated command with `$env:PACHA_RENDERER
 
 Approved commands were scoped to the exact own preview/browser work; no approval/settings, firewall, installation or protected-server change occurred. Only own elevated preview session 84227 was stopped after all runs (exit 1 on Ctrl+C), just as only own sandbox session 28480 was stopped earlier. No servers are intentionally left running by B1.
 
-Retained and inspected through `view_image`: `assets/prepared/b1-review-webgl-map.png`, `b1-review-webgl-bolts.png`, `b1-review-webgl-loop.png` and corresponding `b1-review-canvas-*.png`. These show unchanged procedural map/bolt/eye gameplay, not new-asset integration. Smoke-generated tracked screenshots were restored only after inspection, with an exact `git restore --source=HEAD --worktree --` list: `docs/ruta01-bolts.png`, `ruta01-bugs.png`, `ruta01-eruption.png`, `ruta01-eye.png`, `ruta01-freed.png`, `ruta01-liberation.png`, `ruta01-loop.png`, `ruta01-map.png`, `ruta01-memoryleak.png`, `ruta01-nokia.png`, `ruta01-packetloss.png`, `ruta01-pickups.png`, `ruta01-route.png` (all under `docs/`). The first sandbox restore failed at the shared Git worktree `index.lock` with permission denied; the identical exact-path restore was then explicitly approved through native escalation and exited 0. Their final Git status is clean. No preexisting screenshot changes existed, no blanket restore was used, and no screenshots under `docs/` belong in the B1 commit.
+Retained and inspected through `view_image`: `docs/review/b1-review-webgl-map.png`, `docs/review/b1-review-webgl-bolts.png`, `docs/review/b1-review-webgl-loop.png` and corresponding `docs/review/b1-review-canvas-*.png`. These show unchanged procedural map/bolt/eye gameplay, not new-asset integration. Smoke-generated tracked screenshots were restored only after inspection, with an exact `git restore --source=HEAD --worktree --` list: `docs/ruta01-bolts.png`, `ruta01-bugs.png`, `ruta01-eruption.png`, `ruta01-eye.png`, `ruta01-freed.png`, `ruta01-liberation.png`, `ruta01-loop.png`, `ruta01-map.png`, `ruta01-memoryleak.png`, `ruta01-nokia.png`, `ruta01-packetloss.png`, `ruta01-pickups.png`, `ruta01-route.png` (all under `docs/`). The first sandbox restore failed at the shared Git worktree `index.lock` with permission denied; the identical exact-path restore was then explicitly approved through native escalation and exited 0. Their final Git status is clean. No preexisting screenshot changes existed, no blanket restore was used, and no screenshots under `docs/` belong in the B1 commit.
 
 Final forbidden-surface readback is empty for `assets/incoming`, `src`, `tests`, `index.html`, package/lock, README and `odd/tasks`. No B1 gameplay integration, responsive new-page acceptance, human art approval or two-successful-run WebGL proof is claimed; final QA remains its own later task.
 
@@ -113,6 +113,16 @@ Independent verifier passed the preparation scope: self-test, typecheck, 33 file
 Parent reran Python self-tests, typecheck and the complete TEMP/TMP-prefixed unit suite: all exit 0, 33 files/347 tests. Parent also inspected the seven-frame eye sheet. An earlier parent tracker patch found no matching stale status line and made no changes; current status already reflected the writer's updated outcome. All browser failure records remain intact. One WebGL and one Canvas passing run do not establish final QA's two passing runs per renderer.
 
 Commit boundary: parent-owned B1 work-unit commit after independent verification. Rollback consists only of the B1 tool extension, prepared outputs and associated docs/status/credits; no gameplay/UI behavior changed. Do not start B2 automatically.
+
+### B1 commit and next task
+
+Local commit: `fc3036a27a376ff4cb9f3b31141ecaf2a1139289`, `feat(assets): prepare the six received art sources for integration`. It contains 36 files, including generated images/metadata/review captures, the tested tool extension and corresponding docs/credits. No push, merge or deployment occurred. The working tree was clean immediately after committing; this post-commit hash/status record is the only subsequent documentation change and will be included with the next task's commit, avoiding a self-referential commit hash.
+
+### Review evidence relocation
+
+After the B1 review, the 17 `b1-review-*` files (captures, zooms and the manifest) moved from `assets/prepared/` to `docs/review/`; `assets/prepared/` now holds only art the game loads or will load. Paths in `docs/design/INTEGRATION_NOTES.md` and in this tracker were corrected. The manifest stores bare zoom file names, so it needs no edit.
+
+Next source task: B2, the six-node selected-card map. Use the integration notes, preserve shortcuts/progress/debug contracts and apply the local TEMP/TMP test prefix. Ask only about a genuine new product decision; do not infer scene fit from B1 asset-only inspection. Report this B1 boundary before beginning B2.
 
 ## Recovery evidence (2026-10-14)
 
