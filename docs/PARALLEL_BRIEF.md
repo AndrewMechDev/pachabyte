@@ -1,5 +1,7 @@
 # Parallel brief: Track B (map, page UI, art preparation)
 
+> **UPDATE 2026-10-14: read section 7 (at the end) first. It supersedes sections 0.1, 2 (scope additions) and 3 (ownership list) wherever they differ.**
+
 You are the second AI working on PachaByte at the same time as Track A (another session that owns all gameplay code). Read this whole file, then `docs/HANDOFF.md`, `AGENTS.md` (repo root), `odd/tasks/polish-phases.md` and `docs/design/ASSET_REQUESTS_V2.md`. If anything here contradicts the checkout, trust the checkout and report the difference.
 
 ## 0. Rules of engagement (non-negotiable)
@@ -62,3 +64,34 @@ What you built; files added and changed; decisions (sizes, formats, tool changes
 ## 6. What remains overall (for your awareness; not yours unless stated)
 - Track A: finish P2; P3 Pulso de la Trama (Shift on the route with at least 60 meter); merge Track B; Ajustes disclosure and smoke update; integrate `SHOTS`, `LOOP_NODE_EYE`, `BG_ROUTE_NEON`; HUD shield icon touching "ENERGÍA"; optional bigger Corruptor; README and screenshots; final smoke in both renderers; deploy v1.0.
 - User: playtest, art license decision for the art folder (currently "all rights reserved").
+
+## 7. UPDATE after P2 was merged and deployed (supersedes earlier ownership where different)
+
+### 7.1 What changed
+- `main` is now at commit `21cf517` (v0.7, live): P2 is done (animated bolts with impact bursts, Amaru liberation creature burst, eye-relic loop node, all procedural placeholders). 347 unit tests; the smoke has more checks. Track A is **not editing any file right now**; its next task (P3, Pulso de la Trama) will only start after the user confirms.
+- Your branch `feat/track-b-ui-map` was created before P2. **First step:** in your worktree run `git merge --ff-only feat/polish-phases` (it should fast-forward; your untracked `docs/track-b-progress.md` is not a problem). Then re-run `npm.cmd ci` ONLY if your own `node_modules` is still missing, after confirming with `Test-Path` that no junction remains. Re-read this brief afterwards: it is also updated there.
+- The incident with `npm ci` and the junction is closed: Track A verified its dependencies intact (same versions as the lockfile, 347 tests passing).
+
+### 7.2 New ownership map
+**Track B now owns (in addition to section 2):**
+- `src/game/fxTextures.ts`, `src/game/eyeArt.ts`, `src/game/shotFx.ts`, `src/game/spriteFrames.ts`, `src/game/sheetTextures.ts` and the new files you create: this is where the delivered sprites replace the procedural placeholders (P2 isolated the swap there).
+- `index.html`, `src/style.css`, `src/main.ts` (including the **"Ajustes" disclosure** that groups "Sonido" and "Reducir movimiento" into one control; keep the exact accessible names and visible text "Sonido: sí/no" and "Reducir movimiento: sí/no" once opened).
+- In `tests/browser-smoke.mjs` you may change ONLY the lines that locate or click the Sonido and Reducir movimiento buttons (add a tiny helper that opens "Ajustes" first, and keep the keyboard-only spirit). No other lines, no new groups, no renamed constants. List the exact hunks in your report.
+- Your own new tests for map rules, map text and sprite frame tables.
+
+**Track A still owns (do not edit):** `RouteScene.ts`, `GuardianScene.ts`, `animation.ts`, `sfx.ts`, `textures.ts`, `text.ts`, `debug.ts`, `hud.ts`, `hudRules.ts`, `routeRules.ts`, `amaruRules.ts`, `reverseRules.ts`, `pickupRules.ts`, `bugRules.ts`, `bugArt.ts`, `loopRules.ts`, `liberationRules.ts`, `liberationFx.ts`, `eyeRelic.ts`, `effectsRules.ts`, `balanceRules.ts`, all other existing tests, `docs/ruta01-*.png`, `odd/tasks/*`, `README.md`. Anything you need there goes under "Requests for Track A".
+If a requirement forces a one-line change in an `src/game/` file Track A owns (for example a texture key), do **not** edit it: put the exact diff in your report.
+
+### 7.3 Task list now (in this order, one local commit per task)
+- **B1** prepare the six images (as in section 2).
+- **B2** MapScene with `MAP_TRAMA` (as in section 2). Check `tests/browser-smoke.mjs` for every map field and key it reads and keep them working.
+- **B3** page UI, logo, page background, thematic buttons, **plus the Ajustes disclosure** (now yours).
+- **B4 (new)** integrate `SHOTS` into the bolts: replace the procedural bolt and impact-burst frames with the prepared sheet through `fxTextures.ts` (normal bolt, Ráfaga bolt, 4-frame impact burst). Hitboxes, speeds and the invisible 6x3 physics bodies must stay exactly as they are; Nokia four-green twins must still exist and the exact four-green REVERSE frame must still pass; reduced motion keeps frame 0.
+- **B5 (new)** integrate `LOOP_NODE_EYE` through `eyeArt.ts` (4 idle frames, hit, cracking, shattering; the frame-to-sheet mapping is documented in that file). Node HP, position, bobbing and hitbox unchanged.
+- **B6 (not yours, do not start)** `BG_ROUTE_NEON` needs a change in `RouteScene.ts`; prepare it and write the exact integration steps in `docs/design/INTEGRATION_NOTES.md` for Track A.
+
+### 7.4 Verification (stronger now)
+After each task: `npm.cmd run typecheck`, `npm.cmd test`, `npm.cmd run build`. Before your final report, run the smoke serially: WebGL twice and Canvas once on your own port (4190-4199). The smoke has pilot-dependent checks: a single failure in a pilot-driven check ("REVERSE at least twice", "solid Packet Loss block must cost a heart", Marea, Firewall) is a known flake; rerun to classify it, and report every run honestly. Failures in checks about your changes (map, page, bolts, eye, buttons) are real: fix them. Screenshots: map (restored and corrupted, locked node selected), page at 1000, 600 and 470 px, bolts in a Ráfaga volley, the eye idle and breaking. Look at them in both renderers.
+
+### 7.5 Report additions
+Include: the merge result of `git merge --ff-only feat/polish-phases`; the smoke hunks you touched; a list of integration risks for when Track A merges your branch after P3.
