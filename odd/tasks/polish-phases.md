@@ -41,3 +41,8 @@ Single writer per task; tests first (observe RED); parent spot-checks typecheck 
 - [ ] P4
 - [ ] P5
 Art requested (round 2): `docs/design/ASSET_REQUESTS_V2.md`.
+
+## Parallel tracks (from 2026-10-13, images received)
+- **Track A (main folder, branch `feat/polish-phases`)**: all gameplay code. P2 in progress, then P3, merge Track B, Ajustes disclosure + smoke update, integrate `SHOTS`, `LOOP_NODE_EYE`, `BG_ROUTE_NEON`, README, final QA, deploy.
+- **Track B (worktree `hack-the-andes-game-worktrees/track-b`, branch `feat/track-b-ui-map`)**: prepare the 6 received images, MapScene redesign with `MAP_TRAMA`, page UI with logo and `PAGE_BG`. Brief: `docs/PARALLEL_BRIEF.md`. Never pushes; no overlap with Track A files.
+- Merge order: Track A merges P2, then merges `feat/track-b-ui-map` (disjoint files), runs the full smoke, then deploys.
