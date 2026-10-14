@@ -1,14 +1,56 @@
 # Track B continuation progress
 
-## Current worktree scope — S1 / Checkpoint 2 (2026-10-14)
+## Current worktree scope — S2 / Checkpoint 2 (2026-10-14)
 
 Current baseline is `759461a` on `feat/track-b-ui-map` in the Track B worktree. B1–B5 are already integrated. The PRINCIPAL (Claude) owns release documentation, main merges and deployment; this worktree owns authorized game code/tests. No main access, synchronization, installs, release-file edits or remote operations are part of these bounded Checkpoint 2 units.
 
-Task 0 is verified and committed locally as `9e33b9a1c190f396d46f00677a3c5d3862082901`. Parent reran typecheck and all 35 files/394 tests, inspected the WebGL eye, and applied the medium ordinary verification tier with RDD OFF. Precommit cached whitespace caught an extra EOF blank line in the feature document; parent removed that blank line only before the commit. S1 writer verification is complete; parent assessment/commit is next, and no S2 work is authorized to this writer yet. Feature/recovery locator: `odd/tasks/checkpoint-2-story-sharing.md`. Canvas eye capture remains pending Checkpoint 2 after the one bounded pilot attempt lost; no Task 0 retry is needed.
+Task 0 is verified and committed locally as `9e33b9a1c190f396d46f00677a3c5d3862082901`. Parent reran typecheck and all 35 files/394 tests, inspected the WebGL eye, and applied the medium ordinary verification tier with RDD OFF. Precommit cached whitespace caught an extra EOF blank line in the feature document; parent removed that blank line only before the commit. S1 parent delivery is recorded below; S2 is the current bounded writer unit, stopping before S3. Feature/recovery locator: `odd/tasks/checkpoint-2-story-sharing.md`. Canvas eye capture remains pending Checkpoint 2 after the one bounded pilot attempt lost; no Task 0 retry is needed.
+
+### S1 parent delivery / S2 start
+
+S1 is committed as `2dd0b629960ac8c13c9ac1470663919c1ef10c35`. Parent repeated typecheck/37 files/405 tests and inspected card 2 Canvas; native read-only risk was medium, 473 authored lines, with global RDD OFF and ordinary verification. Initial staging was rejected against an obsolete smoke veto; parent re-read current 9.3/10.1 authorization and the exact helper/one-group diff, then scoped retry was approved. This was an authorization reconciliation, not a code failure. These facts and the S1 hash are recorded BEFORE S2 source writes. S2 only is now authorized; no S3 work.
+
+### S2 acceptance, schedule and invariants
+
+S2 writer verification is complete; parent assessment/spot-check/commit remains pending. Delegated direct: pure schedule/queue/text, small route integration and deterministic/browser proof form one behavior. No S3 work started. The S1 commit/ordinary tier and obsolete staging-veto reconciliation were recorded above and in the feature document BEFORE S2 source edits.
+
+The four compatible suggested intents retain exact wording and existing lore. Duration is 2800 ms each, derived from unchanged `SEGMENTS` and newly exported read-only `CAPTIONS`:
+
+| Segment / text | Instruction window | Narrative window (world ms) |
+|---|---|---|
+| firstBug — `LOS ERRORES DE LA TRAMA TE BUSCAN.` | Arrival hints end at 8000 | 8000–10800 |
+| packetLoss — `LOS DATOS SE PIERDEN Y VUELVEN.` | 37000–40500 | 40500–43300 |
+| eruption — `EL MISTI TAMBIÉN SIENTE EL DESFASE.` | 46000–49500 | 49500–52300 |
+| memoryLeak — `LA ENERGÍA SE ESCAPA DE LA TRAMA.` | 64000–67500 | 67500–70300 |
+
+Arrival lore is omitted because instruction captions occupy its complete 0–8000 ms segment. Bucle lore is omitted because dynamic `BUCLE ROTO` can interrupt a slot, making an uninterrupted 2.5–3 s line unsafe to promise. At-most-six is a ceiling, not a target; this four-line subset changes no hints/cues or canon. Packet/Misti/Leak lines queue from their segment boundary until the earliest complete hint-free interval, never carry into the next segment. Threshold's full instructional segment similarly has no free slot (tested).
+
+`narrativeRules.ts` is pure: schedule reserves non-overlapping full intervals; consumed cursor drops expired/blocked lines, never replays on a lower clock, and fresh `initialNarrative()` resets each Route create. Runtime steps only in the existing active world-clock path; no new timers, physics, HP, enemies, route duration, loop/reset mechanics or reduced-motion animation were introduced. Static narrative uses the existing caption strip (same bitmap atlas/colors/position), below HUD. Existing instructional text has absolute rendering priority, including a defensive future dynamic-cue interruption; an interrupted line is consumed, not resurrected. All four selected current windows avoid dynamic loop cues entirely.
+
+### S2 observed checks and visual proof
+
+Commands use explicit Track B cwd, `login:false` and the same-invocation private TEMP/TMP prefix recorded below. No source normalizer needed; source bytes were final before functional checks. All original route test assertions remain unchanged; no S1/T0 source edits or long-smoke edits occurred.
+
+| Command / phase | Observed result |
+|---|---|
+| `npx.cmd vitest run tests/narrativeRules.test.ts tests/narrativeText.test.ts tests/routeRules.test.ts` RED | Exit 1, receipt de0006: two missing-module suites and one CAPTIONS-export assertion failed; original 32 route tests passed. Missing-module RED is not described as a separately observed scheduling failure. |
+| Same focused command GREEN | Exit 0, a96b08: 3 files / 45 tests (9 queue/schedule, 3 text, 33 route); guarded typecheck also passed |
+| `npx.cmd tsc --noEmit` | Passed before full tests, guarded command continued |
+| `npm.cmd test` | 39 files / 418 tests passed, df364f (S1 405 + 13) |
+| `npm.cmd run build` | Exit 0, 778c4d / session 81156: 74 modules; existing nonfatal chunk/npm-config warnings |
+| `node tests/narrative-flow-check.mjs`, `PACHA_URL=http://127.0.0.1:4190` | Exit 0, 18745e / session 31266: WebGL + Canvas serially, one attempt each; arrival priority, first story, HUD separation, real movement/world-clock continuity, pause/focus freeze, exclusive expiration and restart cursor reset passed. Canvas used OS reduced motion. |
+| Full browser smoke / later narrative route captures | Deferred CP2 after S4; no route pilot, long smoke or additional capture attempt in S2 |
+| `git diff --check` | Exit 0 after final tracking writes; line-ending warnings only |
+
+Scoped elevated own preview and focused Edge command were approved using native permissions due already observed sandbox limitations. Exact server `npx.cmd vite preview --host 127.0.0.1 --port 4190 --strictPort` ran with private TEMP prefix, session 32826. Browser closed in `finally`; only preview 32826 stopped with Ctrl+C, observed exit 1 (4022c6). No protected listener/process, settings, firewall, software install or global review mode changed. No tracked `docs/ruta01-*.png` was generated; no restoration necessary.
+
+Four new 960x540 captures (native 320x180 logical canvas at 3x) were inspected with `view_image` original detail: `docs/design/checkpoint-2-captures/s2-instruction-webgl.png`, `s2-story-webgl.png`, `s2-instruction-canvas.png`, `s2-story-canvas.png`. Existing arrival hint is unchanged; story is fully readable in its centered strip below the unoccluded hearts/energy/score HUD, with flight canvas unobstructed except the existing narrow caption area. Later three schedule windows have deterministic proof, not claimed screenshot proof. Principal human fit/checkpoint review remains separate.
+
+Rollback boundary is the two narrative modules, CAPTIONS export, minimal Route reset/step/debug additions, narrative tests/harness and S2 tracking/captures only. Requests for PRINCIPAL: checkpoint/release summary should report four compatible ambient lines, preserved instructional priority, and remaining CP2 later-caption/full-smoke/human acceptance. Parent owns full task mirror and commit; next source unit is S3 only after parent verification. No principal release file or forbidden surface was edited.
 
 ### S1 acceptance and implementation
 
-S1 writer verification is complete; parent assessment, spot-check and commit remain pending. Route is delegated direct because scene/rules/text, map/page entry, view state and browser helpers form one coherent multi-file behavior. No S2 work was started. T0's parent-owned commit and precommit EOF cleanup were recorded above and in the feature document BEFORE S1 source edits.
+S1 writer verification below is historical; parent delivery is recorded above. Route is delegated direct because scene/rules/text, map/page entry, view state and browser helpers form one coherent multi-file behavior. No S2 work was started. T0's parent-owned commit and precommit EOF cleanup were recorded above and in the feature document BEFORE S1 source edits.
 
 - `IntroScene.ts` renders the four EXACT approved Spanish cards over the existing dimmed arena with native-size Kipu. `introText.ts` wraps at 288 logical pixels (48 six-pixel glyphs), preserving words and accents; card 2 fits two lines with padding.
 - Pure `introRules.ts` owns four cards, 3000 ms/card, 30 ms/character, advance/skip and once-entry routing. The scene advances only its own active clock: focus loss freezes typing/auto-advance, and the first resumed delta is discarded instead of catching up. Reduced motion displays the whole card immediately. One blip is requested per presented card; muted settings still win.

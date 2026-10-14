@@ -41,6 +41,7 @@ import { VIEW_EVENT, FOCUS_EVENT, type ViewState } from './viewState';
 import { Hud, PauseOverlay } from './hud';
 import { TEXT } from './text';
 import { clearDebug, exposeDebug } from './debug';
+import { initialNarrative, stepNarrative } from './narrativeRules';
 import kipuUrl from '../../assets/prepared/kipu-v4-32x40.png';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
@@ -97,6 +98,7 @@ export class RouteScene extends Phaser.Scene {
   private pattern!: Phaser.GameObjects.Graphics;
   private captionBox!: Phaser.GameObjects.Rectangle;
   private caption!: Phaser.GameObjects.BitmapText;
+  private narrative = initialNarrative();
   private panel!: Phaser.GameObjects.Rectangle;
   private panelText!: Phaser.GameObjects.BitmapText;
   private hud!: Hud;
@@ -176,6 +178,7 @@ export class RouteScene extends Phaser.Scene {
   create(): void {
     if (!this.registry.has('progress')) this.registry.set('progress', initialProgress());
     this.sceneRun += 1;
+    this.narrative = initialNarrative();
     this.clock = 0; this.real = 0; this.anim = 0; this.worldRate = 1; this.focused = true; this.paused = false; this.ending = 'playing';
     this.health = { hp: ROUTE.maxHp, invulnerableUntil: 0 }; this.meter = 0; this.tally = { fragments: 0, bugs: 0, returns: 0, bugPoints: 0, comboBonus: 0, pickups: 0, pickupBonus: 0 };
     this.combo = initialCombo(); this.comboHotUntil = 0; this.hitStop = initialHitStop(); this.fragmentsDropped = 0;
@@ -356,7 +359,9 @@ export class RouteScene extends Phaser.Scene {
 
     const blinking = real < this.health.invulnerableUntil;
     this.player.setAlpha(!blinking ? 1 : motion.reduced ? 0.5 : Math.floor(real / 90) % 2 ? 0.25 : 1);
-    this.updateCaption(cueVisible(this.loop, now) ? TEXT.loopBroken : captionAt(now));
+    const instruction = cueVisible(this.loop, now) ? TEXT.loopBroken : captionAt(now);
+    this.narrative = stepNarrative(this.narrative, now, instruction);
+    this.updateCaption(instruction || this.narrative.active?.text || '');
     this.drawOverlay(now, front, cameraX);
     this.animate(delta, carry);
     this.drawHud();
@@ -1083,6 +1088,7 @@ export class RouteScene extends Phaser.Scene {
     const enemyList = [...this.alive(this.glitchlings), ...this.alive(this.corruptors), ...this.alive(this.shadows)].map(enemy);
     return {
       scene: 'route', sceneRun: this.sceneRun, clock: this.clock, realClock: this.real, anim: this.anim, worldRate: this.worldRate, segment: segmentAt(this.clock),
+      narrative: { cursor: this.narrative.cursor, active: this.narrative.active ? { ...this.narrative.active } : null, instruction: cueVisible(this.loop, this.clock) ? TEXT.loopBroken : captionAt(this.clock), stripTop: CAPTION.top, stripBottom: CAPTION.top + CAPTION.height, hudBottom: GAME.hudHeight },
       caption: this.caption.text, paused: this.paused, focused: this.focused, outcome: this.ending,
       cameraX, scrollSpeed: ROUTE.scrollSpeed, transitionMs: ROUTE.transitionMs,
       player: {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ROUTE, SEGMENTS, SPAWNS, WALLS, addMeter, cameraScroll, captionAt, defeatBug, directEntry, finalScore, glitchlingVelocity, mareaFront,
+  ROUTE, SEGMENTS, SPAWNS, WALLS, CAPTIONS, addMeter, cameraScroll, captionAt, defeatBug, directEntry, finalScore, glitchlingVelocity, mareaFront,
   mareaTouches, overlaps, pickupFragment, quietSegment, firewallWindow, readRunState, runningScore, scoreBreakdown, segmentAt, spawnsDue, takeHit, wallRects, wallScreenX, wallTelegraph, type Tally,
 } from '../src/game/routeRules';
 import { BUGS, corruptorLifetime, sombraTravelMs } from '../src/game/bugRules';
@@ -255,4 +255,10 @@ describe('run state carried into the guardian', () => {
     expect(readRunState({ hp: 3, score: 100, fragments: 0, bugs: 0, meter: 0, routeSeconds: 70, pickups: 4, pickupBonus: 100 })).toMatchObject({ pickups: 4, pickupBonus: 100 });
     expect(readRunState({ hp: 3, score: 0, fragments: 0, bugs: 0, meter: 0, routeSeconds: 0, pickups: 'x', pickupBonus: -3 })).toMatchObject({ pickups: 0, pickupBonus: 0 });
   });
+});
+
+it('exposes unchanged instructional windows for instruction-first narrative scheduling', () => {
+  expect(CAPTIONS).toHaveLength(12);
+  for (const c of CAPTIONS) { expect(captionAt(c.start)).toBe(c.text); expect(c.end).toBeGreaterThan(c.start); }
+  expect(CAPTIONS.slice(0, 3).map(c => [c.start, c.end])).toEqual([[0, 3500], [3500, 5800], [5800, 8000]]);
 });

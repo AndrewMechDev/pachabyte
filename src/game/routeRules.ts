@@ -52,8 +52,8 @@ export function cameraScroll(ms: number): number {
 }
 
 // Each hazard is captioned once, the first time it appears (A2: the Packet Loss line waits for the last wall to go).
-interface Caption { start: number; end: number; text: string }
-const CAPTIONS: readonly Caption[] = [
+export interface Caption { readonly start: number; readonly end: number; readonly text: string }
+export const CAPTIONS: readonly Caption[] = [
   { start: 0, end: 3500, text: TEXT.intro },
   { start: 3500, end: 5800, text: TEXT.moveHint },
   { start: 5800, end: 8000, text: TEXT.fireHint },
