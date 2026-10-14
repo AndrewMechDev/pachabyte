@@ -39,3 +39,28 @@ Never use or stop ports 4173 and 4181 (the user's playtest servers); pick your o
 
 ## Memory
 Engram project `hack-the-andes-game` has topic `odd/ruta01-flight-mvp/tasks` with the same history; the repo docs are authoritative.
+
+## Track B temporary-directory recovery (2026-10-14)
+
+At `feat/track-b-ui-map`, baseline `cd80afa`, relocating TEMP/TMP to the verified real private dependency directory eliminated the previously observed sandbox SSR missing-file error: **33 test files and 347 tests passed**, exit 0. This is evidence for the local temporary-path solution, not proof of AppContainer internals, cross-process incoherence or antivirus behavior. The user's report that Track A already passed 347 tests is separate user evidence; this task did not inspect canonical/main.
+
+Run the prefix and command in the **same non-login PowerShell invocation**, from the Track B root:
+
+```powershell
+$env:TEMP = "$PWD\node_modules\.tmp"; $env:TMP = $env:TEMP; New-Item -ItemType Directory -Force $env:TEMP | Out-Null; npm.cmd test
+```
+
+Observed Node `os.tmpdir()` inheritance:
+`C:\Users\dark_\Documents\hack-the-andes-game-worktrees\track-b\node_modules\.tmp`.
+No elevated test retry was needed. Do not replace this with a separate shell invocation or permanently change system/environment configuration.
+
+Build passed with the same prefix (`npm.cmd run build`, including typecheck). The large-chunk warning remained nonfatal. Exact preview and one-shot WebGL smoke commands, each with its own prefix:
+
+```powershell
+$env:TEMP = "$PWD\node_modules\.tmp"; $env:TMP = $env:TEMP; New-Item -ItemType Directory -Force $env:TEMP | Out-Null; npx.cmd vite preview --host 127.0.0.1 --port 4190 --strictPort
+$env:TEMP = "$PWD\node_modules\.tmp"; $env:TMP = $env:TEMP; New-Item -ItemType Directory -Force $env:TEMP | Out-Null; $env:PACHA_URL='http://127.0.0.1:4190'; $env:PACHA_RENDERER='webgl'; npm.cmd run test:browser
+```
+
+Preview started on the owned 4190 port. Smoke exited 1 at **browser launch**, `failed_or_unavailable`, with zero passed groups: `browserType.launch: Target page, context or browser has been closed`. Edge logged `TransactNamedPipe: Ha terminado la canalización. (0x6D)`; Playwright's own cleanup logged a taskkill username/password error and then process exit. Root cause and permission remedy remain unproven. No browser retry/escalation or settings change was authorized/performed; a new smoke attempt needs permission. Canvas was not run. No screenshot was produced or visually examined, and screenshot Git status was clean before and after, so no restoration was needed. Only the owned preview exec session was interrupted and terminated (exit 1); no other server/process was touched.
+
+Unit/build baseline is now verified for this checkout. Renderer smoke and visual acceptance remain unavailable/pending; B1 work still has not started and belongs to parent coordination.
