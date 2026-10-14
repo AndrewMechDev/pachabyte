@@ -17,6 +17,7 @@ PachaByte is an original project. Nothing here is copied from another game.
 | Loop eye relic | User-supplied original image-chat art, request `LOOP_NODE_EYE` | Untouched `assets/incoming/LOOP_NODE_EYE.png`; seven prepared 40x56 cells, measured mapping in `docs/design/INTEGRATION_NOTES.md`. Not integrated in B1. |
 | Normal/Ráfaga bolts and impact burst | User-supplied original image-chat art, request `SHOTS` | Untouched `assets/incoming/SHOTS.png`; three separate prepared four-frame sheets. Not integrated in B1. |
 | Corrupted neon route backdrop | User-supplied original image-chat art, request `BG_ROUTE_NEON` | Untouched `assets/incoming/BG_ROUTE_NEON.png`; prepared 320x180 opaque PNG. Not integrated in B1. |
+| Social preview card | User-supplied original image-chat scene, saved as `assets/incoming/SOCIAL_SCENE.png` (1733x907), with the prepared PachaByte logo composited on top | Untouched source in `assets/incoming/`; `public/social-preview.png` is a 1200x630 composite (crop of the bottom sliver, smooth downscale, logo at 1.4x). Used for the `og:image` / `twitter:card` tags. |
 
 ## Procedural placeholders (Ruta 01)
 
