@@ -17,7 +17,10 @@ import { FloaterPool, floaterView, hitStopActive, initialHitStop, stoppedPart, t
 import { advanceLiberation, resultLines, stageProgress, startLiberation, tickLiberation, variantKey, type Liberation } from './liberationRules';
 import { ARENA, ARENA_DIM, BODY_TEXTURES, BOLT_TEXTURES, HEAD, HEAD_FLASH, createAmaruTextures, derive } from './amaruTextures';
 import { NOKIA, convertPixels } from './nokiaPalette';
-import { PICKUP_TEXTURES, createTextures, createRetroFonts } from './textures';
+import { PICKUP_TEXTURES, createGlitchlingTextures, createTextures, createRetroFonts } from './textures';
+import { createShotTextures } from './fxTextures';
+import { ImpactPool, drawImpacts, shotFrame, shotKindFor, shotOrigin, shotTextureKey, type ShotKind } from './shotFx';
+import { FREED, FREED_SHEETS, freedSparks, freedView, type FreedStage } from './liberationFx';
 import { createSheetTextures, loadSpriteSheets } from './sheetTextures';
 import { pickupFrame } from './spriteFrames';
 import {
@@ -89,6 +92,12 @@ export class GuardianScene extends Phaser.Scene {
   private backdropDim!: Phaser.GameObjects.Image;
   private segments: Phaser.GameObjects.Image[] = [];
   private tail!: Phaser.GameObjects.Image;
+  // P2 juice: display images following the pooled physics shots, impact bursts and the liberation creatures.
+  private shotViews: Phaser.GameObjects.Image[] = [];
+  private impacts = new ImpactPool();
+  private freedImages: Phaser.GameObjects.Image[] = [];
+  private freedStages: FreedStage[] = [];
+  private freedAt = -Infinity;
   private core!: Phaser.GameObjects.Image;
   private orbit: Phaser.GameObjects.Image[] = [];
   private shots!: Phaser.Physics.Arcade.Group;
@@ -185,7 +194,7 @@ export class GuardianScene extends Phaser.Scene {
     if (!this.textures.exists('kipu-evaluation')) this.load.image('kipu-evaluation', kipuUrl);
     if (!this.textures.exists(HEAD)) this.load.image(HEAD, headUrl);
     if (!this.textures.exists(ARENA)) this.load.image(ARENA, arenaUrl);
-    loadSpriteSheets(this, ['pickups']);
+    loadSpriteSheets(this, ['pickups', ...FREED_SHEETS]);
   }
 
   create(): void {
@@ -226,9 +235,10 @@ export class GuardianScene extends Phaser.Scene {
     if (!resume) { this.health = { hp: guard.hp, invulnerableUntil: 0 }; this.power = { ...this.power, shield: guard.shield }; }
     this.time.paused = false;
     sfx.setDucked(false);
+    this.impacts = new ImpactPool(); this.freedAt = -Infinity; this.freedStages = Array.from({ length: FREED.count }, () => 'wait' as FreedStage);
 
     // Pickup frames (user sprites) with their four-green twins, like everything else REVERSE can show (Canvas ignores tint).
-    createTextures(this); createSheetTextures(this, ['pickups'], true); createRetroFonts(this); ensureKipuFrames(this);
+    createTextures(this); createSheetTextures(this, ['pickups'], true); createSheetTextures(this, FREED_SHEETS); createGlitchlingTextures(this); createShotTextures(this, true); createRetroFonts(this); ensureKipuFrames(this);
     for (const key of [...KIPU_FRAMES.map(frame => kipuTextureKey(frame, false)), 'bullet']) derive(this, key, `${key}-nokia`, pixels => convertPixels(pixels));
     createAmaruTextures(this, 0xfff1c3, NOKIA[3]);
 
@@ -257,6 +267,10 @@ export class GuardianScene extends Phaser.Scene {
     this.orbit = Array.from({ length: REVERSE.maxCaptures }, () => this.add.image(0, 0, variantKey(BOLT_TEXTURES.rhombus, false, true)).setDepth(6).setVisible(false));
 
     this.shots = this.pool(POOL.shots, 'bullet', 7);
+    // Invisible 6x3 physics bodies; the animated bolts are these images, one per pool slot (never scaled).
+    this.shotViews = this.shots.getChildren().map(() => this.add.image(0, 0, shotTextureKey('normal', 0, false)).setDepth(7).setVisible(false));
+    // Creatures freed from Amaru: plain display images above the boss, bounded, shown only during the recede stage.
+    this.freedImages = Array.from({ length: FREED.capacity }, () => this.add.image(0, 0, 'glitchling').setDepth(6).setVisible(false));
     this.returns = this.pool(POOL.returns, BOLT_TEXTURES.returned, 7);
     this.enemies = this.pool(POOL.enemies, BOLT_TEXTURES.orb, 6);
     this.pickups = this.pool(POOL.pickups, PICKUP_TEXTURES.corazon, 6.5);
@@ -271,7 +285,7 @@ export class GuardianScene extends Phaser.Scene {
       const shot = (this.shots.contains(first as Sprite) ? first : second) as Sprite;
       if (!shot.active || this.ending !== 'playing') return;
       shot.disableBody(true, true);
-      this.hitAmaru('normal', shot.x, shot.y, Number(shot.getData('damage') ?? PICKUPS.baseDamage));
+      this.hitAmaru('normal', shot.x, shot.y, Number(shot.getData('damage') ?? PICKUPS.baseDamage), (shot.getData('kind') as ShotKind | undefined) ?? 'normal');
     });
     this.physics.add.overlap(this.returns, this.boss, (first, second) => {
       const shot = (this.returns.contains(first as Sprite) ? first : second) as Sprite;
@@ -395,10 +409,10 @@ export class GuardianScene extends Phaser.Scene {
   // (same shield deflection and meter charge on contact) that deals 2 damage (round 2), fixed when it leaves Kipu.
   private fire(now: number): void {
     let size = 0;
-    const damage = shotDamage(this.power, now);
+    const damage = shotDamage(this.power, now), kind = shotKindFor(rafagaActive(this.power, now));
     for (const angle of volleyAngles(this.power, now)) {
       if (this.shots.countActive(false) === 0) break;
-      this.spawnShot(this.shots, this.player.x + this.facing * 12, this.player.y - 1, this.facing * GAME.bulletSpeed * Math.cos(angle), GAME.bulletSpeed * Math.sin(angle), 'bullet', now + GAME.bulletLifetimeMs, damage);
+      this.spawnShot(this.shots, this.player.x + this.facing * 12, this.player.y - 1, this.facing * GAME.bulletSpeed * Math.cos(angle), GAME.bulletSpeed * Math.sin(angle), 'bullet', now + GAME.bulletLifetimeMs, damage, { kind, born: now, tilt: this.facing * angle, facing: this.facing });
       size++;
     }
     if (size === 0) return;
@@ -477,8 +491,10 @@ export class GuardianScene extends Phaser.Scene {
   private orbitAngle(index: number, count: number): number { return this.clocks.real / 160 + index * Math.PI * 2 / Math.max(1, count); }
 
   // ------------------------------------------------------------------ Amaru
-  private hitAmaru(kind: HitKind, x: number, y: number, damage: number = PICKUPS.baseDamage): void {
+  private hitAmaru(kind: HitKind, x: number, y: number, damage: number = PICKUPS.baseDamage, shotKind: ShotKind = 'normal'): void {
     const now = this.clocks.real, before = this.bossState, step = hitBoss(before, kind, this.clocks.world, damage);
+    // Kipu's own bolts land with a star burst on Amaru, his shield or a deflection (returned bolts keep their own burst).
+    if (kind === 'normal') this.impacts.spawn(x, y, shotKind, now);
     this.bossState = step.boss;
     // Ráfaga drops: at the middle of phase 1 and at every phase 2 shield break, one on screen at most.
     const rafagaOnScreen = this.alive(this.pickups).some(item => item.getData('kind') === 'rafaga');
@@ -654,6 +670,8 @@ export class GuardianScene extends Phaser.Scene {
     this.messages = []; this.messageUntil = 0; this.message.setText('');
     this.headOverlay.setVisible(true);
     sfx.play('victory');
+    // The creatures burst out of Amaru inside the recede stage (see liberationFx.ts).
+    this.freedAt = this.clocks.real; sfx.play('freed');
     this.publishView();
   }
 
@@ -802,8 +820,20 @@ export class GuardianScene extends Phaser.Scene {
       image.setVisible(visible);
       if (visible) image.setTexture(variantKey(BOLT_TEXTURES.rhombus, false, nokia)).setPosition(Math.round(this.player.x + Math.cos(angle) * 16), Math.round(this.player.y + Math.sin(angle) * 16));
     });
+    this.shots.getChildren().forEach((child, i) => {
+      const shot = child as Sprite, view = this.shotViews[i];
+      if (!shot.active) { view.setVisible(false); return; }
+      const kind = (shot.getData('kind') as ShotKind | undefined) ?? 'normal', origin = shotOrigin(kind);
+      view.setTexture(shotTextureKey(kind, shotFrame(kind, now - Number(shot.getData('born') ?? 0), motion.reduced), nokia))
+        .setOrigin(origin.x, origin.y).setPosition(Math.round(shot.x), Math.round(shot.y))
+        // Four-green mode never rotates a bolt: Canvas anti-aliases the edges of rotated images, which adds colors outside the palette.
+        .setFlipX(Number(shot.getData('facing') ?? 1) === -1).setRotation(nokia ? 0 : Number(shot.getData('tilt') ?? 0)).setVisible(true);
+    });
+    this.animateFreed(now, nokia);
     this.fx.step(now, delta / 1000, 0);
     this.fxGraphics.clear(); drawParticles(this.fxGraphics, this.fx, nokia);
+    this.impacts.step(now, motion.reduced);
+    drawImpacts(this.fxGraphics, this.impacts, now, nokia, motion.reduced);
     const ring = nokia ? COLORS.nokia.mid : SHIELD_COLOR;
     if (this.ending === 'playing' && this.power.shield) drawKipuShield(this.fxGraphics, this.player.x, this.player.y, ring);
     drawShieldBreak(this.fxGraphics, this.player.x, this.player.y, ring, now - this.shieldBreakAt, motion.reduced);
@@ -815,6 +845,26 @@ export class GuardianScene extends Phaser.Scene {
       const view = floaterView(f, now, motion.reduced);
       // Four-green mode keeps alpha 1: blending would add colors outside the exact palette.
       label.setPosition(Math.round(view.x - f.text.length * CELL_WIDTH / 2), view.y).setAlpha(nokia ? 1 : view.alpha);
+    });
+  }
+
+  // The freed creatures: real Glitchling, Corruptor and Sombra frames at native size, bursting from Amaru along arcs, then
+  // smaller shadow frames, then turquoise and gold sparkles. Reduced motion: a brief static fade, no flight or sparkles.
+  private animateFreed(now: number, nokia: boolean): void {
+    const age = Number.isFinite(this.freedAt) ? now - this.freedAt : -1, origin = (this.boss.body as Body).center;
+    this.freedImages.forEach((image, i) => {
+      if (i >= FREED.count) { image.setVisible(false); return; }
+      const view = freedView(i, age, motion.reduced);
+      image.setVisible(view.visible);
+      if (view.visible) {
+        if (image.texture.key !== view.texture) image.setTexture(view.texture);
+        // Four-green mode keeps alpha 1 (blending would add colors outside the palette).
+        image.setPosition(Math.round(origin.x + view.x), Math.round(origin.y + view.y)).setAlpha(nokia ? 1 : view.alpha);
+      }
+      if (!motion.reduced && view.stage === 'spark' && this.freedStages[i] !== 'spark') {
+        for (const spark of freedSparks(i, origin.x + view.x, origin.y + view.y)) this.fx.emit(spark, now);
+      }
+      this.freedStages[i] = view.stage;
     });
   }
 
@@ -969,11 +1019,12 @@ export class GuardianScene extends Phaser.Scene {
 
   private alive(group: Phaser.Physics.Arcade.Group): Sprite[] { return group.getChildren().filter(child => child.active) as Sprite[]; }
 
-  private spawnShot(group: Phaser.Physics.Arcade.Group, x: number, y: number, vx: number, vy: number, base: string, expires: number, damage: number = PICKUPS.baseDamage): void {
+  // `view` is the display data of a Kipu bolt: its body stays an invisible 6x3 box and an image draws it (animate()).
+  private spawnShot(group: Phaser.Physics.Arcade.Group, x: number, y: number, vx: number, vy: number, base: string, expires: number, damage: number = PICKUPS.baseDamage, view?: Record<string, unknown>): void {
     const shot = group.getFirstDead(false) as Sprite | null;
     if (!shot) return;
-    shot.enableBody(true, x, y, true, true);
-    shot.setTexture(variantKey(base, false, this.palette)).setData({ base, expires, damage });
+    shot.enableBody(true, x, y, true, view === undefined);
+    shot.setTexture(variantKey(base, false, this.palette)).setData({ base, expires, damage, ...view });
     (shot.body as Body).setSize(base === 'bullet' ? 6 : 7, base === 'bullet' ? 3 : 5, true);
     shot.setVelocity(vx, vy);
   }
@@ -1044,6 +1095,8 @@ export class GuardianScene extends Phaser.Scene {
       wave: wave ? { ...wave, width: AMARU.wave.width, gap: AMARU.wave.gap } : null,
       patternsSeen: [...this.patternsSeen], cue: this.cueShown, message: this.message.text,
       liberation: lib ? { stage: lib.stage, dialogueIndex: lib.dialogueIndex, codexShown: lib.codexShown } : null,
+      impacts: { active: this.impacts.activeCount, spawned: this.impacts.spawned, capacity: this.impacts.items.length },
+      freed: { active: this.freedImages.filter(i => i.visible).length, spawned: this.freedStages.filter(st => st !== 'wait').length, capacity: this.freedImages.length, count: FREED.count, textures: this.freedImages.filter(i => i.visible).map(i => i.texture.key) },
       panel: this.panelText.text, panelHelp: this.panelHelp.text, resultText: this.resultText,
       checkpoint: this.checkpoint ? { ...this.checkpoint } : null, checkpointed: this.resumedFrom !== null, resumedFrom: this.resumedFrom?.phase ?? null,
       fightElapsedMs: this.priorMs + this.clocks.real, coach: { ...this.coachState },
@@ -1051,7 +1104,7 @@ export class GuardianScene extends Phaser.Scene {
       hitStop: { active: hitStopActive(this.hitStop, this.clocks.real), from: this.hitStop.from, until: this.hitStop.until, count: this.hitStop.count, totalMs: this.hitStop.totalMs },
       floaters: { active: this.floaters.activeCount, capacity: this.floaters.items.length, texts: this.floaters.items.filter(f => f.active).map(f => f.text) },
       enemyBolts: this.alive(this.enemies).map(bolt => { const v = (bolt.body as Body).velocity; return { x: bolt.x, y: bolt.y, vx: v.x, vy: v.y, capturable: bolt.getData('capturable') === true, shape: bolt.getData('shape'), texture: bolt.texture.key }; }),
-      alliedShots: [...this.alive(this.shots).map(s => ({ x: s.x, y: s.y, returned: false, damage: Number(s.getData('damage') ?? 1) })), ...this.alive(this.returns).map(s => ({ x: s.x, y: s.y, returned: true }))],
+      alliedShots: [...this.alive(this.shots).map(s => ({ x: s.x, y: s.y, returned: false, damage: Number(s.getData('damage') ?? 1), kind: (s.getData('kind') as ShotKind | undefined) ?? 'normal', texture: this.shotViews[this.shots.getChildren().indexOf(s)].texture.key })), ...this.alive(this.returns).map(s => ({ x: s.x, y: s.y, returned: true }))],
       pools: { shots: this.shots.getLength(), returns: this.returns.getLength(), enemies: this.enemies.getLength(), orbit: this.orbit.length, particles: this.fx.items.length, particlesActive: this.fx.activeCount, pickups: this.pickups.getLength() },
       power: { rafaga: { active: rafagaActive(this.power, this.clocks.real), remainingMs: rafagaRemaining(this.power, this.clocks.real), until: this.power.rafagaUntil }, shield: this.power.shield, shieldBreakAt: this.shieldBreakAt },
       pickups: this.alive(this.pickups).map(p => ({ type: p.getData('kind') as PickupKind, x: p.x, y: p.y, texture: p.texture.key })),

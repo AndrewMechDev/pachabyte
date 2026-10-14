@@ -124,11 +124,13 @@ describe('ParticlePool', () => {
 
 describe('fxColor', () => {
   it('maps every effect slot to exactly one of the four Nokia greens when the palette is active', () => {
-    for (const slot of ['light', 'gold', 'teal', 'violet'] as const) expect(NOKIA).toContain(fxColor(slot, true));
+    for (const slot of ['light', 'gold', 'teal', 'violet', 'terracotta', 'plum'] as const) expect(NOKIA).toContain(fxColor(slot, true));
   });
   it('keeps the warm-gold and violet identities in the normal palette', () => {
     expect(fxColor('gold', false)).toBe(0xedc76c);
     expect(fxColor('violet', false)).toBe(0xc985ef);
+    expect(fxColor('terracotta', false)).toBe(0xd8573f);
+    expect(fxColor('plum', false)).toBe(0x4a2266);
   });
 });
 

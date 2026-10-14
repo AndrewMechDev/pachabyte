@@ -36,7 +36,7 @@ Single writer per task; tests first (observe RED); parent spot-checks typecheck 
 ## Status
 - [x] v0.5 live (`530296e`).
 - [x] P1 (v0.6): umbral heal, 3rd Corazón at 71.95 s, Ráfaga 9 s x2 damage, Amaru 80 HP (53/26), entry with >=3 hearts + Escudo, phase 3 Corazón, racha x3/x4 charges +25. RED observed; 308/308; pilots won first attempt in WebGL x3 and Canvas x1.
-- [ ] P2
+- [x] P2 (v0.7): animated Kipu/Ráfaga bolts with impact bursts (invisible 6x3 physics bodies, separate display images), Amaru liberation burst (10 real bug sprites fly out inside the recede stage), loop node as an original eye relic (HP 5, hitbox unchanged), all procedural placeholders for SHOTS and LOOP_NODE_EYE. RED observed; 347/347; smoke passed WebGL x2 and Canvas x1 (parent re-run). Writer saw 2 pilot-dependent failures in 4 WebGL runs (baseline shows the same kind).
 - [ ] P3
 - [ ] P4
 - [ ] P5

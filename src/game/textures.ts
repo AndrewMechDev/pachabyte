@@ -16,7 +16,7 @@ export function createTextures(scene: Phaser.Scene): void {
 
 type PixelRows = readonly string[];
 // '.' is transparent; every other character maps to one opaque color. Integer pixels only.
-function paint(scene: Phaser.Scene, key: string, rows: PixelRows, colors: Readonly<Record<string, number>>): void {
+export function paint(scene: Phaser.Scene, key: string, rows: PixelRows, colors: Readonly<Record<string, number>>): void {
   if (scene.textures.exists(key)) return;
   const g = scene.add.graphics();
   rows.forEach((row, y) => [...row].forEach((char, x) => {
@@ -78,11 +78,16 @@ const FIREWALL: PixelRows = [
   'rrrodrrr',
 ];
 
-export function createRouteTextures(scene: Phaser.Scene): void {
+// The Glitchling frames and their hit flash; the guardian also shows them in Amaru's liberation burst (P2).
+export function createGlitchlingTextures(scene: Phaser.Scene): void {
   paint(scene, 'glitchling', GLITCHLING_A, GLITCH_COLORS);
   paint(scene, 'glitchling-b', GLITCHLING_B, GLITCH_COLORS);
   // Hit flash: same silhouette in one light color (derived texture; Canvas ignores tint).
   paint(scene, 'glitchling-hit', GLITCHLING_A, { p: 0xfff1c3, d: 0xfff1c3, e: 0xfff1c3, l: 0xfff1c3 });
+}
+
+export function createRouteTextures(scene: Phaser.Scene): void {
+  createGlitchlingTextures(scene);
   paint(scene, 'fragment', FRAGMENT, { g: 0xedc76c, l: 0xfff1c3, o: 0xa27c52 });
   paint(scene, 'firewall', FIREWALL, { d: 0x6b2a22, r: 0xd8573f, o: 0xf2a65a });
   // PLACEHOLDER pending an asset request: Marea del Desfase interference tile, purple scanlines with sparks.
@@ -144,9 +149,9 @@ export function createRetroFonts(scene: Phaser.Scene): void {
 //   HAZARD_PACKET_LOSS  stacked data packets (blue blocks with bright bits), repeated by a TileSprite, never scaled;
 //   HAZARD_EMBER        a small round ember (orange rim, yellow-white core);
 //   HAZARD_MEMORY_LEAK  a binary purple dither (opaque pixels and holes, never alpha-blended), repeated by a TileSprite;
-//   HAZARD_LOOP_NODE    a gold ring with four notches around a violet core (plus a light hit-flash twin).
+// The Bucle node is an eye relic since P2 (eyeArt.ts, textures in fxTextures.ts).
 export const HAZARD_TEXTURES = Object.freeze({
-  packetBlock: 'hazard-packet-block', ember: 'hazard-ember', leak: 'hazard-memory-leak', loopNode: 'hazard-loop-node', loopNodeHit: 'hazard-loop-node-hit',
+  packetBlock: 'hazard-packet-block', ember: 'hazard-ember', leak: 'hazard-memory-leak',
 });
 const PACKET_BLOCK: PixelRows = [
   'dddddddddd',
@@ -160,14 +165,8 @@ const PACKET_BLOCK: PixelRows = [
 ];
 const EMBER: PixelRows = ['.oyo.', 'oyYyo', 'yYwYy', 'oyYyo', '.oyo.'];
 const LEAK: PixelRows = ['p.m.', '.p.p', 'm.p.', '.p.p'];
-const LOOP_NODE: PixelRows = Array.from({ length: 13 }, (_, y) => Array.from({ length: 13 }, (_, x) => {
-  const d = Math.hypot(x - 6, y - 6), notch = (x === 6 || y === 6) && d > 4.4 && d < 6.6;
-  return notch ? 'l' : d >= 4.4 && d <= 6.2 ? 'g' : d < 2.3 ? 'c' : d < 3.3 ? 'v' : '.';
-}).join(''));
 export function createHazardTextures(scene: Phaser.Scene): void {
   paint(scene, HAZARD_TEXTURES.packetBlock, PACKET_BLOCK, { d: 0x16343c, b: 0x7fb8ff, l: 0xfff1c3 });
   paint(scene, HAZARD_TEXTURES.ember, EMBER, { o: 0xd8573f, y: 0xf2a65a, Y: 0xffd27a, w: 0xfff1c3 });
   paint(scene, HAZARD_TEXTURES.leak, LEAK, { p: 0x7a3fa8, m: 0xc985ef });
-  paint(scene, HAZARD_TEXTURES.loopNode, LOOP_NODE, { g: 0xedc76c, l: 0xfff1c3, c: 0xfff1c3, v: 0x9b4fd0 });
-  paint(scene, HAZARD_TEXTURES.loopNodeHit, LOOP_NODE, { g: 0xfff1c3, l: 0xfff1c3, c: 0xfff1c3, v: 0xfff1c3 });
 }

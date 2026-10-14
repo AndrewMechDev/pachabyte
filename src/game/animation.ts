@@ -74,9 +74,10 @@ export function chargeLevel(phase: AttackPhase, phaseElapsed: number): number {
   return phase === 'anticipation' ? Math.min(1, Math.max(0, phaseElapsed / 800)) : 0;
 }
 
-export type FxSlot = 'light' | 'gold' | 'teal' | 'violet';
-const NORMAL: Readonly<Record<FxSlot, number>> = { light: 0xfff1c3, gold: 0xedc76c, teal: 0x59d3c4, violet: 0xc985ef };
-const GREEN: Readonly<Record<FxSlot, number>> = { light: NOKIA[3], gold: NOKIA[3], teal: NOKIA[2], violet: NOKIA[2] };
+// terracotta is the last frame of an impact star; plum is the dark purple of loosened eye cables (P2).
+export type FxSlot = 'light' | 'gold' | 'teal' | 'violet' | 'terracotta' | 'plum';
+const NORMAL: Readonly<Record<FxSlot, number>> = { light: 0xfff1c3, gold: 0xedc76c, teal: 0x59d3c4, violet: 0xc985ef, terracotta: 0xd8573f, plum: 0x4a2266 };
+const GREEN: Readonly<Record<FxSlot, number>> = { light: NOKIA[3], gold: NOKIA[3], teal: NOKIA[2], violet: NOKIA[2], terracotta: NOKIA[1], plum: NOKIA[1] };
 export function fxColor(slot: FxSlot, nokia: boolean): number { return nokia ? GREEN[slot] : NORMAL[slot]; }
 
 export interface Particle { x: number; y: number; vx: number; vy: number; born: number; ttl: number; slot: FxSlot; size: number; active: boolean }

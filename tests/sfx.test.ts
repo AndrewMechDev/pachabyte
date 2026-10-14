@@ -36,8 +36,14 @@ describe('sound recipes', () => {
   it('covers the A2 route hazards: ember impact, Memory Leak drain, loop reset and loop break', () => {
     for (const name of ['emberImpact', 'leakDrain', 'loopReset', 'loopBreak']) expect(SFX_NAMES).toContain(name);
   });
+  it('covers the P2 cue: the creatures freed from Amaru', () => {
+    expect(SFX_NAMES).toContain('freed');
+    // The freed sparkle cascade follows the victory arpeggio, so both fit in the voice budget together.
+    expect(RECIPES.freed.length + RECIPES.victory.length).toBeLessThanOrEqual(MAX_VOICES);
+    expect(Math.min(...RECIPES.freed.map(voice => voice.at))).toBeGreaterThan(0.2);
+  });
   it('defines a bounded recipe for every named effect', () => {
-    expect(SFX_NAMES.length).toBe(36);
+    expect(SFX_NAMES.length).toBe(37);
     for (const name of SFX_NAMES) {
       const voices = RECIPES[name];
       expect(voices.length).toBeGreaterThan(0);

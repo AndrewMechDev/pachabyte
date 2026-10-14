@@ -6,7 +6,7 @@ export type SfxName = 'shot' | 'bossHit' | 'reflectHit' | 'heroHit' | 'capture' 
   | 'deflect' | 'shieldHit' | 'shieldBreak' | 'wave' | 'restore' | 'blip'
   | 'corruptorCharge' | 'corruptorShot' | 'sombraDodge' | 'sombraSplit' | 'comboUp'
   | 'pickupRafaga' | 'pickupEscudo' | 'pickupCorazon' | 'shieldAbsorb'
-  | 'emberImpact' | 'leakDrain' | 'loopReset' | 'loopBreak';
+  | 'emberImpact' | 'leakDrain' | 'loopReset' | 'loopBreak' | 'freed';
 
 export interface Voice { wave: 'square' | 'triangle' | 'sawtooth' | 'sine' | 'noise'; from: number; to: number; at: number; dur: number; gain: number }
 // For 'noise', from/to are the low-pass cutoff sweep in Hz instead of a pitch.
@@ -58,6 +58,9 @@ export const RECIPES: Readonly<Record<SfxName, readonly Voice[]>> = Object.freez
   leakDrain: [v('triangle', 520, 260, 0, 0.09, 0.18)],
   loopReset: [v('sawtooth', 700, 180, 0, 0.22, 0.2), v('triangle', 1400, 360, 0.02, 0.2, 0.16)],
   loopBreak: [v('square', 300, 1200, 0, 0.18, 0.3), v('noise', 4000, 900, 0.05, 0.25, 0.3), v('triangle', 990, 990, 0.2, 0.2, 0.3)],
+  // P2 (2026-10-13): the creatures leaving Amaru, a rising sparkle cascade that starts after the victory arpeggio's
+  // first notes (victory uses 5 voices, this one 5 more, so both fit the 12-voice budget).
+  freed: [v('sine', 880, 1320, 0.3, 0.16, 0.24), v('sine', 1100, 1650, 0.4, 0.16, 0.22), v('sine', 1320, 1980, 0.5, 0.16, 0.2), v('triangle', 1760, 2640, 0.6, 0.2, 0.18), v('noise', 7000, 2500, 0.3, 0.5, 0.1)],
 });
 export const SFX_NAMES = Object.keys(RECIPES) as SfxName[];
 

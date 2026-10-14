@@ -44,6 +44,9 @@ const BACKGROUND_LAYERS = new Set(['backdrop', 'ambient-volcano', 'ambient-cloud
 const ROUTE_MS = 98000, MAREA = { start: 72000, peak: 78000, end: 82000 }, LOOP_START = 82000, THRESHOLD_MS = 90000;
 const PL = { start: 37600, period: 2400, solid: 800, speed: 64, width: 10, lanes: [[19, 38], [59, 37], [98, 38], [138, 37]] };
 const plSolid = (t, i) => ((((t - PL.start + (i % 2 ? PL.period / 2 : 0)) % PL.period) + PL.period) % PL.period) < PL.solid;
+// P2 juice (2026-10-13); mirror shotFx.ts, liberationFx.ts and eyeRelic.ts.
+const IMPACT_CAPACITY = 12, FREED_COUNT = 10, FREED_CAPACITY = 12;
+const EYE_IDLE = ['loop-eye-idle0', 'loop-eye-idle1', 'loop-eye-idle2', 'loop-eye-idle3'], EYE_FRAMES = [...EYE_IDLE, 'loop-eye-hit', 'loop-eye-crack', 'loop-eye-break'];
 const EMBER_MARKER_MS = 700, LEAK_DRAIN = 25, LOOP_SCORE = 250, LOOP_BOB = 14, LOOP_ITERATION_MS = 2600;
 const TEXT_A2 = { umbral: 'EL UMBRAL TE RESTAURA', packetLoss: 'PACKET LOSS: CRUZA CUANDO SE PIERDAN', eruption: '¡EL MISTI DESPIERTA!', memoryLeak: 'MEMORY LEAK: DRENA TU ENERGÍA', loop: 'BUCLE: ROMPE EL NODO', loopBroken: 'BUCLE ROTO' };
 // Multiple of 10 up to float noise (the Memory Leak drain makes the meter fractional).
@@ -187,6 +190,8 @@ try {
       lk: s.hazards.leak.inside, ld: s.hazards.leak.drained, lz: s.hazards.leak.zones.length, hl: s.hud.leak,
       la: s.hazards.loop.active, lr: s.hazards.loop.resets, lh: s.hazards.loop.hp, lb: s.hazards.loop.brokenBy ?? '', lf: s.hazards.loop.formation.length,
       tex: [...new Set([...s.enemyList.filter(e => e.type !== 'glitchling').map(e => e.texture), ...s.pickups.map(p => p.texture)])].join(','),
+      sk: s.shots.map(x => `${x.kind}:${x.texture}`).join(','), ic: s.impacts.spawned, ia: s.impacts.active, icap: s.impacts.capacity,
+      eye: s.hazards.loop.eye.visible ? s.hazards.loop.eye.texture : '', esh: s.hazards.loop.shatter.spawned, esp: s.hazards.loop.shatter.pieces,
     };
   });
   assert.equal(await page.locator('#view-title').innerText(), 'Ruta 01 — Santuario de la Trama (Arequipa)');
@@ -256,7 +261,7 @@ try {
     mareaTouched: false, rightDone: false, screenshot: false, bugShot: false, deliberateWall: true, rafagaPause: null, pickupShot: false,
     // A2: take one solid Packet Loss block and one ember on purpose, drain the meter in the first Memory Leak zone, and
     // (WebGL) shoot the Bucle node after its first repeat or (Canvas) let it break by itself after two repeats.
-    deliberatePacket: true, deliberateEmber: null, leakDone: false, shots: { packetloss: false, eruption: false, memoryleak: false, loop: false },
+    deliberatePacket: true, deliberateEmber: null, leakDone: false, shots: { packetloss: false, eruption: false, memoryleak: false, loop: false, bolts: false, eye: false },
   };
   const breakLoopByShot = renderer === 'webgl';
   // Forecast 0.6 s of the nine flight directions against round orbs and Corruptor bodies (screen space).
@@ -333,7 +338,9 @@ try {
     // Marea: wait at the left edge until its contact drains one heart, then flee right.
     if (t > MAREA.start - 1500 && t < MAREA.end) tx = route.mareaTouched ? 210 : 30;
     if (t >= THRESHOLD_MS) { tx = route.rightDone ? 200 : 400; ty = 97; keys.delete('j'); }
-    if (spare.some(e => Math.abs(e.y - (py - 1)) < 16)) keys.delete('j');
+    // Hold fire while a spare Corruptor is on screen: P1's 9 s, 2-damage Ráfaga would kill it mid-charge, and its first
+    // shot (charge and fire frames, an orb) must be observed.
+    if (spare.length) keys.delete('j');
     const dodge = avoid(s, px, py, Math.min(tx, 300), ty);
     if (dodge) {
       if (dodge.mx > 0) keys.add('d'); else if (dodge.mx < 0) keys.add('a');
@@ -363,6 +370,9 @@ try {
       if (!route.shots.eruption && s.hazards.eruption === 1 && s.hazards.embers.filter(e => e.stage === 'marker').length >= 2) await shoot('eruption', 'eruption');
       if (!route.shots.memoryleak && s.hazards.leak.inside && s.hazards.leak.zones.length >= 2) await shoot('memoryleak', 'memoryleak');
       if (!route.shots.loop && s.hazards.loop.active && s.hazards.loop.resets >= 1 && s.hazards.loop.formation.filter(f => f.x < 300).length >= 2) await shoot('loop', 'loop');
+      // P2: a Ráfaga volley in flight, and the eye relic (its first idle frame).
+      if (!route.shots.bolts && s.power.rafaga.active && s.shots.filter(x => x.kind === 'rafaga').length >= 4 && s.shots.some(x => x.screenX > 60 && x.screenX < 280)) await shoot('bolts', 'bolts');
+      if (!route.shots.eye && s.hazards.loop.active && s.hazards.loop.eye.visible && s.hazards.loop.eye.texture.startsWith('loop-eye-idle') && s.hazards.loop.node.x < 300) await shoot('eye', 'eye');
       if (!route.screenshot && s.clock > 29000) {
         route.screenshot = true;
         await canvas.screenshot({ path: 'docs/ruta01-route.png' });
@@ -538,6 +548,24 @@ try {
   } else assert.equal(final2.lr, 2, 'left alone, the Bucle breaks by itself after two repeats');
   assert.ok(R.some(s => s.cap === TEXT_A2.loopBroken), '"BUCLE ROTO" shows');
   for (const key of Object.keys(route.shots)) assert.ok(route.shots[key], `capture docs/ruta01-${key}.png taken`);
+  // P2 juice: animated bolts, impact bursts and the eye relic (sampled frames).
+  const kindTextures = kind => new Set(R.flatMap(s => s.sk.split(',').filter(x => x.startsWith(`${kind}:`)).map(x => x.slice(kind.length + 1))));
+  const normalBolts = kindTextures('normal'), rafagaBolts = kindTextures('rafaga');
+  assert.ok(normalBolts.size >= 2 && rafagaBolts.size >= 2, `both bolt kinds animate through several frames (${[...normalBolts]} / ${[...rafagaBolts]})`);
+  assert.ok([...normalBolts].every(t => /^shot-normal-\d$/.test(t)) && [...rafagaBolts].every(t => /^shot-rafaga-\d$/.test(t)), 'bolt textures follow their kind');
+  assert.ok([...normalBolts].every(t => !rafagaBolts.has(t)), 'Ráfaga and normal bolts never share a texture');
+  assert.ok(R.filter(s => s.pw).some(s => s.sk.includes('rafaga:')), 'shots fired during a Ráfaga are Ráfaga bolts');
+  const lastImpacts = R.at(-1).ic;
+  assert.ok(lastImpacts >= 10 && R.every(s => s.ia <= IMPACT_CAPACITY && s.icap === IMPACT_CAPACITY), `impact bursts happen on hits and stay within their pool (${lastImpacts} spawned)`);
+  assert.ok(R.some(s => s.ia > 0), 'an impact burst is visible');
+  assert.ok(pairs.some(([a, b]) => b.ic > a.ic && (b.bg > a.bg || b.g1 !== a.g1 || b.lh < a.lh)), 'an impact burst appears together with a hit on a bug or the node');
+  const eyeSeen = new Set(R.map(s => s.eye).filter(Boolean));
+  assert.ok(EYE_IDLE.every(k => eyeSeen.has(k)) && [...eyeSeen].every(k => EYE_FRAMES.includes(k)), `the loop node shows the four idle eye frames (${[...eyeSeen]})`);
+  if (breakLoopByShot) assert.ok(eyeSeen.has('loop-eye-hit') && (eyeSeen.has('loop-eye-crack') || eyeSeen.has('loop-eye-break')), `the eye flashes when hit and cracks as it weakens (${[...eyeSeen]})`);
+  assert.ok(R.at(-1).esh === 1 && R.some(s => s.esp > 0), 'the eye shatters once when the Bucle breaks');
+  assert.ok(R.filter(s => s.esp > 0).every(s => s.lb !== '' && !s.la), 'the shatter plays only after the loop broke');
+  assert.ok(R.filter(s => !s.la).every(s => s.eye === ''), 'the eye is hidden outside the Bucle');
+  passed.push(`2 route P2: Ráfaga and normal bolts use different animated textures (${normalBolts.size} / ${rafagaBolts.size} frames), ${lastImpacts} impact bursts within a ${IMPACT_CAPACITY}-slot pool, the Bucle node is the eye relic (${eyeSeen.size} frames seen) and shatters on break`);
   notes.push(`A2: ${solidTurns} solid turns, ${packetHits.length} Packet Loss hit(s), ${impacts.size} ember impacts (${emberHits.length} hit Kipu), leak drained ${Math.round(final2.ld)}, Bucle ${final2.lr} repeat(s) then ${final2.lb}`);
   passed.push(`2 route A2: one hazard at a time, each hit costs one heart; Packet Loss telegraphs before every solid turn (${solidTurns}) and a solid block hurt; ${impacts.size} embers each marked >= 600 ms ahead and one hurt; Memory Leak drained ${LEAK_DRAIN}/s with the HUD indicator and no heart lost; Bucle repeated ${final2.lr} time(s) then broke by ${final2.lb} with "BUCLE ROTO"`);
   stage = '2 route B2: Corruptor, Sombra de Error, racha, hit-stop, debug-drop (sampled frames)';
@@ -645,10 +673,11 @@ try {
       hs: s.hitStop.active, hsc: s.hitStop.count, ch: s.combo.hits, cm: s.combo.multiplier, fb: s.fightBonus, sc: s.score, fl: s.floaters.active,
       pk: s.pickups.map(p => p.type).join(','), pkt: s.pickups.map(p => p.texture).join(','), pdc: s.pickupsDropped.corazon, pde: s.pickupsDropped.escudo,
       pcc: s.pickupsCollected.corazon, pce: s.pickupsCollected.escudo, shd: s.power.shield, inv: s.invulnerableUntil, fpb: s.fightPickups.bonus,
+      fr: s.freed.active, frs: s.freed.spawned, frcap: s.freed.capacity, frt: s.freed.textures.join(','), ic: s.impacts.spawned, ia: s.impacts.active, ask: s.alliedShots.filter(x => !x.returned).map(x => `${x.kind}:${x.texture}`).join(','),
       pdr: s.pickupsDropped.rafaga, pcr: s.pickupsCollected.rafaga, pw: s.power.rafaga.active, fd: s.fire.damage, bc: s.bossCharge, sdm: s.alliedShots.filter(x => !x.returned).map(x => x.damage),
     };
   });
-  const fight = { nokiaDone: false, pauseDone: false, shiftKey: 0, attempts: 0, waveSeen: false };
+  const fight = { nokiaDone: false, pauseDone: false, shiftKey: 0, attempts: 0, waveSeen: false, freedShot: false };
   const guardianKeys = s => {
     const p = s.player, slow = s.reverse.state === 'SLOW', keys = new Set(['j']);
     // Phase 3 can start inside an open shield window, and normal fire alone can then end the fight before its wave.
@@ -744,6 +773,24 @@ try {
     const deadline = Date.now() + 180000;
     while (Date.now() < deadline) {
       const s = await page.evaluate(() => { const s = window.pachaDebug?.(); return s && { ...s, nokiaFrozen: window.__nokia ?? null }; });
+      if (s?.scene === 'guardian' && s.outcome === 'victory' && !fight.freedShot) {
+        // The creatures burst out of Amaru during the recede stage: freeze through the real blur handler at its busiest.
+        fight.freedShot = true;
+        await releaseAll();
+        await page.evaluate(() => new Promise(resolve => {
+          const loop = () => {
+            const f = window.pachaDebug?.();
+            if (!f || f.liberation?.stage !== 'recede' || f.freed.active >= 7) { window.dispatchEvent(new Event('blur')); resolve(f?.freed.active ?? 0); return; }
+            requestAnimationFrame(loop);
+          };
+          loop();
+        }));
+        await wait(() => window.pachaDebug().focused === false);
+        await frames(3);
+        await canvas.screenshot({ path: 'docs/ruta01-freed.png' });
+        await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+        await wait(() => window.pachaDebug().focused);
+      }
       if (!s || s.scene !== 'guardian' || s.outcome !== 'playing') break;
       if (!fight.nokiaDone && s.nokiaFrozen) { await nokiaCheck(); continue; }
       if (!fight.pauseDone && s.realClock > 2500) { await pauseChecks(); continue; }
@@ -911,6 +958,17 @@ try {
   const lib = F.filter(s => s.run === runs.at(-1) && s.lib).map(s => s.lib);
   const order = lib.filter((x, i) => x !== lib[i - 1]);
   assert.deepEqual(order, ['recede0', 'restore0', 'dialogue0', 'dialogue1', 'codex1', 'result1'], 'liberation stages in order');
+  // P2: the freed creatures burst out during the recede stage only and are all gone before the restore and the dialogue.
+  const freedFrames = F.filter(s => s.run === runs.at(-1) && s.lib);
+  const recedeFrames = freedFrames.filter(s => s.lib === 'recede0');
+  assert.ok(recedeFrames.some(s => s.fr >= 6) && recedeFrames.every(s => s.fr <= FREED_CAPACITY), `the freed creatures appear in the recede stage (max ${Math.max(...recedeFrames.map(s => s.fr))})`);
+  assert.ok(freedFrames.filter(s => s.lib !== 'recede0').every(s => s.fr === 0), 'every freed creature is gone before the restore, dialogue, codex and result');
+  assert.equal(freedFrames.at(-1).frs, FREED_COUNT, `${FREED_COUNT} creatures were released`);
+  assert.ok(freedFrames.filter(s => s.fr > 0).every(s => s.frt.split(',').every(t => /^(glitchling|corruptor|sombra|shadow)(-[bc])?$/.test(t))), 'the creatures use the real Glitchling, Corruptor, Sombra and shadow frames');
+  assert.ok(F.filter(s => s.run === runs.at(-1) && !s.lib).every(s => s.fr === 0), 'no creature before the victory');
+  // P2: Kipu's bolts in the fight keep a kind, use their own textures (four-green twins in REVERSE) and land with impact bursts.
+  assert.ok(G.every(s => s.ask.split(',').filter(Boolean).every(x => /^(normal:shot-normal-\d|rafaga:shot-rafaga-\d)(-nokia)?$/.test(x) && x.endsWith('-nokia') === s.nokia)), 'bolt textures follow the kind and the palette');
+  assert.ok(G.at(-1).ic >= 10 && G.every(s => s.ia <= IMPACT_CAPACITY), `impact bursts land on Amaru and his shield (${G.at(-1).ic}) within the pool`);
   const at = key => F.find(s => s.run === runs.at(-1) && s.lib === key);
   const W = F.filter(s => s.run === runs.at(-1));
   assert.ok(G.every(s => /^amaru-head-(corrupt|flash)/.test(s.head)), 'Amaru fights with the corrupted (or hit-flash) head');
@@ -936,6 +994,7 @@ try {
   assert.equal(map.node, 'restored'); assert.equal(map.progress.guardian, true);
   assert.match(await page.locator('#view-result').innerText(), /nodo restaurado/);
   assert.match(await page.locator('#achievements').innerText(), /Amaru liberado/);
+  passed.push(`5 P2: ${FREED_COUNT} freed creatures burst out in the recede stage (up to ${Math.max(...recedeFrames.map(s => s.fr))} at once) and are all gone before the restore and the dialogue; Kipu's bolts and impact bursts keep their palette`);
   passed.push(`5 phases 1-2-3 by HP thresholds, corrupted head while fighting, victory, liberation: corruption overlay recedes > color wave restores the arena > two dialogue lines > codex > result (total ${points('TOTAL')} = fragments + bugs + returns + racha + pickups + time), Enter to map with restored node and progress.guardian true`);
 
   stage = '5 defeat path, READY gate and full retry reset';

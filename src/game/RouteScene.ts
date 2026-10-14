@@ -18,6 +18,9 @@ import { umbralRestore } from './balanceRules';
 import { FloaterPool, floaterView, hitStopActive, initialHitStop, triggerHitStop, worldStep, type FloaterSlot, type HitStop } from './effectsRules';
 import { completeRoute, initialProgress, type Progress } from './challengeRules';
 import { BUG_TEXTURES, HAZARD_TEXTURES, PICKUP_TEXTURES, createBugTextures, createHazardTextures, createTextures, createRetroFonts, createRouteTextures } from './textures';
+import { createEyeTextures, createShotTextures } from './fxTextures';
+import { ImpactPool, drawImpacts, shotFrame, shotKindFor, shotOrigin, shotTextureKey, type ShotKind } from './shotFx';
+import { EYE, drawShatter, eyeFrameFor, eyeOrigin, eyeTextureKey, shatterPieces } from './eyeRelic';
 import { createSheetTextures, loadSpriteSheets } from './sheetTextures';
 import { corruptorFrame, pickupFrame, shadowFrame, sombraFrame } from './spriteFrames';
 import { backdropCopies, summitsX } from './ambientRules';
@@ -147,6 +150,10 @@ export class RouteScene extends Phaser.Scene {
   private leak = { inside: false, drained: 0, nextSoundAt: 0, nextSparkAt: 0 };
   private loop: LoopState = initialLoop();
   private loopNode!: Phaser.GameObjects.Image;
+  // P2 juice: display images that follow the pooled physics shots, the impact star bursts and the eye's shatter.
+  private shotViews: Phaser.GameObjects.Image[] = [];
+  private impacts = new ImpactPool();
+  private shatter = { at: -Infinity, x: 0, y: 0, count: 0 };
   private loopResetAt = -Infinity;
   private loopHitUntil = 0;
   private purgedSegment: SegmentName | null = null;
@@ -174,12 +181,13 @@ export class RouteScene extends Phaser.Scene {
     this.umbral = { applied: false, hpBefore: 0, hpAfter: 0, meterBefore: 0, meterAfter: 0 };
     this.packetView = []; this.embers = Array.from({ length: ERUPTION.pool }, () => ({ active: false, at: 0, x: 0, y: 0, aimed: false, impacted: false }));
     this.emberCursor = 0; this.emberImpacts = 0; this.leakFragmentsSpawned = 0; this.leak = { inside: false, drained: 0, nextSoundAt: 0, nextSparkAt: 0 };
+    this.impacts = new ImpactPool(); this.shatter = { at: -Infinity, x: 0, y: 0, count: 0 };
     this.loop = initialLoop(); this.loopResetAt = -Infinity; this.loopHitUntil = 0; this.hurts = RouteScene.noHurts();
     this.power = initialPower(); this.pickupCursor = 0; this.collected = noPickups(); this.shieldBreakAt = -Infinity;
     this.volley = { count: 0, shots: 0, lastSize: 0, lastAt: 0 };
     this.retryRequested = false; this.mapRequested = false; this.nextGlintAt = 0;
     this.time.paused = false;
-    createTextures(this); createRouteTextures(this); createBugTextures(this); createSheetTextures(this, ROUTE_SHEETS); createRetroFonts(this); ensureKipuFrames(this); createHazardTextures(this);
+    createTextures(this); createRouteTextures(this); createBugTextures(this); createSheetTextures(this, ROUTE_SHEETS); createRetroFonts(this); ensureKipuFrames(this); createHazardTextures(this); createShotTextures(this, false); createEyeTextures(this);
 
     this.cameras.main.setBackgroundColor(BAR).setBounds(0, 0, ROUTE.worldWidth, GAME.height).setScroll(0, 0);
     // The arena art at native size; backdropCopies would tile it (mirrored) if the far layer ever scrolls again.
@@ -198,6 +206,8 @@ export class RouteScene extends Phaser.Scene {
     this.animator = new KipuAnimator(this.player);
 
     this.shots = this.pool('bullet', POOL.shots, 6, 3, 6);
+    // The physics shots stay invisible 6x3 bodies; these images draw the animated bolts (never scaled), one per pool slot.
+    this.shotViews = this.shots.getChildren().map(() => this.add.image(0, 0, shotTextureKey('normal', 0, false)).setDepth(6).setVisible(false));
     this.glitchlings = this.pool('glitchling', POOL.glitchlings, ...BODY.glitchling, 4);
     this.corruptors = this.pool(BUG_TEXTURES.corruptor, POOL.corruptors, ...BODY.corruptor, 4);
     this.shadows = this.pool(BUG_TEXTURES.sombra, POOL.shadows, ...BODY.sombra, 4);
@@ -214,7 +224,8 @@ export class RouteScene extends Phaser.Scene {
     this.packetTiles = PACKET_LOSS.columns.map(() => blockRects(0).map(r => this.add.tileSprite(0, r.y, r.width, r.height, HAZARD_TEXTURES.packetBlock).setOrigin(0).setScrollFactor(0).setDepth(4).setVisible(false)));
     this.leakTiles = MEMORY_LEAK.zones.map(z => this.add.tileSprite(0, z.y, z.width, z.height, HAZARD_TEXTURES.leak).setOrigin(0).setScrollFactor(0).setDepth(1).setVisible(false));
     this.emberImages = this.embers.map(() => this.add.image(0, 0, HAZARD_TEXTURES.ember).setScrollFactor(0).setDepth(6).setVisible(false));
-    this.loopNode = this.add.image(LOOP.node.x, LOOP.node.y, HAZARD_TEXTURES.loopNode).setScrollFactor(0).setDepth(5).setVisible(false);
+    // Eye relic (P2): same position and depth as the old node; the origin puts the eye's centre on the node, cables hang below.
+    this.loopNode = this.add.image(LOOP.node.x, LOOP.node.y, eyeTextureKey('idle0')).setOrigin(eyeOrigin().x, eyeOrigin().y).setScrollFactor(0).setDepth(5).setVisible(false);
 
     for (const group of [this.glitchlings, this.corruptors, this.shadows]) {
       this.physics.add.overlap(this.shots, group, (first, second) => {
@@ -222,6 +233,7 @@ export class RouteScene extends Phaser.Scene {
         const bug = (shot === first ? second : first) as Sprite;
         if (!shot.active || !bug.active || this.ending !== 'playing' || this.clock < Number(bug.getData('graceUntil') ?? 0)) return;
         shot.disableBody(true, true);
+        this.impacts.spawn(shot.x + 3, shot.y, (shot.getData('kind') as ShotKind | undefined) ?? 'normal', this.anim);
         this.hitEnemy(bug, Number(shot.getData('damage') ?? PICKUPS.baseDamage));
       });
     }
@@ -392,13 +404,14 @@ export class RouteScene extends Phaser.Scene {
   // each of its shots deals 2 damage (round 2), fixed when it leaves Kipu. A nearly full pool fires what it can.
   private fire(now: number, carry: number): void {
     let size = 0;
-    const damage = shotDamage(this.power, now);
+    const damage = shotDamage(this.power, now), kind = shotKindFor(rafagaActive(this.power, now));
     for (const angle of volleyAngles(this.power, now)) {
       const shot = this.shots.getFirstDead(false) as Sprite | null;
       if (!shot) break;
-      shot.enableBody(true, this.player.x + 12, this.player.y - 1, true, true);
+      // Last argument false: the body is live but the drawn bolt is the display image (see animate()).
+      shot.enableBody(true, this.player.x + 12, this.player.y - 1, true, false);
       const vx = angle === 0 ? shotVelocity(1, carry) : GAME.bulletSpeed * Math.cos(angle) + carry;
-      shot.setVelocity(vx, GAME.bulletSpeed * Math.sin(angle)).setData({ expiresAt: now + GAME.bulletLifetimeMs, damage });
+      shot.setVelocity(vx, GAME.bulletSpeed * Math.sin(angle)).setData({ expiresAt: now + GAME.bulletLifetimeMs, damage, kind, born: this.anim, tilt: angle });
       size++;
     }
     if (size === 0) return;
@@ -736,9 +749,19 @@ export class RouteScene extends Phaser.Scene {
       if (knot) this.fx.emit({ x: knot.x + 2, y: knot.y - 5, vx: 0, vy: -9, ttl: 380, slot: 'light', size: 1 }, this.anim);
       this.nextGlintAt = this.anim + 900;
     }
+    this.shots.getChildren().forEach((child, i) => {
+      const shot = child as Sprite, view = this.shotViews[i];
+      if (!shot.active) { view.setVisible(false); return; }
+      const kind = (shot.getData('kind') as ShotKind | undefined) ?? 'normal', origin = shotOrigin(kind);
+      view.setTexture(shotTextureKey(kind, shotFrame(kind, this.anim - Number(shot.getData('born') ?? 0), motion.reduced), false))
+        .setOrigin(origin.x, origin.y).setPosition(Math.round(shot.x), Math.round(shot.y)).setRotation(Number(shot.getData('tilt') ?? 0)).setVisible(true);
+    });
     this.fx.step(this.anim, delta / 1000, 20);
     this.fxGraphics.clear();
     drawParticles(this.fxGraphics, this.fx, false);
+    this.impacts.step(this.anim, motion.reduced);
+    drawImpacts(this.fxGraphics, this.impacts, this.anim, false, motion.reduced);
+    drawShatter(this.fxGraphics, shatterPieces(this.anim - this.shatter.at, motion.reduced), this.cameras.main.scrollX + this.shatter.x, this.shatter.y);
     if (this.ending === 'playing' && this.power.shield) drawKipuShield(this.fxGraphics, this.player.x, this.player.y, SHIELD);
     drawShieldBreak(this.fxGraphics, this.player.x, this.player.y, SHIELD, this.anim - this.shieldBreakAt, motion.reduced);
     this.floaters.step(this.anim);
@@ -935,12 +958,13 @@ export class RouteScene extends Phaser.Scene {
     this.loopNode.setVisible(active);
     if (!active) return;
     const p = nodePosition(now), half = LOOP.node.body / 2;
-    this.loopNode.setPosition(p.x, p.y).setTexture(this.anim < this.loopHitUntil ? HAZARD_TEXTURES.loopNodeHit : HAZARD_TEXTURES.loopNode);
+    this.loopNode.setPosition(p.x, p.y).setTexture(eyeTextureKey(eyeFrameFor({ hp: this.loop.hp, anim: this.anim, hitUntil: this.loopHitUntil, reduced: motion.reduced })));
     const node = { x: p.x - half, y: p.y - half, width: LOOP.node.body, height: LOOP.node.body };
     for (const shot of this.alive(this.shots)) {
       const body = shot.body as Body;
       if (!overlaps({ x: body.x - cameraX, y: body.y, width: body.width, height: body.height }, node)) continue;
       shot.disableBody(true, true);
+      this.impacts.spawn(shot.x + 3, shot.y, (shot.getData('kind') as ShotKind | undefined) ?? 'normal', this.anim);
       const hit = hitLoopNode(this.loop, now);
       this.loop = hit.state;
       this.meter = addMeter(this.meter, ROUTE.meterPerHit);
@@ -960,6 +984,8 @@ export class RouteScene extends Phaser.Scene {
   private breakLoop(cameraX: number): void {
     const p = nodePosition(this.clock), x = cameraX + p.x;
     this.loopNode.setVisible(false);
+    // The eye shatters: shards fly and the cables loosen (screen-relative, so the burst rides the scroll with the node).
+    this.shatter = { at: this.anim, x: p.x, y: p.y, count: this.shatter.count + 1 };
     sfx.play('loopBreak');
     dissolve(this.fx, x, p.y, LOOP.node.size, LOOP.node.size, this.anim);
     if (this.loop.brokenBy !== 'shot') return;
@@ -1020,7 +1046,8 @@ export class RouteScene extends Phaser.Scene {
         g.fillRect(dx < 0 ? cx : cx - 2, cy, 3, 1).fillRect(cx, dy < 0 ? cy : cy - 2, 1, 3);
       }
     }
-    for (let i = 0; i < LOOP.hp; i++) g.fillStyle(i < this.loop.hp ? GOLD : DIM).fillRect(p.x - 9 + i * 4, p.y + h + 3, 3, 2);
+    // HP pips sit above the eye now: its cables hang below.
+    for (let i = 0; i < LOOP.hp; i++) g.fillStyle(i < this.loop.hp ? GOLD : DIM).fillRect(p.x - 9 + i * 4, p.y - h - 5, 3, 2);
   }
 
   private hazardSnapshot() {
@@ -1033,6 +1060,8 @@ export class RouteScene extends Phaser.Scene {
       leak: { inside: this.leak.inside, drained: this.leak.drained, zones: leakZones(clock).map(z => ({ index: z.index, screenX: z.rect.x, y: z.rect.y, width: z.rect.width, height: z.rect.height })) },
       loop: {
         ...this.loop, active: loopActive(this.loop, clock), node: nodePosition(clock), markerX: loopMarkerX(clock), cue: cueVisible(this.loop, clock),
+        eye: { texture: this.loopNode.texture.key, visible: this.loopNode.visible, frames: EYE.frames },
+        shatter: { spawned: this.shatter.count, pieces: shatterPieces(this.anim - this.shatter.at, motion.reduced).length },
         formation: this.alive(this.glitchlings).filter(b => b.getData('loop') === true).map(b => ({ x: b.x - cameraX, y: b.y })),
       },
       hurts: JSON.parse(JSON.stringify(this.hurts)) as Record<HurtSource, { damage: number; absorbed: number }>,
@@ -1089,7 +1118,11 @@ export class RouteScene extends Phaser.Scene {
       glitchlings: this.alive(this.glitchlings).map(bug => ({ x: bug.x, y: bug.y, hp: Number(bug.getData('hp')) })),
       fragmentList: this.alive(this.fragments).map(knot => ({ x: knot.x, y: knot.y, dropped: knot.getData('dropped') === true, leak: Number(knot.getData('leak') ?? -1) >= 0 })),
       hazards: this.hazardSnapshot(),
-      shots: this.alive(this.shots).map(shot => ({ x: shot.x, y: shot.y, screenX: shot.x - cameraX, damage: Number(shot.getData('damage') ?? 1) })),
+      shots: this.alive(this.shots).map(shot => ({
+        x: shot.x, y: shot.y, screenX: shot.x - cameraX, damage: Number(shot.getData('damage') ?? 1),
+        kind: (shot.getData('kind') as ShotKind | undefined) ?? 'normal', texture: this.shotViews[this.shots.getChildren().indexOf(shot)].texture.key,
+      })),
+      impacts: { active: this.impacts.activeCount, spawned: this.impacts.spawned, capacity: this.impacts.items.length },
       fx: { active: this.fx.activeCount, capacity: this.fx.items.length },
       audio: sfx.stats(), kipuFrame: this.animator.frame, hud: { score: this.hud.scoreText, combo: this.hud.comboText, rafaga: this.hud.rafagaText, shield: this.hud.shieldIcon, leak: this.hud.leakIcon }, panel: this.panelText.text,
     };
